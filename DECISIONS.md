@@ -814,3 +814,12 @@ All six were already fixed by D-029, and their proof-of-concept tests pass again
 - CLI `decode` never reporting a forged, wrapped or duplicate-ID message as valid;
 - login and logout CSRF limited to user-activated navigation (documented residual risk).
 
+**Mutation proof for the review fixes:**
+- Each of these made at least one test fail when disabled:
+  - the expanded-name check: 2 tests;
+  - fail-closed participant recording: 1;
+  - participants following session refresh: 2;
+  - the per-SP SessionIndex: 8;
+  - pin fingerprints in the metadata cache key: 1.
+- The explicit "no SP certificate available" refusal in SLO is belt-and-braces: `verifyMessageSignature` with no certificates already rejects the message, so it fails closed either way.
+
