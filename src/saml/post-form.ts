@@ -37,13 +37,13 @@ function newNonce(): string {
 }
 
 /** The HTTP-POST binding page: auto-submits SAMLResponse (+ RelayState) to the ACS URL. */
-export function autoPostResponse(acsUrl: string, samlResponse: string, relayState: string | undefined): Response {
+export function autoPostResponse(acsUrl: string, samlResponse: string, relayState: string | undefined, field: "SAMLResponse" | "SAMLRequest" = "SAMLResponse"): Response {
   const nonce = newNonce();
   const html =
     `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer">` +
     `<title>Signing in…</title><style nonce="${nonce}">body{font:16px system-ui,sans-serif;margin:2rem}</style></head>` +
     `<body><form method="post" action="${escapeHtml(acsUrl)}">` +
-    `<input type="hidden" name="SAMLResponse" value="${escapeHtml(samlResponse)}">` +
+    `<input type="hidden" name="${field}" value="${escapeHtml(samlResponse)}">` +
     (relayState !== undefined ? `<input type="hidden" name="RelayState" value="${escapeHtml(relayState)}">` : "") +
     `<noscript><p>JavaScript is disabled. Continue to finish signing in.</p><button type="submit">Continue</button></noscript>` +
     `</form><script nonce="${nonce}">document.forms[0].submit()</script></body></html>`;
@@ -66,12 +66,14 @@ export function errorPage(status: number, code: string, message: string, title =
  * SP (login-CSRF mitigation, docs/security.md). `href` is the same init URL; following it is a
  * same-origin, user-activated navigation. Framing is denied, so the link can't be clickjacked.
  */
-export function confirmPage(href: string, appLabel: string): Response {
+export function confirmPage(href: string, appLabel: string, kind: "sign-in" | "sign-out" = "sign-in"): Response {
   const nonce = newNonce();
   const html =
     `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Continue sign-in</title>` +
     `<style nonce="${nonce}">body{font:16px system-ui,sans-serif;margin:2rem}</style></head>` +
-    `<body><h1>Continue to ${escapeHtml(appLabel)}?</h1><p>Another site sent you here to sign in to this application.</p>` +
+    (kind === "sign-out"
+      ? `<body><h1>Sign out everywhere?</h1><p>Another site sent you here to sign you out of this site and its applications.</p>`
+      : `<body><h1>Continue to ${escapeHtml(appLabel)}?</h1><p>Another site sent you here to sign in to this application.</p>`) +
     `<p><a href="${escapeHtml(href)}">Continue</a></p></body></html>`;
   return new Response(html, { status: 200, headers: pageHeaders(nonce, "error") });
 }

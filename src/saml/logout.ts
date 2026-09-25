@@ -14,6 +14,7 @@ const STATUS = "urn:oasis:names:tc:SAML:2.0:status:";
 
 export interface LogoutRequestInfo {
   id: string;
+  destination: string | undefined;
   issuer: string;
   nameId: string;
   nameIdFormat: string | undefined;
@@ -22,6 +23,7 @@ export interface LogoutRequestInfo {
 
 export interface LogoutResponseInfo {
   id: string;
+  destination: string | undefined;
   issuer: string;
   inResponseTo: string;
   /** Top-level and second-level status codes, e.g. ["Success"] or ["Success", "PartialLogout"]. */
@@ -59,11 +61,11 @@ async function parseMessage(xml: string, rootName: "LogoutRequest" | "LogoutResp
   if (instant < opts.now.getTime() - REQUEST_MAX_AGE_SECONDS * 1000 - skew) throw invalid(`${rootName} is too old`);
   const destination = root.getAttribute("Destination")?.trim() || undefined;
   if (destination !== undefined && destination !== opts.sloUrl) throw invalid("Destination does not match this IdP's logout URL");
-  return { root, issuer, id };
+  return { root, issuer, id, destination };
 }
 
 export async function parseLogoutRequest(xml: string, validator: SchemaValidator, opts: { now: Date; clockSkewSeconds: number; sloUrl: string }): Promise<LogoutRequestInfo> {
-  const { root, issuer, id } = await parseMessage(xml, "LogoutRequest", validator, opts);
+  const { root, issuer, id, destination } = await parseMessage(xml, "LogoutRequest", validator, opts);
   const notOnOrAfter = root.getAttribute("NotOnOrAfter")?.trim();
   if (notOnOrAfter && !(new Date(notOnOrAfter).getTime() > opts.now.getTime() - opts.clockSkewSeconds * 1000)) throw invalid("LogoutRequest has expired");
   if (child(root, NS_ASSERTION, "BaseID").length || child(root, NS_ASSERTION, "EncryptedID").length)
@@ -72,6 +74,7 @@ export async function parseLogoutRequest(xml: string, validator: SchemaValidator
   if (nameIds.length !== 1) throw invalid("LogoutRequest must have exactly one NameID");
   return {
     id,
+    destination,
     issuer,
     nameId: (nameIds[0].textContent ?? "").trim(),
     nameIdFormat: nameIds[0].getAttribute("Format")?.trim() || undefined,
@@ -80,13 +83,13 @@ export async function parseLogoutRequest(xml: string, validator: SchemaValidator
 }
 
 export async function parseLogoutResponse(xml: string, validator: SchemaValidator, opts: { now: Date; clockSkewSeconds: number; sloUrl: string }): Promise<LogoutResponseInfo> {
-  const { root, issuer, id } = await parseMessage(xml, "LogoutResponse", validator, opts);
+  const { root, issuer, id, destination } = await parseMessage(xml, "LogoutResponse", validator, opts);
   const inResponseTo = (root.getAttribute("InResponseTo") ?? "").trim();
   if (!inResponseTo) throw invalid("LogoutResponse has no InResponseTo");
   const status: string[] = [];
   for (let s = child(child(root, NS_PROTOCOL, "Status")[0], NS_PROTOCOL, "StatusCode")[0]; s; s = child(s, NS_PROTOCOL, "StatusCode")[0])
     status.push((s.getAttribute("Value") ?? "").replace(STATUS, ""));
-  return { id, issuer, inResponseTo, status };
+  return { id, destination, issuer, inResponseTo, status };
 }
 
 const instant = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, "Z");

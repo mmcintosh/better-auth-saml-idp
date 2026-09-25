@@ -709,7 +709,7 @@ The live test also found a **workerd incompatibility the stubbed tests couldn't*
 
 **Authenticating a LogoutRequest** (Profiles §4.4.4.1: it must be authenticated):
 - With SP certificates, a valid signature is required: the D-025 POST verifier, or the Redirect query check. `verifyMessageSignature` refuses an unsigned message itself, so the explicit "must be signed" check is belt-and-braces. Its mutation didn't fail a test because the next line already refuses the message.
-- Without certificates, the session ends only if a `SessionIndex` equals this browser's session's value. That value is a hash of the session id, known only to SPs that got an assertion.
+- Without certificates, the session ends only if a `SessionIndex` equals the value issued **to that SP** for this browser's session (per-SP keyed MAC since review 2; see D-029).
 - A signed request without `SessionIndex` must name the NameID stored for that SP and session.
 - A request that matches nothing is answered `Success` and ends nothing, because "this principal has no session here" is true from that SP's point of view.
 - LogoutRequest IDs go through the R2 replay table, namespaced `logout:`.
@@ -736,4 +736,50 @@ The live test also found a **workerd incompatibility the stubbed tests couldn't*
 **Live on Workers + D1 (2026-09-25).** Migration `0004_session_participants.sql` was applied, and the example deployed with `singleLogout` enabled. The live metadata advertises both SingleLogoutService bindings. `/logout` without a session redirects to `returnTo`. A hostile `returnTo` gets `400 INVALID_RETURN_TO` (the error page now says "Sign-out could not be completed" for logout errors). The code-configured SP and the D1-stored SP both still pass smoke 15/15. Cloudflare Access doesn't do SAML SLO, so SP interop is node-saml, in CI on both runtimes.
 
 **Found after release, by `inspect` on the live IdP:** SLO-enabled metadata **failed the metadata XSD**. samlify emits `SingleLogoutService` after `SingleSignOnService`, but `SSODescriptorType` requires it before `NameIDFormat`. The SLO metadata test had only matched a regex. `renderMetadata` now moves the elements into schema order before any signing. The test validates the real document, signed and unsigned, against the XSD, and fails without the fix (mutation-checked). Live `inspect` is clean again.
+
+## D-029: Second adversarial review, part 1 (fresh eyes, 2026-09-25)
+
+**How it was run.** A reviewer with no conversation context worked in its own worktree, with the code, README, threat model and DECISIONS only, and the brief to break it. It wrote a failing proof-of-concept test for each finding, and none touched `src/`. I re-ran each proof against `main` (all 9 reproduced), then fixed each one with its test turning green. The tests stay in `test/review2/` as regressions. A second, independent review by a different model follows.
+
+**Findings and fixes**
+- **R2-SLO-2 (Medium): one SessionIndex for every SP, an unkeyed hash, not tied to the requesting SP.**
+  - Impact: SP B could use its own value to end the user's session in the name of certificate-less SP C. SPs could also link a user across SPs, which defeated pairwise NameIDs.
+  - Fix: `sessionIndexOf(secret, sessionId, spId)` is an HMAC with the Better Auth secret. The logout check compares against the value for the SP named as Issuer.
+- **R2-SLO-1 (Medium): participant rows expired at the session's expiry *at sign-in*.** After Better Auth's sliding refresh, the expiry sweep dropped them, and logout silently skipped SPs while reporting `Success`.
+  - Fix: a `session.update.after` database hook moves the participants' expiry with the session's.
+  - Fix: a failure to list participants, or hitting the 200-participant cap, now reports `PartialLogout`.
+- **R2-MD-1 (Medium): certificates learned from metadata survived a re-pin** of `metadata.signingCertificate`, or a change of entity ID or encryption settings, until the next refresh.
+  - Fix: the cache key covers the id, entity ID, URL, pin fingerprints and encryption algorithms.
+  - Fix: learned encryption keys apply only while `encryption` is configured, with the current algorithms.
+- **R2-SLO-3 (Medium): SLO accepted unsigned requests whenever the SP's certificate list was empty**, including when its certificates come from a metadata URL that failed to load.
+  - Fix: logout messages must be signed when the SP has certificates, requires signed AuthnRequests, or has `metadata`. With no certificates available, they fail closed. An unverifiable participant answer counts as partial.
+- **R2-SLO-4 (Low): `singleLogoutService.binding: "post"` was ignored for our LogoutRequests**, so the chain stalled at POST-only SPs.
+  - Fix: POST participants get an auto-posted, XML-signed LogoutRequest.
+- **R2-MD-2 (Low): metadata import used `ResponseLocation` for requests.**
+  - Fix: `Location` for requests, and `responseUrl` (from ResponseLocation) for our LogoutResponses.
+- **R2-SLO-5 (Low): SLO didn't enforce `relayStateMaxBytes`**, so unauthenticated cross-site POSTs could store large values.
+  - Fix: `checkRelayState`, as SSO does.
+- **R2-CLI-1 (Low): `keygen --force` kept an existing file's permissions** and followed symlinks.
+  - Fix: remove the file, then create it exclusively (`wx`) with mode 0600.
+- **Info items fixed:**
+  - Metadata bodies are read as a stream with a 1 MiB cap (tested with an endless body).
+  - Stored-SP lookups must match the requested value exactly (unit test with a case-insensitive, PAD SPACE adapter; mutation-checked).
+  - Signed LogoutRequests and LogoutResponses need a `Destination` (Bindings §3.4.5.2 / §3.5.5.2).
+  - The logout drive-by page no longer talks about signing in.
+- **Info items documented, not changed:**
+  - A certificate-less SP's LogoutResponse can be obtained unauthenticated (docs/security.md: SPs must check `InResponseTo`; give SLO SPs a certificate).
+  - Registry `metadata.url` can reach internal https hosts (admin-only).
+
+**Rejected by the reviewer after trying:**
+- XSW through ID/Id/id or namespaced ids.
+- XPath injection through the Reference URI.
+- Comment truncation.
+- xmldom 0.9 vs 0.8 parser differences.
+- Redirect signature octet tricks.
+- `returnTo` open redirects.
+- Logout-state forgery.
+- Registry authorization bypass and mass assignment.
+- Prototype pollution through attribute maps.
+- XML injection.
+- Stored SPs being more powerful than code SPs.
 

@@ -387,7 +387,8 @@ samlIdp({
 
 **Authentication:**
 - An SP with certificates must sign its LogoutRequests (Redirect or POST, with the same hardened checks as AuthnRequests).
-- An SP without certificates ends the session only with the right `SessionIndex`, an unguessable per-session value it received in the assertion. Anyone else's request ends nothing.
+- An SP without certificates ends the session only with the right `SessionIndex`. That value is different for every SP and every session (a keyed MAC), so one SP's value can't end the session in another SP's name. Any other request ends nothing.
+- An SP that requires signed AuthnRequests, or gets its certificates from `metadata.url`, must also sign its logout messages. If its certificates aren't available, they're refused.
 - LogoutRequests are replay-protected.
 - A cross-site drive-by to `/logout` gets a confirmation page.
 

@@ -123,6 +123,11 @@ describe("SP metadata URL with refresh", () => {
     ["unsigned metadata when the signature is pinned", () => metadata(), { signingCertificate: keys.idpNext.certificate }],
     ["metadata signed by another key than the pinned one", () => metadata({ signWith: { key: keys.sp.privateKey } }), { signingCertificate: keys.idpNext.certificate }],
     ["not XML", () => "<html>login</html>", {}],
+    [
+      "a body over 1 MiB without Content-Length",
+      () => new Response(new ReadableStream({ pull(c) { c.enqueue(new TextEncoder().encode(" ".repeat(64 * 1024))); } })),
+      {},
+    ],
     ["a redirect (not followed)", () => new Response(null, { status: 302, headers: { location: "https://evil.example/md.xml" } }), {}],
   ])("rejects %s (nothing learned, so the unsigned-capable SP has no certificate)", async (_, doc, pin) => {
     const served = serve(doc);

@@ -14,6 +14,7 @@ import { SpDirectory } from "./saml/sp-directory";
 import { registryEndpoints } from "./endpoints/registry";
 import { logoutEndpoint, sloEndpoint } from "./endpoints/slo";
 import { SLO_PATH } from "./saml/logout";
+import { extendParticipants } from "./storage/participants";
 import type { SamlIdpOptions } from "./types";
 
 export { SAML_IDP_ERROR_CODES } from "./errors";
@@ -37,11 +38,33 @@ export const samlIdp = (options: SamlIdpOptions) => {
         ctx.logger.warn(
           "[saml-idp] no baseURL: the IdP's SSO URL (metadata, Destination check, resume links) follows the request's Host header. Set samlIdp({ baseURL }) or Better Auth's baseURL.",
         );
+      // Logout participants live as long as the session: when Better Auth extends a session,
+      // extend its participant rows, so the expiry sweep can't drop SPs a later logout must
+      // reach (review 2, R2-SLO-1).
+      const options = resolved.singleLogout
+        ? {
+            databaseHooks: {
+              session: {
+                update: {
+                  after: async (session: { id?: string; expiresAt?: Date | string }, hookCtx: { context: { adapter: unknown } } | null | undefined) => {
+                    if (!session?.id || !session.expiresAt || !hookCtx) return;
+                    await extendParticipants(hookCtx.context.adapter as any, session.id, new Date(session.expiresAt)).catch((e) =>
+                      ctx.logger.warn("[saml-idp] could not extend logout participants with the session", e),
+                    );
+                  },
+                },
+              },
+            },
+          }
+        : undefined;
       // SPs POST AuthnRequests cross-origin (HTTP-POST binding), like @better-auth/sso's ACS.
       const existing = ctx.skipOriginCheck;
-      if (existing === true) return {};
+      if (existing === true) return options ? { options } : {};
       // /slo too: SPs POST LogoutRequests and LogoutResponses cross-origin (D-028).
-      return { context: { skipOriginCheck: [...(Array.isArray(existing) ? existing : []), SSO_PATH, ...(resolved.singleLogout ? [SLO_PATH] : [])] } };
+      return {
+        context: { skipOriginCheck: [...(Array.isArray(existing) ? existing : []), SSO_PATH, ...(resolved.singleLogout ? [SLO_PATH] : [])] },
+        ...(options ? { options } : {}),
+      };
     },
     endpoints: {
       getSamlIdpMetadata: metadataEndpoint(getIdp, resolved),

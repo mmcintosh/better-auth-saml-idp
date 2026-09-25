@@ -109,7 +109,7 @@ export interface ServiceProviderConfig {
    * Where this SP receives SAML Single Logout messages (its SingleLogoutService). Needed for the
    * SP to take part in logout (D-028). Default binding: HTTP-Redirect.
    */
-  singleLogoutService?: { url: string; binding?: "redirect" | "post" };
+  singleLogoutService?: { url: string; binding?: "redirect" | "post"; /** Where LogoutResponses go, if not `url` (metadata ResponseLocation). */ responseUrl?: string };
   /** Override the global `signing.signResponse` for this SP. */
   signResponse?: boolean;
   /** Override the global `signing.signAssertion` for this SP. At least one must stay on. */
@@ -260,7 +260,7 @@ export interface ResolvedServiceProvider {
   /** Host-supplied NameID function; undefined means "use the format's default". */
   nameId: ((user: SamlIdpUser) => string) | undefined;
   attributes: (user: SamlIdpUser, onMissingField?: (field: string) => void) => Record<string, SamlAttributeValue>;
-  singleLogoutService: { url: string; binding: "redirect" | "post" } | undefined;
+  singleLogoutService: { url: string; binding: "redirect" | "post"; responseUrl?: string } | undefined;
   /** Metadata refresh (D-026); certificates are normalised to a list. */
   metadata: { url: string; refreshSeconds: number; signingCertificates: string[] } | undefined;
   /** The declarative map, when one was configured (for diagnostics). */

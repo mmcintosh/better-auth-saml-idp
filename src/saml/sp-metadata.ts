@@ -109,8 +109,14 @@ export async function serviceProviderFromMetadata(
   const sloRedirect = slo.find((s) => s.getAttribute("Binding") === "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect");
   const sloPost = slo.find((s) => s.getAttribute("Binding") === BINDING_POST);
   const sloChoice = sloRedirect ?? sloPost;
+  // Location takes requests; ResponseLocation, if present, takes responses (Metadata §2.2.2).
+  const responseLocation = sloChoice?.getAttribute("ResponseLocation") || undefined;
   const singleLogoutService = sloChoice
-    ? { url: (sloChoice.getAttribute("ResponseLocation") || sloChoice.getAttribute("Location")) as string, binding: sloChoice === sloRedirect ? ("redirect" as const) : ("post" as const) }
+    ? {
+        url: sloChoice.getAttribute("Location") as string,
+        binding: sloChoice === sloRedirect ? ("redirect" as const) : ("post" as const),
+        ...(responseLocation ? { responseUrl: responseLocation } : {}),
+      }
     : undefined;
 
   const serviceProvider: ServiceProviderConfig = {

@@ -176,7 +176,7 @@ export async function issueResponse(
       return samlError(ctx, state, request, { code: "Responder", subCode: "UnknownPrincipal", message: "The signed-in user is not the requested subject" });
   }
 
-  const sessionIndex = await sessionIndexOf(session.session.id);
+  const sessionIndex = sessionIndexOf(ctx.context.secret, session.session.id, sp.id);
   const signed = buildSignedResponse(state.options, {
     requestId: request.requestId,
     acsUrl: request.acsUrl,

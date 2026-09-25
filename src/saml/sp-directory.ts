@@ -103,7 +103,10 @@ export class SpDirectory {
     const hit = this.cache.get(key);
     if (hit && hit.expires > this.now()) return hit.sp;
     const row = (await adapter.findOne({ model: SP_MODEL, where: [{ field, value }] })) as StoredSpRow | null;
-    const sp = this.fromRow(row, log);
+    let sp = this.fromRow(row, log);
+    // Exact match only: a case-insensitive or PAD SPACE collation (e.g. MySQL) could return a row
+    // for "HTTPS://SP.example " when "https://sp.example" was stored (review 2).
+    if (sp && (field === "entityId" ? sp.entityId : sp.id) !== value) sp = undefined;
     if (cacheMs > 0) {
       if (this.cache.size >= MAX_CACHE_ENTRIES) this.cache.clear();
       this.cache.set(key, { sp, expires: this.now() + cacheMs });

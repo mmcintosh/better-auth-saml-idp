@@ -87,7 +87,10 @@ betterAuth({
 
 ## Known limitations (v1)
 
-- There's no Single Logout. IdP-initiated SSO has no `acs` parameter: it always uses the SP's first ACS URL.
+- Single Logout is front-channel and best effort: an SP that never sends the browser back stops the chain (the IdP session is already over). It's reported as `PartialLogout` only when the IdP can tell.
+- For an SP **without certificates**, a LogoutRequest is authenticated only by the SessionIndex issued to that SP, so anyone can make the IdP produce a signed `Success` LogoutResponse for such an SP, with an `InResponseTo` and RelayState of their choosing. An SP should check `InResponseTo` against its own pending logout. Give SPs that do SLO a certificate.
+- The registry's `metadata.url` can point at any https host, including internal ones reachable from a Node deployment. Only registry admins can set it, and fetch errors only reach the logs.
+- IdP-initiated SSO has no `acs` parameter: it always uses the SP's first ACS URL.
 - Encryption is configured per SP in code. `serviceProviderFromMetadata()` returns the SP's encryption certificates but doesn't turn encryption on. `keyAlgorithm: "rsa-oaep-sha256"` (`xmlenc11#rsa-oaep`) isn't supported by node-saml or samlify, and its `xenc11:MGF` element fails XSD validators that lack the XML Encryption 1.1 schema, so the default stays `rsa-oaep` (`rsa-oaep-mgf1p`).
 - The HTTP-POST binding is answered through a single-use, 120-second, same-site GET re-entry (`sso?cid=`), because the SP's cross-site POST carries no `SameSite=Lax` cookies. Forwarding that link is equivalent to forwarding an HTTP-Redirect AuthnRequest URL.
 - `AssertionConsumerServiceIndex` without a URL is rejected. SPs must send `AssertionConsumerServiceURL`.

@@ -47,7 +47,42 @@ export interface MetadataStatus {
   lastError?: string;
 }
 
+/** Read at most `max` bytes of a body (a server may omit or lie about Content-Length). */
+async function readLimited(res: Response, max: number): Promise<string> {
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel().catch(() => {});
+      throw new Error(`larger than ${max} bytes`);
+    }
+    chunks.push(value);
+  }
+  const all = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) {
+    all.set(c, at);
+    at += c.byteLength;
+  }
+  return new TextDecoder("utf-8", { fatal: true }).decode(all);
+}
+
 const fingerprint = (pem: string) => new X509Certificate(pem).fingerprint256;
+
+/**
+ * Everything the learned certificates depend on: a registry SP's URL, signature pins, entity ID
+ * or encryption settings can change at runtime, and certificates learned under the old values
+ * must not carry over (e.g. after re-pinning a compromised metadata key; review 2, R2-MD-1).
+ */
+function cacheKey(sp: ResolvedServiceProvider): string {
+  const md = sp.metadata;
+  return JSON.stringify([sp.id, sp.entityId, md?.url, md?.signingCertificates.map(fingerprint), sp.encryption ? [sp.encryption.dataAlgorithm, sp.encryption.keyAlgorithm] : null]);
+}
 
 export class SpMetadataCache {
   private readonly entries = new Map<string, Entry>();
@@ -63,8 +98,7 @@ export class SpMetadataCache {
    */
   async prepare(sp: ResolvedServiceProvider, log: MetadataLogger, background: (p: Promise<unknown>) => void): Promise<ResolvedServiceProvider> {
     if (!sp.metadata) return sp;
-    // Keyed by SP and URL: a registry SP's URL can change at runtime.
-    const key = `${sp.id}\u0000${sp.metadata.url}`;
+    const key = cacheKey(sp);
     let entry = this.entries.get(key);
     if (!entry) {
       if (this.entries.size >= 1000) this.entries.clear();
@@ -82,7 +116,7 @@ export class SpMetadataCache {
 
   status(sp: ResolvedServiceProvider): MetadataStatus | undefined {
     if (!sp.metadata) return undefined;
-    const e = this.entries.get(`${sp.id}\u0000${sp.metadata.url}`);
+    const e = this.entries.get(cacheKey(sp));
     return {
       url: sp.metadata.url,
       fetchedAt: e?.learned ? new Date(e.learned.fetchedAt) : undefined,
@@ -96,7 +130,11 @@ export class SpMetadataCache {
     if (!learned) return sp;
     const certs = [...sp.spCertificates];
     for (const c of learned.signingCertificates) if (!certs.includes(c)) certs.push(c);
-    return { ...sp, spCertificates: certs, encryption: learned.encryption ?? sp.encryption };
+    // A learned encryption key only while encryption is configured, with today's algorithms.
+    const encryption = sp.encryption && learned.encryption
+      ? { ...sp.encryption, publicKeyPem: learned.encryption.publicKeyPem, certificateBase64: learned.encryption.certificateBase64 }
+      : sp.encryption;
+    return { ...sp, spCertificates: certs, encryption };
   }
 
   private async refresh(sp: ResolvedServiceProvider, entry: Entry, log: MetadataLogger): Promise<void> {
@@ -129,7 +167,7 @@ export class SpMetadataCache {
     if (res.status !== 200) throw new Error(res.status >= 300 && res.status < 400 ? `HTTP ${res.status} redirect (not followed)` : `HTTP ${res.status}`);
     const declared = Number(res.headers.get("content-length") ?? 0);
     if (declared > MAX_BYTES) throw new Error(`larger than ${MAX_BYTES} bytes`);
-    const xml = await res.text();
+    const xml = await readLimited(res, MAX_BYTES);
     const pre = precheckXml(xml, MAX_BYTES);
     if (pre.length) throw new Error(pre.join("; "));
 

@@ -94,7 +94,7 @@ const serviceProviderShape = z.object({
     allowedRelayStates: z.array(z.string().min(1)).optional(),
     authorize: fn<ResolvedServiceProvider["authorize"]>().optional(),
     signResponse: z.boolean().optional(),
-    singleLogoutService: z.object({ url: acsUrl, binding: z.enum(["redirect", "post"]).optional() }).strict().optional(),
+    singleLogoutService: z.object({ url: acsUrl, binding: z.enum(["redirect", "post"]).optional(), responseUrl: acsUrl.optional() }).strict().optional(),
     metadata: z
       .object({
         url: z.url({ protocol: /^https$/, error: "must be an https:// URL" }),
@@ -424,7 +424,13 @@ function resolveServiceProvider(sp: ParsedServiceProvider, path: string, d: SpDe
         }
       : undefined,
     requireSignedAuthnRequests: sp.requireSignedAuthnRequests ?? false,
-    singleLogoutService: sp.singleLogoutService ? { url: sp.singleLogoutService.url, binding: sp.singleLogoutService.binding ?? "redirect" } : undefined,
+    singleLogoutService: sp.singleLogoutService
+      ? {
+          url: sp.singleLogoutService.url,
+          binding: sp.singleLogoutService.binding ?? "redirect",
+          ...(sp.singleLogoutService.responseUrl ? { responseUrl: sp.singleLogoutService.responseUrl } : {}),
+        }
+      : undefined,
     spCertificates: sp.spCertificate === undefined ? [] : [sp.spCertificate].flat(),
     allowIdpInitiated: sp.allowIdpInitiated ?? false,
     idpInitiatedRelayState: sp.idpInitiatedRelayState,
