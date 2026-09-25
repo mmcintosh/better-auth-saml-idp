@@ -735,3 +735,5 @@ The live test also found a **workerd incompatibility the stubbed tests couldn't*
 
 **Live on Workers + D1 (2026-09-25).** Migration `0004_session_participants.sql` was applied, and the example deployed with `singleLogout` enabled. The live metadata advertises both SingleLogoutService bindings. `/logout` without a session redirects to `returnTo`. A hostile `returnTo` gets `400 INVALID_RETURN_TO` (the error page now says "Sign-out could not be completed" for logout errors). The code-configured SP and the D1-stored SP both still pass smoke 15/15. Cloudflare Access doesn't do SAML SLO, so SP interop is node-saml, in CI on both runtimes.
 
+**Found after release, by `inspect` on the live IdP:** SLO-enabled metadata **failed the metadata XSD**. samlify emits `SingleLogoutService` after `SingleSignOnService`, but `SSODescriptorType` requires it before `NameIDFormat`. The SLO metadata test had only matched a regex. `renderMetadata` now moves the elements into schema order before any signing. The test validates the real document, signed and unsigned, against the XSD, and fails without the fix (mutation-checked). Live `inspect` is clean again.
+

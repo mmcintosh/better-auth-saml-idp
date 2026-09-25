@@ -2,6 +2,7 @@
 import { createPrivateKey } from "node:crypto";
 import { SAML } from "@node-saml/node-saml";
 import { describe, expect, inject, it } from "vitest";
+import { libxml2Validator } from "../../src/saml/validator";
 import { buildLogoutResponse, redirectBindingUrl, signedPostMessage } from "../../src/saml/logout";
 import { decodeAuthnRequest, parseRedirectQuery, verifyMessageSignature } from "../../src/saml/request";
 import { SP_ACS, SP_ENTITY_ID } from "../support/config";
@@ -265,6 +266,11 @@ describe("Single Logout: interop and metadata", () => {
     const { auth } = await host();
     const md = await (await auth.handler(new Request(`${AUTH_BASE}/saml2/idp/metadata`))).text();
     expect(md).toMatch(/SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https:\/\/auth\.test\/api\/auth\/saml2\/idp\/slo"/);
+    // Schema order matters (SingleLogoutService before NameIDFormat); validate the real document,
+    // signed and unsigned.
+    expect(await libxml2Validator().validate(md, "metadata")).toEqual({ valid: true });
+    const { auth: signed } = await createHost({ saml: { singleLogout: { enabled: true }, signMetadata: true } });
+    expect(await libxml2Validator().validate(await (await signed.handler(new Request(`${AUTH_BASE}/saml2/idp/metadata`))).text(), "metadata")).toEqual({ valid: true });
     const { auth: off } = await createHost({});
     expect(await (await off.handler(new Request(`${AUTH_BASE}/saml2/idp/metadata`))).text()).not.toContain("SingleLogoutService");
     expect((await off.handler(new Request(SLO))).status).toBe(404);
