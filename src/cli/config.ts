@@ -86,6 +86,11 @@ export async function checkConfig(path: string | undefined): Promise<Report> {
       Encryption: sp.encryption ? `${sp.encryption.dataAlgorithm} + ${sp.encryption.keyAlgorithm}` : "off",
       "Signed requests": sp.requireSignedAuthnRequests ? `required (${sp.spCertificates.length} certificate${sp.spCertificates.length === 1 ? "" : "s"})` : "optional",
       "IdP-initiated": sp.allowIdpInitiated ? "allowed" : "off",
+      Attributes: sp.attributeMap
+        ? Object.entries(sp.attributeMap)
+            .map(([name, src]) => `${name} ← ${typeof src === "string" ? src : JSON.stringify(src)}`)
+            .join("\n") || "(none)"
+        : "(function)",
     });
     for (const u of sp.acsUrls) if (u.startsWith("http:")) report.warn(`SP ${sp.id}: ACS URL ${u} is not https`);
     for (const [i, c] of sp.spCertificates.entries()) checkCert(report, `SP ${sp.id} certificate #${i + 1}`, certSummary(c));

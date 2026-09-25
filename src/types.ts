@@ -24,6 +24,17 @@ export const NAMEID_FORMAT = {
   transient: "urn:oasis:names:tc:SAML:2.0:nameid-format:transient",
 } as const;
 
+/**
+ * Where a mapped attribute's value comes from:
+ * - `"email"`: a user field (core or additional, e.g. `"role"`);
+ * - `{ field, split?, part? }`: a field, split into several values (`split: ","`) and/or reduced to
+ *   the first word or the rest (`part: "first" | "last"`, for first/last name from `name`);
+ * - `{ value }`: a constant.
+ * Missing, null and empty values are left out; dates become ISO 8601; arrays are multi-valued.
+ */
+export type AttributeSource = string | { field: string; split?: string; part?: "first" | "last" } | { value: string | string[] };
+export type AttributeMap = Record<string, AttributeSource>;
+
 export interface ServiceProviderConfig {
   /** Stable identifier used in logs and in `/saml2/idp/init?sp=<id>` (IdP-initiated SSO). */
   id: string;
@@ -44,8 +55,12 @@ export interface ServiceProviderConfig {
    * - transient: a new random identifier for every assertion.
    */
   nameId?: (user: SamlIdpUser) => string;
-  /** Attributes to include in the `<AttributeStatement>`. */
-  attributes?: (user: SamlIdpUser) => Record<string, SamlAttributeValue>;
+  /**
+   * Attributes to include in the `<AttributeStatement>`: a function, or a declarative map from
+   * attribute name to source (usable from JSON configuration), e.g.
+   * `{ email: "email", groups: { field: "role", split: "," }, firstName: { field: "name", part: "first" } }`.
+   */
+  attributes?: ((user: SamlIdpUser) => Record<string, SamlAttributeValue>) | AttributeMap;
   /** Reject unsigned AuthnRequests from this SP. Requires `spCertificate`. */
   requireSignedAuthnRequests?: boolean;
   /**
@@ -189,7 +204,9 @@ export interface ResolvedServiceProvider {
   nameIdFormat: string;
   /** Host-supplied NameID function; undefined means "use the format's default". */
   nameId: ((user: SamlIdpUser) => string) | undefined;
-  attributes: (user: SamlIdpUser) => Record<string, SamlAttributeValue>;
+  attributes: (user: SamlIdpUser, onMissingField?: (field: string) => void) => Record<string, SamlAttributeValue>;
+  /** The declarative map, when one was configured (for diagnostics). */
+  attributeMap: AttributeMap | undefined;
   requireSignedAuthnRequests: boolean;
   /** Normalised to a list; empty when none configured. */
   spCertificates: string[];

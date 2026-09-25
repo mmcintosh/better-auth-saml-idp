@@ -8,6 +8,15 @@ import type { SpRegistry } from "../saml/sp-registry";
 import { base64url, sha256b64url, type ValidatedRequest } from "../storage/pending";
 import { NAMEID_FORMAT, type ResolvedSamlIdpOptions, type ResolvedServiceProvider, type SamlIdpUser } from "../types";
 
+/** A mapped field the user object lacks: warn once per SP and field (typo, or a field not in the schema). */
+const warnedMissing = new Set<string>();
+function warnMissingField(ctx: GenericEndpointContext, sp: ResolvedServiceProvider, field: string) {
+  const key = `${sp.id}\u0000${field}`;
+  if (warnedMissing.has(key)) return;
+  if (warnedMissing.size < 1000) warnedMissing.add(key);
+  ctx.context.logger.warn(`[saml-idp] attributes for SP ${sp.id}: the user has no field "${field}"; the attribute is left out`);
+}
+
 export interface PluginState {
   options: ResolvedSamlIdpOptions;
   registry: SpRegistry;
@@ -128,7 +137,7 @@ export async function issueResponse(
   let attributes: ReturnType<ResolvedServiceProvider["attributes"]>;
   try {
     nameId = sp.nameId ? sp.nameId(user) : defaultNameId(ctx, sp, user);
-    attributes = sp.attributes(user);
+    attributes = sp.attributes(user, (field) => warnMissingField(ctx, sp, field));
   } catch (e) {
     ctx.context.logger.error(`[saml-idp] nameId()/attributes() threw for SP ${sp.id}`, e);
     return fail(ctx, "INTERNAL_ERROR");

@@ -42,7 +42,16 @@ type SpJson = Pick<
   | "signResponse"
   | "signAssertion"
   | "encryption"
+  | "attributes"
 >;
+
+/** Sent to SPs whose JSON entry has no `attributes` (a declarative map; JSON can set its own). */
+const DEFAULT_ATTRIBUTES = {
+  email: "email",
+  name: "name",
+  firstName: { field: "name", part: "first" },
+  lastName: { field: "name", part: "last" },
+} as const;
 
 // Built once per isolate. Better Auth itself is created per request (to pass that request's
 // `cf` geolocation), but the SAML plugin holds the parsed keys and the compiled XSDs.
@@ -60,13 +69,7 @@ function samlPlugin(env: Env, origin: string) {
       certificate: env.SAML_IDP_CERT,
       additionalCertificates: pemBlocks(env.SAML_IDP_ADDITIONAL_CERTS),
     },
-    serviceProviders: sps.map((sp) => ({
-      ...sp,
-      attributes: (user) => {
-        const [firstName, ...rest] = (user.name ?? "").split(" ");
-        return { email: user.email, name: user.name, firstName: firstName ?? "", lastName: rest.join(" ") };
-      },
-    })),
+    serviceProviders: sps.map((sp) => ({ ...sp, attributes: sp.attributes ?? DEFAULT_ATTRIBUTES })),
   });
   plugin = { key, value };
   return value;

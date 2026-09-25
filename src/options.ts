@@ -1,3 +1,4 @@
+import { compileAttributeMap } from "./attributes";
 import { type KeyObject, X509Certificate, createPrivateKey, createPublicKey } from "node:crypto";
 import * as z from "zod";
 import type { AssertionEncryption } from "./saml/encrypt";
@@ -7,6 +8,7 @@ import type {
   ResolvedServiceProvider,
   SamlIdpOptions,
   SamlIdpUser,
+  AttributeSource,
 } from "./types";
 
 export const NAMEID_EMAIL = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress";
@@ -53,6 +55,31 @@ const acsUrl = z.string().superRefine((v, ctx) => {
   if (url.username || url.password) ctx.addIssue({ code: "custom", message: `"${v}" must not contain credentials` });
 });
 
+const FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+const FIELD_MESSAGE = "must be a user field name (letters, digits, _), e.g. \"email\" or \"role\"";
+/** One map entry; checked by hand so a mistake gets a specific message rather than "Invalid input". */
+const attributeSource = z.custom<AttributeSource>(() => true).superRefine((v, ctx) => {
+  const issue = (message: string, path: (string | number)[] = []) => ctx.addIssue({ code: "custom", message, path });
+  if (typeof v === "string") {
+    if (!FIELD_NAME.test(v)) issue(FIELD_MESSAGE);
+    return;
+  }
+  if (!v || typeof v !== "object" || Array.isArray(v)) return issue('must be a field name, { field, split?, part? } or { value }');
+  const o = v as Record<string, unknown>;
+  const keys = Object.keys(o);
+  if ("value" in o) {
+    if (keys.length !== 1) issue("{ value } takes no other keys");
+    const ok = typeof o.value === "string" || (Array.isArray(o.value) && o.value.length > 0 && o.value.every((x) => typeof x === "string"));
+    if (!ok) issue("must be a string or a non-empty array of strings", ["value"]);
+    return;
+  }
+  for (const k of keys) if (!["field", "split", "part"].includes(k)) issue(`unknown key "${k}" (expected field, split, part)`);
+  if (typeof o.field !== "string" || !FIELD_NAME.test(o.field)) issue(FIELD_MESSAGE, ["field"]);
+  if (o.split !== undefined && (typeof o.split !== "string" || o.split.length < 1 || o.split.length > 8)) issue("must be a 1-8 character separator", ["split"]);
+  if (o.part !== undefined && o.part !== "first" && o.part !== "last") issue('must be "first" or "last"', ["part"]);
+});
+const attributeMapSchema = z.record(z.string().min(1, "attribute names can't be empty").max(256), attributeSource);
+
 const serviceProviderSchema = z
   .object({
     id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, "must be 1-64 characters of A-Z a-z 0-9 _ -"),
@@ -60,7 +87,7 @@ const serviceProviderSchema = z
     acsUrls: z.array(acsUrl).min(1, "must list at least one ACS URL"),
     nameIdFormat: z.string().min(1).optional(),
     nameId: fn<(user: SamlIdpUser) => string>().optional(),
-    attributes: fn<(user: SamlIdpUser) => Record<string, string | string[]>>().optional(),
+    attributes: z.union([fn<(user: SamlIdpUser) => Record<string, string | string[]>>(), attributeMapSchema]).optional(),
     requireSignedAuthnRequests: z.boolean().optional(),
     spCertificate: z.union([pem("CERTIFICATE"), z.array(pem("CERTIFICATE")).min(1)]).optional(),
     allowIdpInitiated: z.boolean().optional(),
@@ -351,7 +378,8 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
         acsUrls: sp.acsUrls as [string, ...string[]],
         nameIdFormat: sp.nameIdFormat ?? NAMEID_EMAIL,
         nameId: sp.nameId,
-        attributes: sp.attributes ?? (() => ({})),
+        attributes: typeof sp.attributes === "function" ? sp.attributes : compileAttributeMap(sp.attributes ?? {}),
+        attributeMap: typeof sp.attributes === "function" ? undefined : sp.attributes,
         requireSignedAuthnRequests: sp.requireSignedAuthnRequests ?? false,
         spCertificates: sp.spCertificate === undefined ? [] : Array.isArray(sp.spCertificate) ? sp.spCertificate : [sp.spCertificate],
         allowIdpInitiated: sp.allowIdpInitiated ?? false,

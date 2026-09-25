@@ -39,7 +39,7 @@ FEATURES = [
  ("Replay and protocol fidelity", "ForceAuthn, IsPassive, RequestedAuthnContext", row(("y","ForceAuthn verified live with Cloudflare Access; RequestedAuthnContext exact match"),("y",""),("p",""),("y","step-up via LoA"),("n",""),("p","ForceAuthn only"),("p","ForceAuthn only"),("n",""),("y","RequestedAuthnContext exact only"),("p","ForceAuthn setting"),("u",""),("p","no IsPassive")), "test/integration/review-findings.test.ts #12"),
  ("Replay and protocol fidelity", "SAML error status Responses", row(("y","NoPassive, NoAuthnContext, UnknownPrincipal, InvalidNameIDPolicy"),("y",""),("y",""),("y",""),("y",""),("n","SSO errors are HTML pages"),("n",""),("n",""),("y",""),("u",""),("p","mostly error pages"),("u","")), "test/integration/review-findings.test.ts"),
  ("Identity and access", "NameID formats per SP", row(("y","email, persistent (per-SP HMAC), transient, unspecified"),("y",""),("y",""),("y",""),("n","fixed; labelled email, carries username"),("y",""),("y",""),("p","passes upstream NameID"),("y",""),("y",""),("p",""),("y","")), "test/integration/review-findings.test.ts #11"),
- ("Identity and access", "Attribute mapping", row(("p","per-SP function in code; no declarative map yet"),("y","declarative + scripts"),("y",""),("y","mappers + scripts"),("p","fixed set + Actions"),("y","Python mappings"),("y","declarative"),("p",""),("y",""),("y",""),("y",""),("y","")), "test/integration/sso-flow.test.ts"),
+ ("Identity and access", "Attribute mapping", row(("y","per SP: declarative map (JSON-friendly) or a function"),("y","declarative + scripts"),("y",""),("y","mappers + scripts"),("p","fixed set + Actions"),("y","Python mappings"),("y","declarative"),("p",""),("y",""),("y",""),("y",""),("y","")), "test/integration/sso-flow.test.ts"),
  ("Identity and access", "Per-SP access control", row(("y","authorize() hook, deny = no assertion"),("y",""),("p","via authproc filters"),("p","via conditional flows"),("y","per project"),("y","policy bindings"),("u",""),("p","routing only"),("y","app assignment"),("y","app assignment"),("y","per OU or group"),("u","")), "test/integration/security.test.ts"),
  ("Identity and access", "MFA and step-up for SAML", row(("p","host's Better Auth 2FA; no step-up mapping yet"),("y",""),("p","via modules"),("y",""),("p","MFA, no step-up"),("p","ForceAuthn step-up"),("p","MFA, no step-up"),("n","delegated upstream"),("y","Conditional Access (P1)"),("y","policies"),("u",""),("p","")), ""),
  ("Operations", "Register an SP from its metadata XML or URL", row(("p","XML import helper; URL refresh on roadmap v1.2"),("y","file, URL, MDQ"),("p","converter, refresh add-on"),("y","XML import, URL for certificates"),("y","the only way"),("p","file import"),("n",""),("n",""),("p","fills URLs, not certificates"),("n","manual fields"),("n",""),("n","")), ""),
@@ -72,7 +72,7 @@ ROADMAP = [
  ]),
  ("Later", "Considered", "Valuable, but needs design first or depends on the host.", [
    ("Step-up authentication", "Map RequestedAuthnContext to the host's Better Auth 2FA state, as Keycloak does with levels of authentication."),
-   ("Declarative attribute mapping", "Spec open question 5; functions already cover it in code."),
+   ("Declarative attribute mapping (done)", "Per-SP map from attribute name to user field, constant, split list or first/last name; usable from JSON configuration."),
    ("Upstreaming", "Propose integration with @better-auth/sso on better-auth #6254 once v1 is stable."),
  ]),
  ("Not planned", "Out of scope", "Deliberately left out.", [

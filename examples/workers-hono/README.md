@@ -38,6 +38,8 @@ SPs come from the `SAML_SERVICE_PROVIDERS` variable, a JSON array, so adding one
 ]
 ```
 
+Each entry takes any JSON-representable SP option, including `attributes` as a declarative map (for example `"attributes": { "email": "email", "role": "role" }`). Without one, the example sends `email`, `name`, `firstName` and `lastName`. Check a config with `npx better-auth-saml-idp check-config`.
+
 - **Locally:** `pnpm dev --var 'SAML_SERVICE_PROVIDERS:[...]'`, or put it in `.dev.vars`.
 - **Deployed:** set it in `wrangler.jsonc` → `vars`, or with the dashboard.
 

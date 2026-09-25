@@ -73,6 +73,21 @@ const { serviceProvider, warnings } = await serviceProviderFromMetadata(cloudfla
 });
 ```
 
+**Attributes.** Each SP's `attributes` is either a function `(user) => ({ ... })` or a declarative map, which also works from JSON configuration:
+
+```ts
+attributes: {
+  email: "email",                                 // a user field
+  role: "role",                                   // additional fields too (e.g. the admin plugin's)
+  groups: { field: "teams", split: "," },         // one field → several values
+  firstName: { field: "name", part: "first" },    // "Ada King Lovelace" → "Ada"
+  lastName: { field: "name", part: "last" },      //                     → "King Lovelace"
+  org: { value: "Acme" },                         // a constant
+}
+```
+
+Missing, null and empty values are left out. Dates become ISO 8601 and arrays become several values. A field the user doesn't have is logged once, so a typo shows up in the logs.
+
 **Signing options.** Response and Assertion are both signed by default. Each SP can override `signResponse` / `signAssertion`, but at least one must stay on. Set `signMetadata: true` to sign the metadata document for SPs and federations that verify it.
 
 **Encrypted assertions (per SP).** Give an SP `encryption: { certificate: "<the SP's PEM encryption certificate>" }` and its assertions arrive as `<saml:EncryptedAssertion>`: AES-256-GCM with RSA-OAEP by default, signed before encryption and wrapped in a signed Response. `dataAlgorithm` also takes `aes128-gcm`, or `aes256-cbc` with `allowInsecureCbc: true` for SPs without GCM. `keyAlgorithm: "rsa-oaep-sha256"` is available, but node-saml and samlify can't decrypt it. RSA PKCS#1 v1.5 isn't offered. See DECISIONS.md D-020.
@@ -198,7 +213,7 @@ For hosts with many SPs or changing SPs.
 Valuable, but needs design first or depends on the host.
 
 - **Step-up authentication.** Map RequestedAuthnContext to the host's Better Auth 2FA state, as Keycloak does with levels of authentication.
-- **Declarative attribute mapping.** Spec open question 5; functions already cover it in code.
+- **Declarative attribute mapping (done).** Per-SP map from attribute name to user field, constant, split list or first/last name; usable from JSON configuration.
 - **Upstreaming.** Propose integration with @better-auth/sso on better-auth #6254 once v1 is stable.
 
 ### Not planned: Out of scope

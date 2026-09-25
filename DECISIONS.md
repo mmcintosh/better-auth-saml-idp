@@ -545,3 +545,22 @@ SPs parse the decrypted element on its own, outside the Response that declares `
   - Requests: signed-request verification.
   - Checked by hand against the live Workers deployment: `inspect`, `smoke` (15 of 15), and `request` then `decode` of a live signed NoPassive Response.
 
+## D-024: Declarative attribute mapping (2026-09-25)
+
+Spec open question 5. `serviceProviders[].attributes` accepts a map as well as a function: `{ attributeName: source }`. A source is one of:
+- a user field (`"email"`, `"role"`);
+- `{ field, split?, part? }`: split a field into several values, or take the first word or the rest of it (first/last name from `name`);
+- `{ value }`: a constant.
+
+**Why this shape.** It covers what SPs actually ask for (email, names, groups/roles, a fixed org) while staying data, not code. That means an SP entry is plain JSON: the Workers example's config var, `check-config`, `sp-from-metadata` output, and the planned database registry can all hold it. Anything more complex stays a function. We deliberately don't provide expressions or templates, since a mini-language would be attack surface and a maintenance burden.
+
+**Semantics.**
+- The map is compiled once at startup into the same `(user) => attributes` function, so issuing has one code path.
+- Only the user's *own* properties are read (`Object.hasOwn`), so `"constructor"` and the like resolve to nothing.
+- Field names must match `[A-Za-z_][A-Za-z0-9_]{0,63}`.
+- Values: null, empty and object values are left out (no `"[object Object]"`). Dates become ISO 8601, and arrays and `split` results are multi-valued.
+- A field the user doesn't have is logged once per SP and field, so a typo shows up instead of silently dropping the attribute.
+- Validation messages name the exact problem (for example `part: must be "first" or "last"`), not zod's generic "Invalid input".
+
+**Tests.** Unit tests cover every source type and edge case, inherited properties, and each validation message. An integration test has the strict samlify SP read mapped fields, the admin plugin's `role`, name parts, constants and escaped values. It also checks that a missing field is left out and warned about exactly once.
+
