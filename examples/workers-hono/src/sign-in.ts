@@ -14,6 +14,7 @@ button{margin-top:1rem;padding:.5rem 1rem}#err{color:#b00020}</style></head><bod
 <label id="nameLabel" for="name" hidden>Name</label><input id="name" name="name" hidden>
 <button id="submit" type="submit">Sign in</button> <button id="toggle" type="button">Create an account instead</button>
 <p id="err" role="alert"></p></form>
+<p id="sent" hidden>Check your email for a verification link to finish signing in.</p>
 <script nonce="${nonce}">
 const f=document.getElementById("f"),err=document.getElementById("err"),name=document.getElementById("name"),nameLabel=document.getElementById("nameLabel");
 let signUp=false;
@@ -23,8 +24,9 @@ document.getElementById("toggle").onclick=()=>{signUp=!signUp;name.hidden=nameLa
 function safeCallback(){const raw=new URLSearchParams(location.search).get("callbackURL")||"/";
   try{const u=new URL(raw,location.origin);return u.origin===location.origin?u.href:"/";}catch{return "/";}}
 f.onsubmit=async(e)=>{e.preventDefault();err.textContent="";
-  const body={email:f.email.value,password:f.password.value};if(signUp)body.name=f.name.value||f.email.value;
+  const body={email:f.email.value,password:f.password.value,callbackURL:safeCallback()};if(signUp)body.name=f.name.value||f.email.value;
   const r=await fetch("/api/auth/"+(signUp?"sign-up":"sign-in")+"/email",{method:"POST",headers:{"content-type":"application/json"},credentials:"include",body:JSON.stringify(body)});
+  if(r.ok&&signUp){f.hidden=true;document.getElementById("sent").hidden=false;return;}
   if(r.ok){location.assign(safeCallback());return;}
   const j=await r.json().catch(()=>({}));err.textContent=j.message||("Failed ("+r.status+")");};
 </script></body></html>`;

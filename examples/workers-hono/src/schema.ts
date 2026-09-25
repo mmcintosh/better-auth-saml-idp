@@ -91,6 +91,7 @@ export const samlIdpSeenRequests = sqliteTable(
   "saml_idp_seen_requests",
   {
     id: text("id").primaryKey(),
+    key: text("key").notNull().unique(),
     spId: text("sp_id").notNull(),
     requestId: text("request_id").notNull(),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),

@@ -7,6 +7,7 @@
  *  - No I/O. Schema documents come from an in-memory registry filled by the
  *    host through xv_register_file(); anything not in the registry fails to
  *    load. libxml2's default I/O callbacks are removed after init.
+ *  - Instance documents must be well-formed and namespace-well-formed.
  *  - Instance documents: XML_PARSE_NONET, no NOENT/DTDLOAD/DTDATTR, and any
  *    DOCTYPE stops the parser (SAX internalSubset hook) and is reported as an
  *    error; the tree is additionally checked for DTD nodes after parsing.
@@ -304,7 +305,11 @@ int xv_validate(int kind, const char *xml, int xml_len) {
         xmlFreeParserCtxt(ctxt);
         return 1;
     }
-    if (doc == NULL || !ctxt->wellFormed) {
+    /* Namespace errors (unbound prefix, duplicate expanded attribute name,
+     * misuse of the xml/xmlns prefixes, empty prefixed declaration) only
+     * clear nsWellFormed, and libxml2 still returns a tree. Such a document
+     * is not namespace-well-formed and must never reach the schema check. */
+    if (doc == NULL || !ctxt->wellFormed || !ctxt->nsWellFormed) {
         if (err_count == 0) errors_add("document is not well-formed");
         if (doc != NULL) xmlFreeDoc(doc);
         xmlFreeParserCtxt(ctxt);

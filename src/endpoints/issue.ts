@@ -1,59 +1,106 @@
+import { createHmac } from "node:crypto";
 import type { GenericEndpointContext } from "better-auth";
 import { ERROR_STATUS, SAML_IDP_ERROR_CODES, type SamlIdpErrorCode } from "../errors";
 import { autoPostResponse, errorPage } from "../saml/post-form";
-import { buildSignedResponse } from "../saml/response";
+import { logSafe, type SamlStatus } from "../saml/request";
+import { buildSignedErrorResponse, buildSignedResponse, newSamlId } from "../saml/response";
 import type { SpRegistry } from "../saml/sp-registry";
-import { sha256b64url } from "../storage/pending";
-import type { ResolvedSamlIdpOptions, ResolvedServiceProvider, SamlIdpUser } from "../types";
+import { base64url, sha256b64url, type ValidatedRequest } from "../storage/pending";
+import { NAMEID_FORMAT, type ResolvedSamlIdpOptions, type ResolvedServiceProvider, type SamlIdpUser } from "../types";
 
 export interface PluginState {
   options: ResolvedSamlIdpOptions;
   registry: SpRegistry;
 }
 
-type SessionWithUser = { session: { id: string; token: string; createdAt: Date; expiresAt: Date }; user: { id: string } };
+type SessionWithUser = {
+  session: { id: string; token: string; createdAt: Date; expiresAt: Date; impersonatedBy?: unknown };
+  user: { id: string };
+};
 
 /** Error page for a plugin error code; the detail goes to the debug log only. */
 export function fail(ctx: GenericEndpointContext, code: SamlIdpErrorCode, detail?: string): Response {
-  ctx.context.logger.debug(`[saml-idp] ${code}${detail ? `: ${detail}` : ""}`);
+  ctx.context.logger.debug(`[saml-idp] ${code}${detail ? `: ${logSafe(detail, 300)}` : ""}`);
   return errorPage(ERROR_STATUS[code], code, SAML_IDP_ERROR_CODES[code].message);
 }
 
-function isBanned(user: Record<string, unknown>, now: Date): boolean {
-  if (user.banned !== true) return false;
+/**
+ * A SAML error Response to the (already validated) ACS URL. Used when the SP should learn the
+ * outcome in-protocol: NoPassive, NoAuthnContext, InvalidNameIDPolicy, UnknownPrincipal.
+ */
+export function samlError(
+  ctx: GenericEndpointContext,
+  state: PluginState,
+  req: Pick<ValidatedRequest, "requestId" | "acsUrl" | "relayState" | "spId">,
+  status: SamlStatus,
+): Response {
+  ctx.context.logger.debug(`[saml-idp] SAML status ${status.code}/${status.subCode ?? "-"} for SP ${req.spId}`);
+  const res = buildSignedErrorResponse(state.options, { requestId: req.requestId, acsUrl: req.acsUrl, status, now: new Date() });
+  return autoPostResponse(req.acsUrl, res.base64, req.relayState);
+}
+
+/** Truthy like Better Auth's admin plugin: some adapters return 1 for a boolean column. */
+const truthy = (v: unknown) => v === true || v === 1 || v === "1" || v === "true";
+
+export function isBanned(user: Record<string, unknown>, now: Date): boolean {
+  if (!truthy(user.banned)) return false;
   const exp = user.banExpires;
   if (exp === null || exp === undefined) return true;
   const t = exp instanceof Date ? exp.getTime() : new Date(exp as string | number).getTime();
   return Number.isNaN(t) || t > now.getTime();
 }
 
+type Refusal = { code: SamlIdpErrorCode; detail: string };
+
 /**
- * ADDENDUM-01 R3: re-read the user (and, where the database holds sessions, the session)
- * straight from the database immediately before signing. A session served from a KV cache
- * can outlive revocation (better-auth-cloudflare #61); the database is the source of truth.
+ * Immediately before signing: re-read the user (and, where the database holds sessions, the
+ * session) from the database (ADDENDUM-01 R3), then apply the account policy. A session served
+ * from a KV cache can outlive revocation (better-auth-cloudflare #61); the database is the
+ * source of truth. An IdP vouches for identities, so the defaults are strict: unverified email,
+ * impersonation and anonymous users are refused (review finding #1).
  */
-async function freshPrincipal(ctx: GenericEndpointContext, session: SessionWithUser, now: Date) {
+async function eligiblePrincipal(
+  ctx: GenericEndpointContext,
+  state: PluginState,
+  session: SessionWithUser,
+  now: Date,
+): Promise<{ user: SamlIdpUser } | Refusal> {
   const user = (await ctx.context.internalAdapter.findUserById(session.user.id)) as SamlIdpUser | null;
-  if (!user) return { error: "user no longer exists" as const };
-  if (isBanned(user, now)) return { error: "user is banned" as const };
+  if (!user) return { code: "ACCOUNT_INACTIVE", detail: "user no longer exists" };
+  if (isBanned(user, now)) return { code: "ACCOUNT_INACTIVE", detail: "user is banned" };
 
   const opts = ctx.context.options as { secondaryStorage?: unknown; session?: { storeSessionInDatabase?: boolean } };
   const sessionsInDatabase = !opts.secondaryStorage || opts.session?.storeSessionInDatabase === true;
+  let impersonatedBy = session.session.impersonatedBy;
   if (sessionsInDatabase) {
     const row = (await ctx.context.adapter.findOne({
       model: "session",
       where: [{ field: "token", value: session.session.token }],
-    })) as { expiresAt: Date | string } | null;
-    if (!row) return { error: "session no longer exists" as const };
-    if (new Date(row.expiresAt).getTime() <= now.getTime()) return { error: "session expired" as const };
+    })) as { expiresAt: Date | string; impersonatedBy?: unknown } | null;
+    if (!row) return { code: "ACCOUNT_INACTIVE", detail: "session no longer exists" };
+    if (new Date(row.expiresAt).getTime() <= now.getTime()) return { code: "ACCOUNT_INACTIVE", detail: "session expired" };
+    impersonatedBy = row.impersonatedBy;
   }
+
+  const policy = state.options.accountPolicy;
+  if (policy.requireEmailVerified && !truthy(user.emailVerified)) return { code: "EMAIL_NOT_VERIFIED", detail: `user ${user.id}` };
+  if (!policy.allowImpersonatedSessions && impersonatedBy) return { code: "SESSION_NOT_ALLOWED", detail: "impersonated session" };
+  if (!policy.allowAnonymousUsers && truthy(user.isAnonymous)) return { code: "SESSION_NOT_ALLOWED", detail: "anonymous user" };
   return { user };
 }
 
-export interface IssueRequest {
-  requestId: string;
-  acsUrl: string;
-  relayState: string | undefined;
+/**
+ * NameID per format when the host supplies no `nameId` function (review finding #11):
+ * persistent → opaque, stable, per-SP, never re-assigned (HMAC of user id, keyed with the
+ * Better Auth secret); transient → one-time random; otherwise the (verified) email.
+ */
+function defaultNameId(ctx: GenericEndpointContext, sp: ResolvedServiceProvider, user: SamlIdpUser): string {
+  if (sp.nameIdFormat === NAMEID_FORMAT.persistent) {
+    const mac = createHmac("sha256", ctx.context.secret).update(`saml-idp:persistent\u0000${sp.entityId}\u0000${user.id}`).digest();
+    return base64url(new Uint8Array(mac));
+  }
+  if (sp.nameIdFormat === NAMEID_FORMAT.transient) return newSamlId();
+  return user.email;
 }
 
 export async function issueResponse(
@@ -61,11 +108,11 @@ export async function issueResponse(
   state: PluginState,
   sp: ResolvedServiceProvider,
   session: SessionWithUser,
-  request: IssueRequest,
+  request: ValidatedRequest,
 ): Promise<Response> {
   const now = new Date();
-  const principal = await freshPrincipal(ctx, session, now);
-  if ("error" in principal) return fail(ctx, "ACCOUNT_INACTIVE", principal.error);
+  const principal = await eligiblePrincipal(ctx, state, session, now);
+  if ("code" in principal) return fail(ctx, principal.code, principal.detail);
   const user = principal.user;
 
   let allowed = false;
@@ -80,7 +127,7 @@ export async function issueResponse(
   let nameId: unknown;
   let attributes: ReturnType<ResolvedServiceProvider["attributes"]>;
   try {
-    nameId = sp.nameId(user);
+    nameId = sp.nameId ? sp.nameId(user) : defaultNameId(ctx, sp, user);
     attributes = sp.attributes(user);
   } catch (e) {
     ctx.context.logger.error(`[saml-idp] nameId()/attributes() threw for SP ${sp.id}`, e);
@@ -89,6 +136,13 @@ export async function issueResponse(
   if (typeof nameId !== "string" || nameId.length === 0) {
     ctx.context.logger.error(`[saml-idp] nameId() returned an empty value for SP ${sp.id}`);
     return fail(ctx, "INTERNAL_ERROR");
+  }
+
+  // The SP asked about a specific principal: answer only for that one (Core §3.4.1.4).
+  if (request.subject) {
+    const formatOk = !request.subject.format || request.subject.format === sp.nameIdFormat || request.subject.format === NAMEID_FORMAT.unspecified;
+    if (!formatOk || request.subject.nameId !== nameId)
+      return samlError(ctx, state, request, { code: "Responder", subCode: "UnknownPrincipal", message: "The signed-in user is not the requested subject" });
   }
 
   const sessionIndex = `_${(await sha256b64url(`saml-idp:session\u0000${session.session.id}`)).slice(0, 32)}`;

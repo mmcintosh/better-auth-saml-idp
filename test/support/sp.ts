@@ -3,7 +3,10 @@
 import { createPrivateKey, sign as cryptoSign } from "node:crypto";
 import * as samlify from "samlify";
 import { inject } from "vitest";
+import { libxml2Validator } from "../../src/saml/validator";
 import { AUTH_BASE, BASE_URL } from "./host";
+
+const testValidator = libxml2Validator();
 import { SP_ACS, SP_ENTITY_ID } from "./config";
 
 export const SSO_URL = `${AUTH_BASE}/saml2/idp/sso`;
@@ -82,45 +85,75 @@ export async function redirectUrl(xml: string, opts: RedirectOptions = {}): Prom
 
 export { deflateRaw };
 
-/** A minimal browser: follows nothing automatically, but carries cookies between requests. */
+type AuthLike = { handler(r: Request): Promise<Response>; $context: Promise<any> };
+
+/**
+ * A minimal browser: carries cookies between requests and, like Chromium, withholds
+ * SameSite=Lax/Strict cookies on cross-site POSTs (`crossSite: true`), which is what the SP's
+ * HTTP-POST binding form submission is. (Review finding #6 hid behind a jar that sent every
+ * cookie everywhere.) Real-browser behaviour is covered end to end by `pnpm e2e` (Playwright).
+ */
 export class Browser {
-  private jar = new Map<string, string>();
+  private jar = new Map<string, { value: string; sameSite: "lax" | "strict" | "none" }>();
   /**
    * Each simulated browser is a distinct client IP. Rate limiting stays ON (ADDENDUM-01 R5);
    * distinct IPs keep unrelated tests from sharing a sign-up budget.
    */
   private readonly clientIp = `10.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}.${1 + Math.floor(Math.random() * 250)}`;
-  constructor(private auth: { handler(r: Request): Promise<Response> }) {}
+  constructor(public auth: AuthLike) {}
 
-  cookieHeader() {
-    return [...this.jar].map(([k, v]) => `${k}=${v}`).join("; ");
+  cookieHeader(opts: { crossSite?: boolean } = {}) {
+    return [...this.jar]
+      .filter(([, c]) => !opts.crossSite || c.sameSite === "none")
+      .map(([k, c]) => `${k}=${c.value}`)
+      .join("; ");
   }
 
-  async fetch(url: string, init: RequestInit = {}): Promise<Response> {
-    const headers = new Headers(init.headers);
-    if (this.jar.size) headers.set("cookie", this.cookieHeader());
-    if (!headers.has("origin") && init.method && init.method !== "GET") headers.set("origin", BASE_URL);
+  async fetch(url: string, init: RequestInit & { crossSite?: boolean } = {}): Promise<Response> {
+    const { crossSite, ...rest } = init;
+    const headers = new Headers(rest.headers);
+    const cookie = this.cookieHeader({ crossSite });
+    if (cookie) headers.set("cookie", cookie);
+    if (!headers.has("origin") && rest.method && rest.method !== "GET") headers.set("origin", BASE_URL);
     if (!headers.has("cf-connecting-ip")) headers.set("cf-connecting-ip", this.clientIp);
-    const res = await this.auth.handler(new Request(url, { ...init, headers, redirect: "manual" }));
+    const res = await this.auth.handler(new Request(url, { ...rest, headers, redirect: "manual" }));
     for (const c of res.headers.getSetCookie()) {
-      const [pair] = c.split(";");
+      const [pair, ...attrs] = c.split(";");
       const i = pair!.indexOf("=");
       const name = pair!.slice(0, i).trim();
       const value = pair!.slice(i + 1).trim();
+      const ss = attrs.map((a) => a.trim().toLowerCase()).find((a) => a.startsWith("samesite="))?.slice(9);
       if (/max-age=0/i.test(c) || value === "") this.jar.delete(name);
-      else this.jar.set(name, value);
+      else this.jar.set(name, { value, sameSite: ss === "none" || ss === "strict" ? ss : "lax" });
     }
     return res;
   }
 
-  async signUp(email = `u${Date.now()}${Math.random().toString(36).slice(2)}@example.com`) {
+  /** Follow same-site GET redirects (e.g. the POST binding's 303 re-entry) until a non-redirect. */
+  async follow(res: Response, max = 5): Promise<Response> {
+    for (let i = 0; i < max && res.status >= 300 && res.status < 400; i++) {
+      const loc = res.headers.get("location")!;
+      if (!loc.startsWith(BASE_URL)) return res; // leaving the IdP (e.g. to the login page)
+      if (new URL(loc).pathname.endsWith("/sign-in")) return res;
+      res = await this.fetch(loc);
+    }
+    return res;
+  }
+
+  /** Sign up; by default also mark the email verified, as the plugin requires (finding #1). */
+  async signUp(email = `u${Date.now()}${Math.random().toString(36).slice(2)}@example.com`, opts: { verified?: boolean } = {}) {
     const res = await this.fetch(`${AUTH_BASE}/sign-up/email`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email, password: "correct-horse-battery", name: "Alice Example" }),
     });
     if (res.status !== 200) throw new Error(`sign-up failed: ${res.status} ${await res.text()}`);
-    return ((await res.json()) as { user: { id: string; email: string } }).user;
+    const user = ((await res.json()) as { user: { id: string; email: string } }).user;
+    if (opts.verified !== false) {
+      const ctx = await this.auth.$context;
+      await ctx.adapter.update({ model: "user", where: [{ field: "id", value: user.id }], update: { emailVerified: true } });
+    }
+    return user;
   }
 
   async signIn(email: string) {
@@ -138,6 +171,17 @@ export class Browser {
     (b as any).clientIp = this.clientIp;
     return b;
   }
+}
+
+/** Submit an AuthnRequest with the HTTP-POST binding, as the SP's cross-site form would. */
+export async function postBinding(browser: Browser, xml: string, relayState?: string): Promise<Response> {
+  const res = await browser.fetch(SSO_URL, {
+    method: "POST",
+    crossSite: true,
+    headers: { "content-type": "application/x-www-form-urlencoded", origin: "https://sp.test" },
+    body: new URLSearchParams({ SAMLRequest: b64(xml), ...(relayState !== undefined ? { RelayState: relayState } : {}) }).toString(),
+  });
+  return browser.follow(res);
 }
 
 export interface PostedForm {
@@ -165,6 +209,15 @@ export async function readAutoPost(res: Response): Promise<PostedForm> {
 
 /** The strict test SP: message AND assertion signatures required. */
 export async function strictSp(auth: { handler(r: Request): Promise<Response> }) {
+  // A samlify SP app must install samlify's (process-global) schema validator itself; the IdP
+  // plugin no longer touches that global.
+  samlify.setSchemaValidator({
+    validate: async (xml: string) => {
+      const r = await testValidator.validate(xml, "protocol");
+      if (!r.valid) throw new Error(`ERR_SCHEMA: ${r.errors.join("; ")}`);
+      return "SUCCESS_VALIDATE_XML";
+    },
+  });
   const metadata = await (await auth.handler(new Request(`${AUTH_BASE}/saml2/idp/metadata`))).text();
   const idp = samlify.IdentityProvider({ metadata });
   const sp = samlify.ServiceProvider({

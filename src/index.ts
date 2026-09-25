@@ -1,9 +1,6 @@
-/// <reference path="./samlify-api.d.ts" />
 /// <reference path="./saml/wasm/wasm.d.ts" />
 import type { BetterAuthPlugin } from "better-auth";
 import { mergeSchema } from "better-auth/db";
-import * as samlify from "samlify";
-import { getContext } from "samlify/build/src/api";
 import { metadataEndpoint } from "./endpoints/metadata";
 import { resumeEndpoint } from "./endpoints/resume";
 import { ssoEndpoint } from "./endpoints/sso";
@@ -19,29 +16,20 @@ export { SamlIdpConfigError } from "./options";
 export { libxml2Validator } from "./saml/validator";
 export type * from "./types";
 
-// samlify refuses to parse without a process-global validator. Install ours only if nobody
-// else (e.g. @better-auth/sso) has; the plugin validates inbound XML itself regardless.
-// See DECISIONS.md D-006.
-function ensureSamlifyValidator(validate: (xml: string) => Promise<unknown>) {
-  if (!getContext().validate) samlify.setSchemaValidator({ validate });
-}
-
 export const samlIdp = (options: SamlIdpOptions) => {
   const resolved = resolveOptions(options);
   const registry = createSpRegistry(resolved.serviceProviders);
   const getIdp = idpCache(resolved);
   const state = { options: resolved, registry };
 
-  ensureSamlifyValidator(async (xml) => {
-    const r = await resolved.schemaValidator.validate(xml, "protocol");
-    if (!r.valid) throw new Error("ERR_INVALID_XML");
-    return "SUCCESS_VALIDATE_XML";
-  });
-
   return {
     id: "saml-idp",
     init(ctx) {
       for (const w of resolved.warnings) ctx.logger.warn(`[saml-idp] ${w}`);
+      if (!resolved.baseURL && !ctx.options.baseURL)
+        ctx.logger.warn(
+          "[saml-idp] no baseURL: the IdP's SSO URL (metadata, Destination check, resume links) follows the request's Host header. Set samlIdp({ baseURL }) or Better Auth's baseURL.",
+        );
       // SPs POST AuthnRequests cross-origin (HTTP-POST binding), like @better-auth/sso's ACS.
       const existing = ctx.skipOriginCheck;
       if (existing === true) return {};
@@ -52,7 +40,9 @@ export const samlIdp = (options: SamlIdpOptions) => {
       samlIdpSingleSignOn: ssoEndpoint(state),
       samlIdpResume: resumeEndpoint(state),
     },
-    schema: mergeSchema(samlIdpSchema, resolved.schema),
+    // A fresh schema object per plugin: mergeSchema mutates its first argument, so a shared
+    // module-level object would leak one instance's renames into every other (finding #10).
+    schema: mergeSchema(samlIdpSchema(), resolved.schema),
     $ERROR_CODES: SAML_IDP_ERROR_CODES,
     options: { registry },
   } satisfies BetterAuthPlugin;

@@ -21,9 +21,12 @@ const BA_SP_ACS = `${BA_SP_BASE}/api/auth/sso/saml2/sp/acs/our-idp`;
 const NS_ISSUER = "https://node-saml.test/sp";
 const NS_ACS = "https://node-saml.test/acs";
 
-async function idp() {
+async function idp(saml: Record<string, unknown> = {}) {
   const host = await createHost({
     saml: {
+      // Password sign-in over TLS; node-saml requests exactly this class by default.
+      authnContextClassRef: "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport",
+      ...saml,
       serviceProviders: [
         {
           id: "better-auth-sso",
@@ -137,6 +140,17 @@ describe("interop: @node-saml/node-saml as the SP", () => {
     expect(profile?.nameID).toBe(user.email);
     expect(profile?.issuer).toBe("https://auth.test/api/auth/saml2/idp");
     expect(profile?.email).toBe(user.email);
+  });
+
+  it("receives a signed NoAuthnContext error when the IdP can't satisfy RequestedAuthnContext", async () => {
+    const { auth } = await idp({ authnContextClassRef: "urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified" });
+    const sp = nodeSaml(keys.idp.certificate);
+    const browser = new Browser(auth);
+    await browser.signUp();
+    const form = await readAutoPost(await browser.fetch(await sp.getAuthorizeUrlAsync("", undefined, {})));
+    expect(form.xml).toContain("urn:oasis:names:tc:SAML:2.0:status:NoAuthnContext");
+    expect(form.xml).not.toContain("<saml:Assertion");
+    await expect(sp.validatePostResponseAsync({ SAMLResponse: form.samlResponse })).rejects.toThrow(/Responder error/);
   });
 
   it("rejects our Response when configured with a different IdP certificate", async () => {

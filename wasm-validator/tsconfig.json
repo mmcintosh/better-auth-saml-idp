@@ -9,5 +9,5 @@
     "lib": ["es2023", "dom"],
     "types": ["node"]
   },
-  "include": ["src", "test", "bench", "../test/support/global-setup.ts"]
+  "include": ["test", "bench", "../src/saml/wasm", "../test/support/global-setup.ts"]
 }

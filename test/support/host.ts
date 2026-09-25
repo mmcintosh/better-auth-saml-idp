@@ -23,6 +23,8 @@ export interface HostOptions {
   auth?: Record<string, unknown>;
   /** Share one database between several auth instances (separate isolates in miniature). */
   database?: HostDatabase;
+  /** better-auth-cloudflare options (geolocation tracking forces DB-stored sessions). */
+  cloudflare?: { geolocationTracking?: boolean };
 }
 
 export type HostDatabase = { kind: "d1"; db: unknown } | { kind: "sqlite"; db: unknown };
@@ -68,7 +70,7 @@ export function hostOptions(database: HostDatabase, options: HostOptions = {}) {
     ...withCloudflare(
       {
         autoDetectIpAddress: true,
-        geolocationTracking: true,
+        geolocationTracking: options.cloudflare?.geolocationTracking ?? true,
         cf: {},
         ...(database.kind === "d1" ? { d1: { db: database.db as any, options: { usePlural: true } } } : {}),
       },

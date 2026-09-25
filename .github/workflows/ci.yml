@@ -22,7 +22,8 @@ jobs:
       - run: pnpm test          # node + workerd (D1/Drizzle, validateSchema on), incl. SP interop
       - run: pnpm test:wasm     # validator suite, node + workerd
 
-  # Phase 3: third-party SPs (Keycloak 26.4, SimpleSAMLphp 2.5) against the example IdP on workerd.
+  # Real Chromium over HTTPS (Playwright): Keycloak 26.4, SimpleSAMLphp 2.5 and a node-saml POST-binding
+  # SP with a cross-site post-ACS redirect, against the example IdP on workerd.
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -33,4 +34,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - run: npx playwright install --with-deps chromium
       - run: pnpm e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: playwright-traces, path: test-results/, retention-days: 7 }

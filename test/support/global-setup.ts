@@ -10,7 +10,7 @@ function keypair(cn: string) {
   const dir = mkdtempSync(join(tmpdir(), "saml-idp-test-"));
   try {
     execFileSync("openssl", [
-      "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-sha256", "-days", "2",
+      "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-sha256", "-days", "365",
       "-subj", `/CN=${cn}`, "-keyout", join(dir, "key.pem"), "-out", join(dir, "cert.pem"),
     ], { stdio: "ignore" });
     return {
@@ -32,9 +32,9 @@ function badKeys() {
   try {
     openssl(["ecparam", "-name", "prime256v1", "-genkey", "-noout", "-out", "ec.pem"], dir);
     openssl(["pkcs8", "-topk8", "-nocrypt", "-in", "ec.pem", "-out", "ec8.pem"], dir);
-    openssl(["req", "-x509", "-key", "ec8.pem", "-sha256", "-days", "2", "-subj", "/CN=ec", "-out", "ec-cert.pem"], dir);
+    openssl(["req", "-x509", "-key", "ec8.pem", "-sha256", "-days", "365", "-subj", "/CN=ec", "-out", "ec-cert.pem"], dir);
     openssl(["genrsa", "-out", "rsa1024.pem", "1024"], dir);
-    openssl(["req", "-x509", "-key", "rsa1024.pem", "-sha256", "-days", "2", "-subj", "/CN=weak", "-out", "rsa1024-cert.pem"], dir);
+    openssl(["req", "-x509", "-key", "rsa1024.pem", "-sha256", "-days", "365", "-subj", "/CN=weak", "-out", "rsa1024-cert.pem"], dir);
     // Expired certificate: OpenSSL 3.0's `req` cannot backdate, so self-sign via `ca`.
     openssl(["genrsa", "-out", "old.pem", "2048"], dir);
     openssl(["req", "-new", "-key", "old.pem", "-subj", "/CN=expired", "-out", "old.csr"], dir);

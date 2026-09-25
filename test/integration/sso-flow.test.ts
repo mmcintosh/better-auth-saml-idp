@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { SP_ACS, SP_ENTITY_ID } from "../support/config";
 import { AUTH_BASE, createHost } from "../support/host";
-import { authnRequestXml, Browser, readAutoPost, redirectUrl, strictSp, SSO_URL, b64 } from "../support/sp";
+import { authnRequestXml, Browser, postBinding, readAutoPost, redirectUrl, strictSp, SSO_URL } from "../support/sp";
 
 async function setup(saml = {}) {
   const { auth, database } = await createHost({
@@ -77,11 +77,9 @@ describe("SP-initiated SSO round trip", () => {
     const { browser, verifier } = await setup();
     await browser.signUp();
     const { id, xml } = authnRequestXml();
-    const res = await browser.fetch(SSO_URL, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded", origin: "https://sp.test" },
-      body: new URLSearchParams({ SAMLRequest: b64(xml), RelayState: "rs" }).toString(),
-    });
+    // The SP's cross-site POST carries no session cookie: the IdP re-enters via a same-site GET
+    // (303 → sso?cid=…), where the session is visible, and answers without the login page.
+    const res = await postBinding(browser, xml, "rs");
     expect(res.status).toBe(200);
     const form = await readAutoPost(res);
     expect((await verifier.verify(form.samlResponse)).extract.response?.inResponseTo).toBe(id);

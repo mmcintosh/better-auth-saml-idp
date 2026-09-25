@@ -7,6 +7,7 @@ import {
   authnRequestXml,
   b64,
   Browser,
+  postBinding,
   deflateRaw,
   readAutoPost,
   redirectUrl,
@@ -93,7 +94,12 @@ describe("R1 pending requests: single use, expiry, concurrency", () => {
   it("a rid is bound to the browser that started the flow", async () => {
     const { auth, browser } = await host();
     const resume = await startPending(browser);
+    // A realistic attacker first starts a flow of their own, so they DO hold a valid, signed
+    // binding cookie — just not the victim's. Only the hash comparison can stop them
+    // (review finding #13: a cookie-less second browser proved nothing).
     const other = new Browser(auth);
+    await startPending(other);
+    expect(other.cookieHeader()).toMatch(/saml_idp_binding=/);
     await other.signUp();
     const res = await other.fetch(resume);
     expect(res.status).toBe(400);
@@ -344,7 +350,7 @@ describe("§7 algorithms, validity, signatures", () => {
 });
 
 describe("§7 auto-POST page", () => {
-  it("has a nonce CSP limited to the ACS URL, no-store, DENY framing, and a noscript button", async () => {
+  it("has a nonce CSP, no form-action (it breaks SPs that redirect after the ACS), no-store, DENY framing, noscript", async () => {
     const { browser } = await host();
     await browser.signUp();
     const res = await browser.fetch(await redirectUrl(authnRequestXml().xml));
@@ -352,7 +358,10 @@ describe("§7 auto-POST page", () => {
     const nonce = /script-src 'nonce-([^']+)'/.exec(csp)?.[1];
     expect(nonce).toBeTruthy();
     expect(csp).toContain("default-src 'none'");
-    expect(csp).toContain(`form-action ${SP_ACS}`);
+    // Chromium enforces form-action on redirects after the submission; hosted SPs redirect
+    // cross-site after their ACS (review finding #5, reproduced in e2e/browser/test-sp.spec).
+    expect(csp).not.toContain("form-action");
+    expect(csp).toContain("base-uri 'none'");
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).not.toContain("unsafe-inline");
     expect(res.headers.get("cache-control")).toBe("no-store");
@@ -378,7 +387,6 @@ describe("§7 inbound request validation", () => {
     ["IssueInstant too old", { issueInstant: new Date(Date.now() - 10 * 60_000) }],
     ["IssueInstant in the future", { issueInstant: new Date(Date.now() + 10 * 60_000) }],
     ["two Issuers", { inner: `<saml:Issuer>${SP_ENTITY_ID}</saml:Issuer>` }],
-    ["NameIDPolicy for an unconfigured format", { nameIdFormat: "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent" }],
   ])("rejects %s", async (_, spec) => {
     const { browser } = await host();
     await browser.signUp();
@@ -452,11 +460,7 @@ describe("§7 signed AuthnRequests", () => {
 
   it("rejects the POST binding when signatures are required (v1: Redirect only)", async () => {
     const { browser } = await signedHost();
-    const res = await browser.fetch(SSO_URL, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded", origin: "https://sp.test" },
-      body: new URLSearchParams({ SAMLRequest: b64(authnRequestXml().xml) }).toString(),
-    });
+    const res = await postBinding(browser, authnRequestXml().xml);
     expect(res.status).toBe(400);
     expect(await pageCode(res)).toBe("UNSIGNED_SAML_REQUEST");
   });
@@ -496,11 +500,24 @@ describe("§7 authorize()", () => {
 });
 
 describe("IsPassive / ForceAuthn", () => {
-  it("IsPassive without a session → 401, no login redirect", async () => {
+  it("IsPassive without a session → signed SAML NoPassive Response to the SP, no login redirect", async () => {
     const { browser } = await host();
-    const res = await browser.fetch(await redirectUrl(authnRequestXml({ isPassive: true }).xml));
-    expect(res.status).toBe(401);
-    expect(await pageCode(res)).toBe("PASSIVE_SIGN_IN_NOT_POSSIBLE");
+    const { id, xml } = authnRequestXml({ isPassive: true });
+    const res = await browser.fetch(await redirectUrl(xml));
+    expect(res.status).toBe(200);
+    const form = await readAutoPost(res);
+    expect(form.action).toBe(SP_ACS);
+    expect(form.xml).toContain(`InResponseTo="${id}"`);
+    expect(form.xml).toContain('<samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Responder"><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:NoPassive"/>');
+    expect(form.xml).not.toContain("<saml:Assertion");
+    expect(form.xml).toContain("<ds:Signature");
+  });
+
+  it("IsPassive with a session succeeds silently", async () => {
+    const { browser } = await host();
+    await browser.signUp();
+    const form = await readAutoPost(await browser.fetch(await redirectUrl(authnRequestXml({ isPassive: true }).xml)));
+    expect(form.xml).toContain("status:Success");
   });
 
   it("ForceAuthn requires a session created after the request", async () => {

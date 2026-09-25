@@ -17,6 +17,13 @@ export interface AuthorizeContext {
   serviceProvider: ResolvedServiceProvider;
 }
 
+export const NAMEID_FORMAT = {
+  emailAddress: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+  unspecified: "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified",
+  persistent: "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent",
+  transient: "urn:oasis:names:tc:SAML:2.0:nameid-format:transient",
+} as const;
+
 export interface ServiceProviderConfig {
   /** Stable identifier used in logs and in `/saml2/idp/init?sp=` (stretch goal). */
   id: string;
@@ -29,7 +36,13 @@ export interface ServiceProviderConfig {
   acsUrls: [string, ...string[]];
   /** Defaults to `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`. */
   nameIdFormat?: string;
-  /** Value of `<NameID>`. Defaults to `user.email`. */
+  /**
+   * Value of `<NameID>`. Default depends on `nameIdFormat`:
+   * - emailAddress / unspecified: the user's (verified) email;
+   * - persistent: an opaque, stable, per-SP identifier (HMAC of the user id, keyed with the
+   *   Better Auth secret) that is never re-assigned to another user;
+   * - transient: a new random identifier for every assertion.
+   */
   nameId?: (user: SamlIdpUser) => string;
   /** Attributes to include in the `<AttributeStatement>`. */
   attributes?: (user: SamlIdpUser) => Record<string, SamlAttributeValue>;
@@ -65,6 +78,12 @@ export interface SigningConfig {
 export interface SamlIdpOptions {
   /** The IdP entity ID, usually `https://<host>/<basePath>/saml2/idp`. */
   entityId: string;
+  /**
+   * The Better Auth base URL the IdP's own URLs (SSO endpoint in metadata, resume URL,
+   * expected `Destination`) are built from, e.g. `https://auth.example.com/api/auth`.
+   * Strongly recommended: without it they follow the request's Host header.
+   */
+  baseURL?: string;
   /** Where unauthenticated users are sent. Path on this origin, or an absolute URL. */
   loginPage: string;
   signing: SigningConfig;
@@ -79,6 +98,23 @@ export interface SamlIdpOptions {
    * more. Default 80, hard cap 1024.
    */
   relayStateMaxBytes?: number;
+  /**
+   * The `AuthnContextClassRef` asserted, and matched against an SP's
+   * `RequestedAuthnContext`. Default `urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified`.
+   * Set it to what your sign-in actually guarantees, e.g. `...:PasswordProtectedTransport`.
+   */
+  authnContextClassRef?: string;
+  /**
+   * Who may receive assertions. Defaults are strict: an IdP vouches for identities.
+   */
+  accountPolicy?: {
+    /** Refuse users whose email is not verified. Default true. */
+    requireEmailVerified?: boolean;
+    /** Allow sessions created by admin impersonation (`impersonatedBy`). Default false. */
+    allowImpersonatedSessions?: boolean;
+    /** Allow anonymous-plugin users (`isAnonymous`). Default false. */
+    allowAnonymousUsers?: boolean;
+  };
   serviceProviders: ServiceProviderConfig[];
   /**
    * Rename the plugin's table or columns, as with other Better Auth plugins.
@@ -87,7 +123,7 @@ export interface SamlIdpOptions {
   schema?: {
     samlIdpSeenRequest?: {
       modelName?: string;
-      fields?: Partial<Record<"spId" | "requestId" | "expiresAt", string>>;
+      fields?: Partial<Record<"key" | "spId" | "requestId" | "expiresAt", string>>;
     };
   };
   /** Validator run on every inbound SAML message. Default: `libxml2Validator()`. */
@@ -100,7 +136,8 @@ export interface ResolvedServiceProvider {
   entityId: string;
   acsUrls: [string, ...string[]];
   nameIdFormat: string;
-  nameId: (user: SamlIdpUser) => string;
+  /** Host-supplied NameID function; undefined means "use the format's default". */
+  nameId: ((user: SamlIdpUser) => string) | undefined;
   attributes: (user: SamlIdpUser) => Record<string, SamlAttributeValue>;
   requireSignedAuthnRequests: boolean;
   spCertificate: string | undefined;
@@ -110,12 +147,19 @@ export interface ResolvedServiceProvider {
 
 export interface ResolvedSamlIdpOptions {
   entityId: string;
+  baseURL: string | undefined;
   loginPage: string;
-  signing: Required<Omit<SigningConfig, "allowInsecureSha1">> & { allowInsecureSha1: boolean };
+  signing: Required<Omit<SigningConfig, "allowInsecureSha1">> & {
+    allowInsecureSha1: boolean;
+    /** Parsed once at startup. */
+    keyObject: import("node:crypto").KeyObject;
+  };
   assertionLifetimeSeconds: number;
   clockSkewSeconds: number;
   pendingRequestTtlSeconds: number;
   relayStateMaxBytes: number;
+  authnContextClassRef: string;
+  accountPolicy: Required<NonNullable<SamlIdpOptions["accountPolicy"]>>;
   serviceProviders: ResolvedServiceProvider[];
   schemaValidator: SchemaValidator;
   schema: SamlIdpOptions["schema"];

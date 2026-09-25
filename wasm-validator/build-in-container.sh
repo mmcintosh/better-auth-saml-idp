@@ -8,7 +8,8 @@ LIBXML2_URL="https://download.gnome.org/sources/libxml2/2.15/libxml2-${LIBXML2_V
 
 CACHE=/work/.cache
 BUILD=/tmp/xsdv-build
-mkdir -p "$CACHE" "$BUILD" /work/dist
+mkdir -p "$CACHE" "$BUILD"
+[ -d /out ] || { echo "/out (the repo wasm/ directory) is not mounted" >&2; exit 1; }
 TARBALL="$CACHE/libxml2-${LIBXML2_VERSION}.tar.xz"
 [ -f "$TARBALL" ] || curl -fsSL -o "$TARBALL" "$LIBXML2_URL"
 echo "${LIBXML2_SHA256}  ${TARBALL}" | sha256sum -c -
@@ -71,7 +72,9 @@ emcc $CFLAGS_COMMON \
   -sSTACK_SIZE=1MB \
   -sMALLOC=dlmalloc \
   -sERROR_ON_UNDEFINED_SYMBOLS=1 \
-  -o /work/dist/xsd.wasm
+  -o "$BUILD/xsd.wasm"
 
-(cd /work/dist && sha256sum xsd.wasm | tee xsd.wasm.sha256)
-ls -l /work/dist/xsd.wasm
+# /out is the repo's wasm/ directory: the one and only copy of the binary.
+install -m 0644 "$BUILD/xsd.wasm" /out/xsd.wasm
+(cd /out && sha256sum xsd.wasm | tee xsd.wasm.sha256)
+ls -l /out/xsd.wasm

@@ -1,8 +1,8 @@
 // Benchmark worker: timed from outside with curl (bench/run.sh), because
 // in-Worker timers are clamped.
-import wasmModule from "../dist/xsd.wasm";
+import wasmModule from "../../wasm/xsd.wasm";
 import * as authenio from "@authenio/samlify-node-xmllint";
-import { createWasmValidator } from "../src/index";
+import { createWasmValidator } from "../../src/saml/wasm/validator";
 
 const v = createWasmValidator(wasmModule);
 const x = `<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_abc123" Version="2.0" IssueInstant="2026-09-24T10:00:00Z"><saml:Issuer>x</saml:Issuer></samlp:AuthnRequest>`;

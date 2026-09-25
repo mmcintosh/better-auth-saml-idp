@@ -22,7 +22,10 @@ export const metadataEndpoint = (getIdp: (baseURL: string) => Idp) =>
       return new Response(xml, {
         headers: {
           "Content-Type": "application/samlmetadata+xml; charset=utf-8",
-          "Cache-Control": "public, max-age=300",
+          // Contents depend on the request's host unless `baseURL` is pinned: never let a
+          // shared cache serve one host's metadata for another.
+          "Cache-Control": "private, max-age=300",
+          Vary: "Host, X-Forwarded-Host, X-Forwarded-Proto",
         },
       });
     },

@@ -12,7 +12,15 @@ export interface Env {
   SAML_IDP_CERT: string;
   /** JSON: [{ "id": "...", "entityId": "...", "acsUrls": ["..."] }] */
   SAML_SERVICE_PROVIDERS: string;
+  /**
+   * DEVELOPMENT ONLY. "true" keeps verification links in memory and serves them at
+   * /dev/mailbox instead of sending email. Never set this in production.
+   */
+  DEV_MAILBOX?: string;
 }
+
+/** DEV_MAILBOX: the latest verification link per email address (per isolate). */
+export const devMailbox = new Map<string, string>();
 
 type SpJson = Pick<ServiceProviderConfig, "id" | "entityId" | "acsUrls" | "nameIdFormat">;
 
@@ -52,7 +60,20 @@ export function createAuth(env: Env, cf: IncomingRequestCfProperties | Record<st
         d1: { db: drizzle(env.DB, { schema }), options: { usePlural: true } },
       },
       {
-        emailAndPassword: { enabled: true },
+        // The SAML plugin only asserts verified email addresses, so verification is required.
+        emailAndPassword: { enabled: true, requireEmailVerification: true },
+        emailVerification: {
+          sendOnSignUp: true,
+          autoSignInAfterVerification: true,
+          sendVerificationEmail: async ({ user, url }) => {
+            if (env.DEV_MAILBOX === "true") {
+              devMailbox.set(user.email, url);
+              return;
+            }
+            // Production: send `url` to `user.email` with your email provider here.
+            console.error("[example] email sending is not configured; set up sendVerificationEmail");
+          },
+        },
         // ADDENDUM-01: single-use state and rate limits in the database, never KV.
         verification: { storeInDatabase: true },
         rateLimit: { enabled: true, storage: "database" },

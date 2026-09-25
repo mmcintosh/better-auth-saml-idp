@@ -35,15 +35,30 @@ export function createIdp(options: ResolvedSamlIdpOptions, baseURL: string): Idp
   });
 }
 
-/** One IdP per base URL; samlify entities are immutable once built. */
+/** The Better Auth base URL the IdP's own URLs use: the pinned option, else the request's. */
+export function idpBaseURL(options: ResolvedSamlIdpOptions, requestBaseURL: string): string {
+  return (options.baseURL ?? requestBaseURL).replace(/\/+$/, "");
+}
+
+const MAX_CACHED_BASE_URLS = 32;
+
+/**
+ * samlify IdP per base URL. With `options.baseURL` pinned there is exactly one. Otherwise the
+ * base URL follows the request's Host, so the cache is bounded (LRU) instead of growing with
+ * every Host header a client sends (review finding #7).
+ */
 export function idpCache(options: ResolvedSamlIdpOptions) {
   const cache = new Map<string, Idp>();
-  return (baseURL: string) => {
+  return (requestBaseURL: string) => {
+    const baseURL = idpBaseURL(options, requestBaseURL);
     let idp = cache.get(baseURL);
-    if (!idp) {
+    if (idp) {
+      cache.delete(baseURL); // refresh LRU position
+    } else {
       idp = createIdp(options, baseURL);
-      cache.set(baseURL, idp);
+      if (cache.size >= MAX_CACHED_BASE_URLS) cache.delete(cache.keys().next().value!);
     }
+    cache.set(baseURL, idp);
     return idp;
   };
 }

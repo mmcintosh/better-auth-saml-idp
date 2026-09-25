@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { createAuth, type Env } from "./auth";
+import { createAuth, devMailbox, type Env } from "./auth";
 import { signInPage } from "./sign-in";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -10,6 +10,14 @@ const authFor = (c: { env: Env; req: { raw: Request; url: string } }) =>
 app.all("/api/auth/*", (c) => authFor(c).handler(c.req.raw));
 
 app.get("/sign-in", (c) => signInPage(c.req.url));
+
+// DEVELOPMENT ONLY (DEV_MAILBOX="true"): read the verification link that would have been emailed.
+app.get("/dev/mailbox", (c) => {
+  if (c.env.DEV_MAILBOX !== "true") return c.notFound();
+  const email = c.req.query("email") ?? "";
+  const link = devMailbox.get(email);
+  return link ? c.json({ email, link }) : c.json({ email, link: null }, 404);
+});
 
 app.get("/", async (c) => {
   const origin = new URL(c.req.url).origin;

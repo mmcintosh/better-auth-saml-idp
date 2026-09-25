@@ -18,7 +18,8 @@ describe("GET /saml2/idp/metadata", { timeout: 60_000 }, () => {
     const { res } = await fetchMetadata();
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("application/samlmetadata+xml; charset=utf-8");
-    expect(res.headers.get("cache-control")).toBe("public, max-age=300");
+    expect(res.headers.get("cache-control")).toBe("private, max-age=300");
+    expect(res.headers.get("vary")).toBe("Host, X-Forwarded-Host, X-Forwarded-Proto");
   });
 
   it("validates against the OASIS SAML 2.0 metadata XSD (Phase 1 gate)", async () => {

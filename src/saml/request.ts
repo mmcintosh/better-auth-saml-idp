@@ -1,13 +1,11 @@
 import { createPublicKey, verify as cryptoVerify } from "node:crypto";
-import type { ResolvedServiceProvider } from "../types";
+import { NAMEID_FORMAT, type ResolvedServiceProvider } from "../types";
 import { precheckXml, type SchemaValidator } from "./validator";
 import { parseXmlStrict } from "./xml";
 
 export const NS_PROTOCOL = "urn:oasis:names:tc:SAML:2.0:protocol";
 export const NS_ASSERTION = "urn:oasis:names:tc:SAML:2.0:assertion";
-export const NS_DSIG = "http://www.w3.org/2000/09/xmldsig#";
 const BINDING_POST = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
-const NAMEID_UNSPECIFIED = "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified";
 
 /** Maximum decoded AuthnRequest size. Real requests are well under 8 KiB. */
 export const MAX_REQUEST_BYTES = 64 * 1024;
@@ -17,7 +15,7 @@ export const REQUEST_MAX_AGE_SECONDS = 300;
 export class SamlRequestError extends Error {
   constructor(
     readonly code: "INVALID_SAML_REQUEST" | "UNSIGNED_SAML_REQUEST" | "RELAY_STATE_TOO_LONG",
-    /** Safe to log at debug level: never contains the raw payload. */
+    /** For debug logs. May quote short, sanitised fragments of the request (see `logSafe`). */
     readonly detail: string,
   ) {
     super(detail);
@@ -26,31 +24,85 @@ export class SamlRequestError extends Error {
 
 const invalid = (detail: string) => new SamlRequestError("INVALID_SAML_REQUEST", detail);
 
+/** Attacker-controlled text in debug logs: bounded length, no control characters. */
+export function logSafe(s: string, max = 120): string {
+  const clean = s.replace(/[\u0000-\u001f\u007f]/g, "?");
+  return clean.length > max ? `${clean.slice(0, max)}…` : clean;
+}
+
 export type Binding = "redirect" | "post";
 
 export interface RawAuthnRequest {
   binding: Binding;
   samlRequest: string;
   relayState: string | undefined;
-  /** Redirect binding only: the raw (still URL-encoded) query string, for signature checks. */
-  rawQuery?: string;
-  sigAlg?: string;
-  signature?: string;
+  /** Redirect binding: the exact raw parameters the signature covers (see parseRedirectQuery). */
+  signed?: { octets: string; sigAlg: string; signature: string };
 }
 
-export interface AuthnRequestInfo {
-  id: string;
-  issuer: string;
-  issueInstant: Date;
-  destination: string | undefined;
-  acsUrl: string | undefined;
-  acsIndex: string | undefined;
-  protocolBinding: string | undefined;
-  forceAuthn: boolean;
-  isPassive: boolean;
-  nameIdFormat: string | undefined;
-  signedRedirect: boolean;
+// ---------------------------------------------------------------------------------------
+// HTTP-Redirect query parsing
+// ---------------------------------------------------------------------------------------
+
+const SAML_PARAMS = ["SAMLRequest", "RelayState", "SigAlg", "Signature"] as const;
+type SamlParam = (typeof SAML_PARAMS)[number];
+
+function formDecode(s: string): string {
+  try {
+    return decodeURIComponent(s.replace(/\+/g, " "));
+  } catch {
+    throw invalid("malformed percent-encoding in query string");
+  }
 }
+
+function percentDecode(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    throw invalid("malformed percent-encoding in query string");
+  }
+}
+
+/**
+ * Parse the raw query string ourselves. Parameter NAMES are decoded before matching, so
+ * `Relay%53tate` is RelayState here exactly as it would be for any URLSearchParams-based
+ * reader; every SAML parameter may appear at most once; and the signed octet string is built
+ * from the raw (undecoded) segments of precisely the parameters we then use (Bindings §3.4.4.1).
+ */
+export function parseRedirectQuery(rawQuery: string): RawAuthnRequest {
+  const found: Partial<Record<SamlParam, { raw: string; value: string }>> = {};
+  for (const part of rawQuery.split("&")) {
+    if (!part) continue;
+    const eq = part.indexOf("=");
+    const rawKey = eq < 0 ? part : part.slice(0, eq);
+    const rawValue = eq < 0 ? "" : part.slice(eq + 1);
+    const key = formDecode(rawKey);
+    if (!(SAML_PARAMS as readonly string[]).includes(key)) continue;
+    if (found[key as SamlParam]) throw invalid(`duplicate ${key} parameter`);
+    // Canonical raw form for the octet string: the parameter name as the spec spells it.
+    // base64 values keep a literal "+" (some SPs don't escape it); RelayState is form-decoded.
+    const value = key === "RelayState" || key === "SigAlg" ? formDecode(rawValue) : percentDecode(rawValue);
+    found[key as SamlParam] = { raw: `${key}=${rawValue}`, value };
+  }
+  const req = found.SAMLRequest;
+  if (!req) throw invalid("missing SAMLRequest");
+  const out: RawAuthnRequest = { binding: "redirect", samlRequest: req.value, relayState: found.RelayState?.value };
+  if (found.Signature || found.SigAlg) {
+    if (!found.Signature || !found.SigAlg) throw invalid("Signature and SigAlg must be sent together");
+    // A name that needed decoding cannot have been signed as "SAMLRequest"/"RelayState"/…:
+    // rebuild the octets only from segments whose raw name is the canonical one.
+    const octets = [found.SAMLRequest, found.RelayState, found.SigAlg].filter(Boolean).map((p) => p!.raw).join("&");
+    out.signed = { octets, sigAlg: found.SigAlg.value, signature: found.Signature.value };
+    const rawNames = rawQuery.split("&").map((p) => p.split("=")[0]);
+    for (const name of ["SAMLRequest", "RelayState", "SigAlg"] as const)
+      if (found[name] && !rawNames.includes(name)) throw invalid(`${name} parameter name is encoded; cannot verify signature`);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------
+// Decoding
+// ---------------------------------------------------------------------------------------
 
 function base64ToBytes(b64: string): Uint8Array {
   const clean = b64.replace(/\s+/g, "");
@@ -61,7 +113,7 @@ function base64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
-/** raw DEFLATE (Redirect binding), stopping as soon as the output exceeds `limit` bytes. */
+/** raw DEFLATE, stopping as soon as the output exceeds `limit` bytes. */
 async function inflateRawLimited(data: Uint8Array, limit: number): Promise<Uint8Array> {
   const stream = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
   const reader = stream.getReader();
@@ -91,12 +143,22 @@ async function inflateRawLimited(data: Uint8Array, limit: number): Promise<Uint8
   return out;
 }
 
+/** First non-whitespace byte (after an optional UTF-8 BOM) is "<". */
+function looksLikeXml(bytes: Uint8Array): boolean {
+  let i = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? 3 : 0;
+  while (i < bytes.length && (bytes[i] === 0x20 || bytes[i] === 0x09 || bytes[i] === 0x0a || bytes[i] === 0x0d)) i++;
+  return bytes[i] === 0x3c;
+}
+
 export async function decodeAuthnRequest(raw: RawAuthnRequest): Promise<string> {
   if (!raw.samlRequest) throw invalid("missing SAMLRequest");
   // base64 inflates by 4/3; bound the encoded size before decoding anything.
   if (raw.samlRequest.length > Math.ceil((MAX_REQUEST_BYTES * 4) / 3) + 1024) throw invalid("SAMLRequest too large");
   const bytes = base64ToBytes(raw.samlRequest);
-  const xmlBytes = raw.binding === "redirect" ? await inflateRawLimited(bytes, MAX_REQUEST_BYTES) : bytes;
+  // HTTP-POST messages are plain base64 (Bindings §3.5.4), but node-saml/passport-saml DEFLATE
+  // them anyway. If the POST payload is not XML text, accept raw DEFLATE too, same size cap.
+  const xmlBytes =
+    raw.binding === "redirect" || !looksLikeXml(bytes) ? await inflateRawLimited(bytes, MAX_REQUEST_BYTES) : bytes;
   if (xmlBytes.byteLength > MAX_REQUEST_BYTES) throw invalid(`SAMLRequest exceeds ${MAX_REQUEST_BYTES} bytes`);
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(xmlBytes);
@@ -111,9 +173,45 @@ export function checkRelayState(relayState: string | undefined, maxBytes: number
     throw new SamlRequestError("RELAY_STATE_TOO_LONG", `RelayState exceeds ${maxBytes} bytes`);
 }
 
+// ---------------------------------------------------------------------------------------
+// Parsing
+// ---------------------------------------------------------------------------------------
+
+export interface RequestedAuthnContext {
+  comparison: "exact" | "minimum" | "maximum" | "better";
+  classRefs: string[];
+  /** AuthnContextDeclRef requests (never satisfiable here). */
+  hasDeclRefs: boolean;
+}
+
+export interface AuthnRequestInfo {
+  id: string;
+  issuer: string;
+  issueInstant: Date;
+  destination: string | undefined;
+  acsUrl: string | undefined;
+  forceAuthn: boolean;
+  isPassive: boolean;
+  nameIdFormat: string | undefined;
+  subject: { nameId: string; format: string | undefined } | undefined;
+  requestedAuthnContext: RequestedAuthnContext | undefined;
+}
+
 function childElements(node: { childNodes: ArrayLike<any> }) {
   return Array.from(node.childNodes).filter((n: any) => n.nodeType === 1) as any[];
 }
+
+const child = (parent: any, ns: string, name: string) =>
+  childElements(parent).filter((e) => e.namespaceURI === ns && e.localName === name);
+
+/** xs:boolean after whitespace collapse. */
+function xsBoolean(v: string | null): boolean {
+  const t = (v ?? "").trim();
+  return t === "true" || t === "1";
+}
+
+/** xs:dateTime that states its time zone (a bare local time would depend on our server's zone). */
+const DATETIME_WITH_ZONE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
 /**
  * Schema-validate and extract an AuthnRequest. Structural rules beyond the XSD:
@@ -127,47 +225,72 @@ export async function parseAuthnRequest(
   const pre = precheckXml(xml, MAX_REQUEST_BYTES);
   if (pre.length) throw invalid(pre.join("; "));
   const schema = await validator.validate(xml, "protocol");
-  if (!schema.valid) throw invalid(`schema: ${schema.errors.slice(0, 3).join("; ")}`);
+  if (!schema.valid) throw invalid(`schema: ${logSafe(schema.errors.slice(0, 2).join("; "), 300)}`);
 
   let doc;
   try {
     doc = parseXmlStrict(xml);
   } catch (e) {
-    throw invalid(`not well-formed: ${(e as Error).message}`);
+    throw invalid(`not well-formed: ${logSafe((e as Error).message)}`);
   }
   const root = doc.documentElement!;
   if (root.namespaceURI !== NS_PROTOCOL || root.localName !== "AuthnRequest") throw invalid("root element is not samlp:AuthnRequest");
-  if (root.getAttribute("Version") !== "2.0") throw invalid("Version must be 2.0");
+  if ((root.getAttribute("Version") ?? "").trim() !== "2.0") throw invalid("Version must be 2.0");
 
-  const issuers = childElements(root).filter((e) => e.namespaceURI === NS_ASSERTION && e.localName === "Issuer");
+  const issuers = child(root, NS_ASSERTION, "Issuer");
   if (issuers.length !== 1) throw invalid("AuthnRequest must have exactly one Issuer");
   const issuer = (issuers[0].textContent ?? "").trim();
   if (!issuer) throw invalid("empty Issuer");
 
-  const id = root.getAttribute("ID") ?? "";
+  // xs:ID: whitespace-collapsed, so " _abc" and "_abc" are the same ID (and one replay key).
+  const id = (root.getAttribute("ID") ?? "").trim();
   if (!id || id.length > 256) throw invalid("missing or oversized ID");
 
-  const issueInstant = new Date(root.getAttribute("IssueInstant") ?? "");
+  const rawInstant = (root.getAttribute("IssueInstant") ?? "").trim();
+  if (!DATETIME_WITH_ZONE.test(rawInstant)) throw invalid("IssueInstant must be an xs:dateTime with a time zone");
+  const issueInstant = new Date(rawInstant);
   if (Number.isNaN(issueInstant.getTime())) throw invalid("invalid IssueInstant");
   const skewMs = opts.clockSkewSeconds * 1000;
   if (issueInstant.getTime() > opts.now.getTime() + skewMs) throw invalid("IssueInstant is in the future");
   if (issueInstant.getTime() < opts.now.getTime() - REQUEST_MAX_AGE_SECONDS * 1000 - skewMs)
     throw invalid("AuthnRequest is too old");
 
-  const destination = root.getAttribute("Destination") || undefined;
+  const destination = root.getAttribute("Destination")?.trim() || undefined;
   if (destination !== undefined && destination !== opts.ssoUrl) throw invalid("Destination does not match this IdP's SSO URL");
 
-  const protocolBinding = root.getAttribute("ProtocolBinding") || undefined;
+  const protocolBinding = root.getAttribute("ProtocolBinding")?.trim() || undefined;
   if (protocolBinding !== undefined && protocolBinding !== BINDING_POST)
     throw invalid("only the HTTP-POST response binding is supported");
 
-  const acsUrl = root.getAttribute("AssertionConsumerServiceURL") || undefined;
-  const acsIndex = root.getAttribute("AssertionConsumerServiceIndex") || undefined;
+  const acsUrl = root.getAttribute("AssertionConsumerServiceURL")?.trim() || undefined;
+  const acsIndex = root.getAttribute("AssertionConsumerServiceIndex")?.trim() || undefined;
   if (acsIndex !== undefined && acsUrl === undefined)
     throw invalid("AssertionConsumerServiceIndex is not supported; send AssertionConsumerServiceURL");
 
-  const policy = childElements(root).find((e) => e.namespaceURI === NS_PROTOCOL && e.localName === "NameIDPolicy");
-  const nameIdFormat = policy?.getAttribute("Format") || undefined;
+  const policy = child(root, NS_PROTOCOL, "NameIDPolicy")[0];
+  const nameIdFormat = policy?.getAttribute("Format")?.trim() || undefined;
+
+  // <saml:Subject><saml:NameID>…</saml:NameID></saml:Subject>: the assertion must be about
+  // exactly this principal (Core §3.4.1.4). BaseID/EncryptedID can't be matched: refuse.
+  let subject: AuthnRequestInfo["subject"];
+  const subjectEl = child(root, NS_ASSERTION, "Subject")[0];
+  if (subjectEl) {
+    if (child(subjectEl, NS_ASSERTION, "BaseID").length || child(subjectEl, NS_ASSERTION, "EncryptedID").length)
+      throw invalid("Subject BaseID/EncryptedID is not supported");
+    const nameIdEl = child(subjectEl, NS_ASSERTION, "NameID")[0];
+    if (nameIdEl) subject = { nameId: (nameIdEl.textContent ?? "").trim(), format: nameIdEl.getAttribute("Format")?.trim() || undefined };
+  }
+
+  let requestedAuthnContext: RequestedAuthnContext | undefined;
+  const rac = child(root, NS_PROTOCOL, "RequestedAuthnContext")[0];
+  if (rac) {
+    const comparison = ((rac.getAttribute("Comparison") ?? "exact").trim() || "exact") as RequestedAuthnContext["comparison"];
+    requestedAuthnContext = {
+      comparison,
+      classRefs: child(rac, NS_ASSERTION, "AuthnContextClassRef").map((e) => (e.textContent ?? "").trim()),
+      hasDeclRefs: child(rac, NS_ASSERTION, "AuthnContextDeclRef").length > 0,
+    };
+  }
 
   return {
     id,
@@ -175,21 +298,47 @@ export async function parseAuthnRequest(
     issueInstant,
     destination,
     acsUrl,
-    acsIndex,
-    protocolBinding,
-    forceAuthn: root.getAttribute("ForceAuthn") === "true" || root.getAttribute("ForceAuthn") === "1",
-    isPassive: root.getAttribute("IsPassive") === "true" || root.getAttribute("IsPassive") === "1",
+    forceAuthn: xsBoolean(root.getAttribute("ForceAuthn")),
+    isPassive: xsBoolean(root.getAttribute("IsPassive")),
     nameIdFormat,
-    signedRedirect: false,
+    subject,
+    requestedAuthnContext,
   };
 }
 
-/** NameIDPolicy@Format must be absent, unspecified, or the SP's configured format. */
-export function checkNameIdPolicy(info: AuthnRequestInfo, sp: ResolvedServiceProvider) {
-  const f = info.nameIdFormat;
-  if (f === undefined || f === NAMEID_UNSPECIFIED || f === sp.nameIdFormat) return;
-  throw invalid(`NameIDPolicy Format ${f} is not configured for this service provider`);
+// ---------------------------------------------------------------------------------------
+// Policy: conditions answered with a SAML error Response (not an error page), because the
+// SP and ACS URL are known-good by now (Core §3.2.2.2 status codes).
+// ---------------------------------------------------------------------------------------
+
+export interface SamlStatus {
+  code: "Requester" | "Responder";
+  subCode?: "InvalidNameIDPolicy" | "NoAuthnContext" | "NoPassive" | "UnknownPrincipal" | "RequestDenied";
+  message: string;
 }
+
+/** NameIDPolicy@Format must be absent, unspecified, or the SP's configured format. */
+export function nameIdPolicyStatus(info: AuthnRequestInfo, sp: ResolvedServiceProvider): SamlStatus | undefined {
+  const f = info.nameIdFormat;
+  if (f === undefined || f === NAMEID_FORMAT.unspecified || f === sp.nameIdFormat) return;
+  return { code: "Responder", subCode: "InvalidNameIDPolicy", message: "The requested NameID format is not available" };
+}
+
+/**
+ * The IdP asserts exactly one AuthnContextClassRef (`ours`) and knows no ordering between
+ * classes, so: exact/minimum/maximum are satisfied only if `ours` is listed; "better" never is.
+ */
+export function authnContextStatus(info: AuthnRequestInfo, ours: string): SamlStatus | undefined {
+  const r = info.requestedAuthnContext;
+  if (!r) return;
+  const ok = !r.hasDeclRefs && r.comparison !== "better" && r.classRefs.includes(ours);
+  if (ok) return;
+  return { code: "Responder", subCode: "NoAuthnContext", message: "The requested authentication context is not available" };
+}
+
+// ---------------------------------------------------------------------------------------
+// Signatures
+// ---------------------------------------------------------------------------------------
 
 const REDIRECT_SIG_ALGS: Record<string, { hash: string; sha1: boolean }> = {
   "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256": { hash: "sha256", sha1: false },
@@ -197,60 +346,31 @@ const REDIRECT_SIG_ALGS: Record<string, { hash: string; sha1: boolean }> = {
   "http://www.w3.org/2000/09/xmldsig#rsa-sha1": { hash: "sha1", sha1: true },
 };
 
-/** Pull `name=value` pairs from a raw query string without decoding them. */
-function rawParam(rawQuery: string, name: string): string | undefined {
-  for (const part of rawQuery.split("&")) {
-    const eq = part.indexOf("=");
-    const k = eq < 0 ? part : part.slice(0, eq);
-    if (k === name) return eq < 0 ? "" : part.slice(eq + 1);
-  }
-  return undefined;
-}
-
 /**
- * Enforce the SP's signing policy (SAML Bindings §3.4.4.1). Redirect binding signatures are
- * verified over the octet string built from the *raw* query parameters, in the order
- * SAMLRequest, RelayState, SigAlg. POST-binding (embedded XML) signatures are not supported
- * in v1 (DECISIONS.md D-012).
+ * Enforce the SP's signing policy. Redirect-binding signatures are verified over octets built
+ * by parseRedirectQuery. POST-binding (embedded XML) signatures are not supported in v1
+ * (DECISIONS.md D-012).
  */
-export function checkRequestSignature(
-  raw: RawAuthnRequest,
-  sp: ResolvedServiceProvider,
-  opts: { allowInsecureSha1: boolean },
-): boolean {
-  const hasRedirectSig = raw.binding === "redirect" && raw.signature !== undefined;
+export function checkRequestSignature(raw: RawAuthnRequest, sp: ResolvedServiceProvider, opts: { allowInsecureSha1: boolean }): boolean {
   if (raw.binding === "post") {
     if (sp.requireSignedAuthnRequests)
       throw new SamlRequestError("UNSIGNED_SAML_REQUEST", "signed AuthnRequests must use the HTTP-Redirect binding");
     return false;
   }
-  if (!hasRedirectSig) {
+  if (!raw.signed) {
     if (sp.requireSignedAuthnRequests) throw new SamlRequestError("UNSIGNED_SAML_REQUEST", "missing Signature");
     return false;
   }
   if (!sp.spCertificate) {
-    // Unsolicited signature from an SP we hold no certificate for: nothing to verify against.
     if (sp.requireSignedAuthnRequests) throw new SamlRequestError("UNSIGNED_SAML_REQUEST", "no SP certificate configured");
     return false;
   }
-  const alg = REDIRECT_SIG_ALGS[raw.sigAlg ?? ""];
+  const alg = REDIRECT_SIG_ALGS[raw.signed.sigAlg];
   if (!alg) throw invalid("unsupported SigAlg");
   if (alg.sha1 && !opts.allowInsecureSha1) throw invalid("SHA-1 signatures are not accepted");
-  const q = raw.rawQuery ?? "";
-  const req = rawParam(q, "SAMLRequest");
-  const relay = rawParam(q, "RelayState");
-  const sigAlg = rawParam(q, "SigAlg");
-  const sig = rawParam(q, "Signature");
-  if (req === undefined || sigAlg === undefined || sig === undefined) throw invalid("malformed signed query string");
-  const octets = `SAMLRequest=${req}${relay !== undefined ? `&RelayState=${relay}` : ""}&SigAlg=${sigAlg}`;
   let ok = false;
   try {
-    ok = cryptoVerify(
-      alg.hash,
-      new TextEncoder().encode(octets),
-      createPublicKey(sp.spCertificate),
-      base64ToBytes(decodeURIComponent(sig)),
-    );
+    ok = cryptoVerify(alg.hash, new TextEncoder().encode(raw.signed.octets), createPublicKey(sp.spCertificate), base64ToBytes(raw.signed.signature));
   } catch {
     ok = false;
   }

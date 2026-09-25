@@ -39,6 +39,10 @@ describe("resolveOptions: defaults", () => {
     expect(r.relayStateMaxBytes).toBe(80);
     expect(r.warnings).toEqual([]);
     expect(typeof r.schemaValidator.validate).toBe("function");
+    expect(r.accountPolicy).toEqual({ requireEmailVerified: true, allowImpersonatedSessions: false, allowAnonymousUsers: false });
+    expect(r.authnContextClassRef).toBe("urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified");
+    expect(r.baseURL).toBeUndefined();
+    expect(r.signing.keyObject.asymmetricKeyType).toBe("rsa"); // parsed once, not per request
   });
 
   it("applies SP defaults", async () => {
@@ -47,7 +51,7 @@ describe("resolveOptions: defaults", () => {
     expect(s!.requireSignedAuthnRequests).toBe(false);
     expect(s!.allowIdpInitiated).toBe(false);
     const user = { id: "u1", email: "a@example.com", name: "A", emailVerified: true, createdAt: new Date(), updatedAt: new Date() };
-    expect(s!.nameId(user)).toBe("a@example.com");
+    expect(s!.nameId).toBeUndefined(); // default is per format, computed at issuance
     expect(s!.attributes(user)).toEqual({});
     expect(await s!.authorize({ user, session: {} as any, serviceProvider: s! })).toBe(true);
   });
@@ -113,8 +117,14 @@ describe("resolveOptions: key material", () => {
     );
   });
 
-  it("rejects an expired certificate", () => {
-    expect(issuesFor(baseOptions({ signing: keys.expired })).join()).toMatch(/^signing\.certificate: expired on /);
+  it("only WARNS about an expired certificate (never takes the auth server down)", () => {
+    const r = resolveOptions(baseOptions({ signing: keys.expired }));
+    expect(r.warnings.join()).toMatch(/signing\.certificate: EXPIRED on /);
+  });
+
+  it("only warns about an expired rotation certificate in additionalCertificates", () => {
+    const r = resolveOptions(baseOptions({ signing: { ...baseOptions().signing, additionalCertificates: [keys.expired.certificate] } }));
+    expect(r.warnings.join()).toMatch(/signing\.additionalCertificates\.0: EXPIRED on /);
   });
 
   it("rejects encrypted and non-PEM private keys", () => {
@@ -135,8 +145,10 @@ describe("resolveOptions: key material", () => {
 });
 
 describe("resolveOptions: service providers", () => {
-  it("requires at least one SP", () => {
-    expect(issuesFor(baseOptions({ serviceProviders: [] }))).toEqual(["serviceProviders: must configure at least one service provider"]);
+  it("allows an empty SP list, with a warning", () => {
+    expect(resolveOptions(baseOptions({ serviceProviders: [] })).warnings).toEqual([
+      "serviceProviders is empty: every AuthnRequest will be rejected",
+    ]);
   });
 
   it("rejects duplicate ids and entity IDs", () => {
@@ -190,6 +202,15 @@ describe("resolveOptions: service providers", () => {
   });
 });
 
+describe("resolveOptions: baseURL", () => {
+  it("accepts and normalises an absolute base URL", () => {
+    expect(resolveOptions(baseOptions({ baseURL: "https://auth.example.com/api/auth/" })).baseURL).toBe("https://auth.example.com/api/auth");
+  });
+  it.each(["/api/auth", "https://a.test/x?y=1", "https://a.test/x#f", "javascript:alert(1)"])("rejects baseURL %j", (baseURL) => {
+    expect(issuesFor(baseOptions({ baseURL })).join()).toMatch(/^baseURL:/);
+  });
+});
+
 describe("resolveOptions: limits", () => {
   it.each([
     [{ assertionLifetimeSeconds: 10 }, /assertionLifetimeSeconds/],
@@ -208,7 +229,7 @@ describe("resolveOptions: limits", () => {
     ]);
   });
 
-  it.each(["sign-in", "//evil.test/login", "ftp://x"])("rejects loginPage %s", (loginPage) => {
+  it.each(["sign-in", "//evil.test/login", "ftp://x", "/\\evil.example", "/sign in", "/a\u0000b"])("rejects loginPage %j", (loginPage) => {
     expect(issuesFor(baseOptions({ loginPage })).join()).toMatch(/^loginPage:/);
   });
 });

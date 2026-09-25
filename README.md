@@ -34,7 +34,10 @@ export const createAuth = (env: Env, cf: IncomingRequestCfProperties) =>
         plugins: [
           samlIdp({
             entityId: "https://auth.example.com/api/auth/saml2/idp",
+            baseURL: "https://auth.example.com/api/auth", // pin the IdP's own URLs
             loginPage: "/sign-in",
+            // What your sign-in guarantees; matched against SPs' RequestedAuthnContext.
+            authnContextClassRef: "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport",
             signing: { privateKey: env.SAML_IDP_PRIVATE_KEY, certificate: env.SAML_IDP_CERT },
             serviceProviders: [
               {
@@ -51,6 +54,8 @@ export const createAuth = (env: Env, cf: IncomingRequestCfProperties) =>
   });
 ```
 
+**Defaults to know about.** Only users with a **verified email** receive assertions, and admin-impersonation sessions and anonymous users are refused (`accountPolicy`). The NameID follows each SP's `nameIdFormat`: the email for `emailAddress`, an opaque per-SP ID for `persistent`, and a one-time ID for `transient`. Requests the IdP can't satisfy (IsPassive without a session, an unsatisfiable RequestedAuthnContext, a Subject mismatch) get a signed SAML error Response.
+
 Add the plugin's table to your Drizzle schema. Field maps use Drizzle **property keys**, not column names:
 
 ```ts
@@ -58,6 +63,7 @@ export const samlIdpSeenRequests = sqliteTable(
   "saml_idp_seen_requests",
   {
     id: text("id").primaryKey(),
+    key: text("key").notNull().unique(), // hash(spId, requestId): the replay check
     spId: text("sp_id").notNull(),
     requestId: text("request_id").notNull(),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
@@ -69,7 +75,7 @@ export const samlIdpSeenRequests = sqliteTable(
 );
 ```
 
-Expired rows are cleaned up as new requests arrive. If an IdP gets little traffic, you can also delete rows with `expires_at < now` on a cron.
+Upgrading from a pre-release that lacked the `key` column: the table only holds short-lived replay markers, so drop and recreate it (see `examples/workers-hono/migrations/0002_seen_request_key.sql`). Expired rows are cleaned up as new requests arrive. If an IdP gets little traffic, you can also delete rows with `expires_at < now` on a cron.
 
 ## Endpoints
 
@@ -85,7 +91,7 @@ The login page gets `?callbackURL=<absolute resume URL>`. After a successful sig
 
 ## Tested against
 
-`@better-auth/sso`, `@node-saml/node-saml` and samlify run in CI. Keycloak 26.4 and SimpleSAMLphp 2.5 run in Docker (`pnpm e2e`, also in CI). SAMLtool validates the Response. Guides for Cloudflare Access, AWS IAM Identity Center and HubSpot are included. See [docs/testing-with-sps.md](docs/testing-with-sps.md) and the [Workers example](examples/workers-hono/README.md).
+`@better-auth/sso`, `@node-saml/node-saml` and samlify run in CI. In a **real Chromium over HTTPS** (Playwright, `pnpm e2e`, also in CI), where every party is a separate site so SameSite and CSP behave as in production, three SPs are tested: Keycloak 26.4 and SimpleSAMLphp 2.5 in Docker, and a `node-saml` SP that uses the POST binding and redirects cross-site after its ACS. SAMLtool validates the Response. Guides for Cloudflare Access, AWS IAM Identity Center and HubSpot are included. See [docs/testing-with-sps.md](docs/testing-with-sps.md) and the [Workers example](examples/workers-hono/README.md).
 
 ## Security
 
@@ -96,7 +102,7 @@ See [docs/security.md](docs/security.md) for the threat model, host configuratio
 ```sh
 pnpm test          # Node (node:sqlite) + workerd (D1/Drizzle, validateSchema on)
 pnpm test:wasm     # the libxml2 WASM validator, Node + workerd
-pnpm e2e           # Keycloak + SimpleSAMLphp in Docker against the example IdP on workerd
+pnpm e2e           # Playwright + Chromium: Keycloak, SimpleSAMLphp (Docker) and a node-saml SP vs. the example IdP on workerd
 pnpm typecheck
 scripts/use-better-auth.sh latest-1.7   # run the suite against another Better Auth version
 ```

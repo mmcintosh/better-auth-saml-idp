@@ -2,7 +2,7 @@
 //   wasm-validator/bench/node-bench.sh
 import { readFileSync } from "node:fs";
 import * as authenio from "@authenio/samlify-node-xmllint";
-import { createWasmValidator } from "../src/index";
+import { createWasmValidator } from "../../src/saml/wasm/validator";
 
 const x = `<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_abc123" Version="2.0" IssueInstant="2026-09-24T10:00:00Z"><saml:Issuer>x</saml:Issuer></samlp:AuthnRequest>`;
 const ms = (t0: number) => (performance.now() - t0).toFixed(3);
@@ -18,7 +18,7 @@ async function bench(name: string, fn: () => Promise<unknown>, warmN: number) {
   console.log(`${name.padEnd(8)} cold first call ${cold} ms | warm ${warm} ms/validation (n=${warmN}) | result ${JSON.stringify(first)}`);
 }
 
-const bytes = readFileSync("wasm-validator/dist/xsd.wasm");
+const bytes = readFileSync("wasm/xsd.wasm");
 let t0 = performance.now();
 const mod = await WebAssembly.compile(bytes);
 console.log(`wasm     WebAssembly.compile ${ms(t0)} ms`);

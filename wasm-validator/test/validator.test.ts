@@ -1,6 +1,6 @@
-import { beforeAll, describe, expect, inject, it } from "vitest";
+import { beforeAll, describe, expect, inject, it, vi } from "vitest";
 import * as samlify from "samlify";
-import { createWasmValidator, EXPECTED_IMPORTS, type WasmValidator } from "../src/index";
+import { createWasmValidator, EXPECTED_IMPORTS, type WasmValidator } from "../../src/saml/wasm/validator";
 import { isWorkerd, loadWasm } from "./load";
 
 const RUNTIME = isWorkerd ? "workerd" : "node";
@@ -68,6 +68,36 @@ describe(`wasm module (${RUNTIME})`, () => {
     expect(invalid(await v.validate(VALID, "toString" as never))).toEqual(["unknown schema kind: toString"]);
   });
 
+  it.runIf(!isWorkerd)("wasm/xsd.wasm matches wasm/xsd.wasm.sha256", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const { createHash } = await import("node:crypto");
+    const bin = await readFile(new URL("../../wasm/xsd.wasm", import.meta.url));
+    const recorded = (await readFile(new URL("../../wasm/xsd.wasm.sha256", import.meta.url), "utf8")).split(/\s+/)[0];
+    expect(createHash("sha256").update(bin).digest("hex")).toBe(recorded);
+  });
+
+  it.runIf(!isWorkerd)("does not cache a failed WebAssembly.compile", async () => {
+    // Node only: workerd forbids compiling bytes, so there the loader is always given a Module.
+    expect(wasm).toBeInstanceOf(Uint8Array);
+    const spy = vi.spyOn(WebAssembly, "compile").mockRejectedValueOnce(new Error("transient compile failure"));
+    try {
+      const fresh = createWasmValidator(wasm);
+      await expect(fresh.validate(VALID, "protocol")).rejects.toThrow("transient compile failure");
+      expect(await fresh.validate(VALID, "protocol")).toEqual({ valid: true });
+      expect(spy).toHaveBeenCalledTimes(2);
+      expect(fresh.stats().instantiations).toBe(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("rejects invalid wasm bytes (and keeps rejecting, without caching a stale module)", async () => {
+    const bad = createWasmValidator(new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0xff]));
+    await expect(bad.validate(VALID, "protocol")).rejects.toThrow();
+    await expect(bad.validate(VALID, "protocol")).rejects.toThrow();
+    expect(bad.stats().instantiations).toBe(0);
+  });
+
   it("instantiates once even with concurrent first calls", async () => {
     const fresh = createWasmValidator(wasm);
     const results = await Promise.all(Array.from({ length: 5 }, () => fresh.validate(VALID, "protocol")));
@@ -132,6 +162,29 @@ describe(`non-well-formed input (${RUNTIME})`, () => {
   for (const [name, xml, re] of cases) {
     it(`rejects ${name}`, async () => {
       const errors = invalid(await v.validate(xml, "protocol"));
+      expect(errors.join("\n")).toMatch(re);
+    });
+  }
+});
+
+describe(`namespace well-formedness (${RUNTIME})`, () => {
+  // Each bad construct sits inside <samlp:Extensions> (xs:any ##other, lax) on an
+  // element with no schema, so schema validation alone would accept the document:
+  // only the parser's namespace well-formedness check (nsWellFormed) rejects it.
+  const ext = (inner: string) => authnRequest(undefined, `<saml:Issuer>x</saml:Issuer><samlp:Extensions>${inner}</samlp:Extensions>`);
+  it("accepts the well-formed control document", async () => {
+    expect(await v.validate(ext(`<e:x xmlns:e="urn:ext" e:a="1"/>`), "protocol")).toEqual({ valid: true });
+  });
+  const cases: [string, string, RegExp][] = [
+    ["an unbound prefix on an attribute", `<e:x xmlns:e="urn:ext" foo:a="1"/>`, /Namespace prefix foo for a on x is not defined/],
+    ["duplicate namespaced attributes via two prefixes", `<e:x xmlns:e="urn:ext" xmlns:a="urn:dup" xmlns:b="urn:dup" a:x="1" b:x="2"/>`, /Namespaced Attribute x in 'urn:dup' redefined/],
+    ["the xml prefix bound to the wrong URI", `<e:x xmlns:e="urn:ext" xmlns:xml="urn:wrong"/>`, /xml namespace prefix mapped to wrong URI/],
+    ["the xmlns prefix declared", `<e:x xmlns:e="urn:ext" xmlns:xmlns="urn:wrong"/>`, /redefinition of the xmlns prefix is forbidden/],
+    ["an empty prefixed namespace declaration", `<e:x xmlns:e="urn:ext" xmlns:p=""/>`, /xmlns:p: Empty XML namespace is not allowed/],
+  ];
+  for (const [name, inner, re] of cases) {
+    it(`rejects ${name}`, async () => {
+      const errors = invalid(await v.validate(ext(inner), "protocol"));
       expect(errors.join("\n")).toMatch(re);
     });
   }

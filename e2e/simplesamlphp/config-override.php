@@ -1,5 +1,3 @@
 <?php
-// e2e runs over plain http on localhost.
-$config['session.cookie.secure'] = false;
-$config['session.cookie.samesite'] = 'Lax';
-$config['baseurlpath'] = 'http://localhost:8081/simplesaml/';
+// e2e: served over HTTPS (the image's :443 vhost) with the throwaway e2e certificate.
+$config['baseurlpath'] = 'https://ssp.test:8081/simplesaml/';

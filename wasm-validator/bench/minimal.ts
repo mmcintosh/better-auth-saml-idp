@@ -1,6 +1,6 @@
 // Smallest real consumer: used for `wrangler deploy --dry-run` size numbers.
-import wasmModule from "../dist/xsd.wasm";
-import { createWasmValidator } from "../src/index";
+import wasmModule from "../../wasm/xsd.wasm";
+import { createWasmValidator } from "../../src/saml/wasm/validator";
 
 const v = createWasmValidator(wasmModule);
 export default {

@@ -1,4 +1,4 @@
-// Minimal hand-written loader for wasm/xsd.wasm (built in wasm-validator/) (libxml2 + c/xsdv.c, built with
+// Minimal hand-written loader for wasm/xsd.wasm (libxml2 + wasm-validator/c/xsdv.c, built with
 // -sSTANDALONE_WASM). No emscripten JS glue, no eval, no runtime wasm codegen,
 // no addFunction/table growth: the module is instantiated once from a
 // precompiled WebAssembly.Module (workerd) or from bytes (Node), with a handful
@@ -6,14 +6,13 @@
 import { SCHEMAS } from "../schemas.generated";
 import type { SchemaKind, SchemaValidationResult, SchemaValidator } from "../validator";
 
-
 /** Schema set entry points. Slot numbers are the `kind` argument of xv_compile/xv_validate. */
 const ENTRY: Record<SchemaKind, { slot: number; file: string }> = {
   protocol: { slot: 0, file: "saml-schema-protocol-2.0.xsd" },
   metadata: { slot: 1, file: "saml-schema-metadata-2.0.xsd" },
 };
 
-/** The exact import set of dist/xsd.wasm. Anything else is a build regression. */
+/** The exact import set of wasm/xsd.wasm. Anything else is a build regression. */
 export const EXPECTED_IMPORTS = [
   "env.emscripten_notify_memory_growth",
   "wasi_snapshot_preview1.clock_time_get",
@@ -72,8 +71,15 @@ export function createWasmValidator(
   let instantiations = 0;
   let live: Instance | undefined;
 
-  const getModule = () =>
-    (modulePromise ??= wasm instanceof WebAssembly.Module ? Promise.resolve(wasm) : WebAssembly.compile(wasm));
+  // A failed compile is not cached: the next call retries.
+  const getModule = () => {
+    if (!modulePromise) {
+      const p = wasm instanceof WebAssembly.Module ? Promise.resolve(wasm) : WebAssembly.compile(wasm);
+      modulePromise = p;
+      p.catch(() => { if (modulePromise === p) modulePromise = undefined; });
+    }
+    return modulePromise;
+  };
 
   async function instantiate(): Promise<Instance> {
     const mod = await getModule();

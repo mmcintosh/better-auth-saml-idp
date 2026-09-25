@@ -5,11 +5,22 @@ WebAssembly module, with a small hand-written TypeScript loader. It is the
 follow-up to DECISIONS.md D-003: a replacement for `node-xmllint` that runs
 on workerd without runtime code generation.
 
+There is exactly one loader and one binary, and both ship in the package:
+
+- `../src/saml/wasm/validator.ts`: the loader (`createWasmValidator`).
+- `../wasm/xsd.wasm` (+ `xsd.wasm.sha256`): the binary. `build.sh` writes it there directly.
+
+This directory holds only the build inputs (`c/xsdv.c`, build scripts), the
+test suite and the benchmarks. The tests and benchmarks import the shipped
+loader and load the shipped binary through the plugin's own
+`src/saml/wasm/load.node.ts` / `load.workerd.ts`, so they can't drift from
+what's published.
+
 ```ts
-import wasmModule from "./dist/xsd.wasm";           // workerd: precompiled WebAssembly.Module
-import { createWasmValidator } from "./src/index";
-const validator = createWasmValidator(wasmModule);  // Node: pass the bytes (see src/node.ts)
-await validator.validate(xml, "protocol");          // { valid: true } | { valid: false, errors: string[] }
+import wasmModule from "../wasm/xsd.wasm";                          // workerd: precompiled WebAssembly.Module
+import { createWasmValidator } from "../src/saml/wasm/validator";
+const validator = createWasmValidator(wasmModule);                 // Node: pass the bytes (see load.node.ts)
+await validator.validate(xml, "protocol");                         // { valid: true } | { valid: false, errors: string[] }
 ```
 
 ## Pinned inputs
@@ -19,10 +30,11 @@ await validator.validate(xml, "protocol");          // { valid: true } | { valid
 | libxml2 | **2.15.4**: `https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.4.tar.xz`, sha256 `98087fd181d9070724f3fbc65c7377db03038eb92bd882374daff44940138821` (checked in `build-in-container.sh`) |
 | Toolchain | `emscripten/emsdk:6.0.10@sha256:e077d54e2b8970575ebc4f185ac1de0b95c05f2b266134d4ba27449af7aebf65` |
 | Schemas | `../src/saml/schemas.generated.ts` (`SCHEMAS`), passed in from JS when the module is instantiated |
-| Output | `dist/xsd.wasm`, 404,849 bytes, sha256 in `dist/xsd.wasm.sha256` |
+| Output | `../wasm/xsd.wasm`, 404,861 bytes, sha256 in `../wasm/xsd.wasm.sha256` (a test checks the two agree) |
 
-The build is reproducible. Two consecutive `./build.sh` runs produced the same
-sha256: `d116cf5dd19e7b45bb4bf298e3fb5d0d3801d4346ba64a106f268172c9dd7750`.
+The build is reproducible. Two consecutive `./build.sh` runs produced
+byte-identical output, sha256
+`cfef04b645a346fddb73bacb730e2644519fa97db868f8a8848aa4e153960103`.
 
 ## Build
 
@@ -46,16 +58,17 @@ four things:
 3. Links `c/xsdv.c` with `--no-entry -sSTANDALONE_WASM -sFILESYSTEM=0
    -sSUPPORT_LONGJMP=0 -sALLOW_TABLE_GROWTH=0 -sALLOW_MEMORY_GROWTH=1
    -sINITIAL_MEMORY=4MB -sSTACK_SIZE=1MB`.
-4. Writes `dist/xsd.wasm` and its sha256.
+4. Writes `../wasm/xsd.wasm` (mounted into the container as `/out`) and its
+   sha256. There is no other output location.
 
-Consumers don't need Docker because `dist/xsd.wasm` is checked in.
+Consumers don't need Docker because `wasm/xsd.wasm` is checked in.
 
 ## Design
 
 **No emscripten JS glue.** The module is a WASI reactor. Its complete import
 list is below, and a test asserts it matches exactly:
 
-| Import | Implementation in `src/index.ts` |
+| Import | Implementation in `src/saml/wasm/validator.ts` |
 |---|---|
 | `wasi.random_get` | `crypto.getRandomValues`, used for libxml2's hash seed. It runs lazily inside the first `validate()`, never at global scope. |
 | `wasi.clock_time_get` | `Date.now()` |
@@ -65,7 +78,8 @@ list is below, and a test asserts it matches exactly:
 
 The loader calls `WebAssembly.instantiate(module, imports)` once per validator
 and then `_initialize()`. On Node, a `BufferSource` goes through
-`WebAssembly.compile` first. There is no `eval`, `new Function`, `addFunction`,
+`WebAssembly.compile` first. A failed compile is not cached: the next call
+retries. There is no `eval`, `new Function`, `addFunction`,
 table growth or worker thread anywhere.
 
 **No callbacks into JS.** Every function pointer given to libxml2 is a C
@@ -97,6 +111,13 @@ XML_PARSE_NOCDATA)`. Three settings apply:
 - UTF-8 is forced because JS has already decoded the string, so a stale
   `encoding=` declaration can't cause mis-decoding.
 
+A document must be both well-formed (`ctxt->wellFormed`) and
+namespace-well-formed (`ctxt->nsWellFormed`). libxml2 only clears
+`nsWellFormed` for namespace errors (unbound prefix, the same expanded
+attribute name via two prefixes, `xml`/`xmlns` prefix misuse, `xmlns:p=""`)
+and still returns a tree, so without this check such a document could pass
+schema validation inside a lax wildcard.
+
 DOCTYPE is rejected in C in two ways:
 1. A SAX `internalSubset` hook calls `xmlStopParser` as soon as
    `<!DOCTYPE name …` is read, before any internal subset is parsed.
@@ -119,10 +140,10 @@ instance.
 |---|---|
 | `c/xsdv.c` | C glue: registry, resolvers, error collection, DOCTYPE rejection, exports |
 | `build.sh`, `build-in-container.sh` | Reproducible Docker build |
-| `dist/xsd.wasm` (+ `.sha256`) | Built module, checked in |
-| `src/index.ts` | Runtime-neutral loader. Exports `createWasmValidator(wasm, schemas = SCHEMAS)`, the interface types, and `EXPECTED_IMPORTS`. |
-| `src/node.ts` | Node convenience: `createNodeWasmValidator()` reads `dist/xsd.wasm` from disk |
-| `test/validator.test.ts` | Vitest suite, run under Node and workerd |
+| `../wasm/xsd.wasm` (+ `.sha256`) | Built module, checked in, shipped in the package. The only copy. |
+| `../src/saml/wasm/validator.ts` | The loader, shipped in the package. Exports `createWasmValidator(wasm, schemas = SCHEMAS)`, the interface types, and `EXPECTED_IMPORTS`. |
+| `../src/saml/wasm/load.node.ts`, `load.workerd.ts` | Shipped binary loaders (`#xsd-wasm`), also used by the tests |
+| `test/validator.test.ts`, `test/load.ts` | Vitest suite, run under Node and workerd against the shipped loader and binary |
 | `vitest.config.ts`, `wrangler.jsonc` | Test config. Reuses `../test/support/global-setup.ts` for keys. |
 | `bench/run.sh`, `bench/worker.ts` | workerd benchmark (`wrangler dev`, timed with curl from outside) |
 | `bench/node-bench.sh`, `bench/node-bench.ts` | Node benchmark |
@@ -131,7 +152,7 @@ instance.
 ## Tests
 
 ```sh
-npx vitest run --config wasm-validator/vitest.config.ts            # from the repo root
+pnpm test:wasm                                                     # from the repo root
 npx tsc -p wasm-validator                                          # typecheck: clean
 ```
 
@@ -139,17 +160,26 @@ Results (vitest 4.1.11, @cloudflare/vitest-pool-workers 0.22.0, workerd 1.202609
 
 ```
  Test Files  2 passed (2)
-      Tests  67 passed | 1 skipped (68)
-node:    33 passed, 1 skipped (the workerd-only "codegen is forbidden here" check)
-workerd: 34 passed
+      Tests  83 passed | 3 skipped (86)
+node:    42 passed, 1 skipped (the workerd-only "codegen is forbidden here" check)
+workerd: 41 passed, 2 skipped (the Node-only sha256-file and compile-retry checks)
 [node]    800 validations: heapUsed 816256 -> 816256 B, linear memory 4194304 -> 4194304 B, stdio bytes 0
 [workerd] 800 validations: heapUsed 816256 -> 816256 B, linear memory 4194304 -> 4194304 B, stdio bytes 0
 ```
+
+The suite is mutation-checked against the shipped files: removing
+`x.xv_free(ptr)` from `src/saml/wasm/validator.ts` fails the leak test in both
+runtimes (heapUsed 954200 -> 1114840 B), and removing the compile-failure
+reset fails the compile-retry test.
 
 What the suite covers, identically in both runtimes:
 
 - **Module shape**
   - The exact import set.
+  - (Node) `wasm/xsd.wasm` hashes to the value in `wasm/xsd.wasm.sha256`.
+  - (Node) A failed `WebAssembly.compile` isn't cached; the next call
+    retries and succeeds.
+  - Invalid wasm bytes reject on every call, with no instance created.
   - Under workerd, a check that `WebAssembly.compile` of even an empty module
     throws "Wasm code generation disallowed by embedder". This proves every
     other test ran with codegen forbidden.
@@ -169,6 +199,12 @@ What the suite covers, identically in both runtimes:
     accepted (UTF-8 is forced).
 - **Non-well-formed input**: empty string, plain text, truncated document,
   mismatched tag, unbound prefix, two roots, NUL byte.
+- **Namespace well-formedness**: inside `samlp:Extensions` (a lax `##other`
+  wildcard, so the schema alone would accept them): an unbound attribute
+  prefix, `a:x` and `b:x` with the same namespace URI, `xmlns:xml` bound to a
+  wrong URI, a declared `xmlns:xmlns`, and `xmlns:p=""` are all rejected. A
+  well-formed control document is accepted. All five were accepted before the
+  `nsWellFormed` check was added.
 - **DOCTYPE and entities**: internal entity, XXE `SYSTEM file:///etc/passwd`,
   billion laughs, parameter entity, external DTD and bare DOCTYPE all return
   `["DOCTYPE is not allowed"]`. Also covered:
@@ -232,7 +268,7 @@ roughly 10–15× faster.
 
 | | Raw | gzip -9 |
 |---|---|---|
-| `dist/xsd.wasm` | 404,849 B (395 KiB) | 157,452 B (154 KiB) |
+| `wasm/xsd.wasm` | 404,861 B (395 KiB) | 157,460 B (154 KiB) |
 | Minimal worker using it: `wrangler deploy --dry-run --config wasm-validator/bench/minimal.wrangler.jsonc`, which includes the 76 KB JS bundle with the SAML schemas | 469.74 KiB | **169.02 KiB** |
 | The same minimal worker with node-xmllint (`bench/minimal-xmllint.wrangler.jsonc`) | 9662.13 KiB | 1028.84 KiB |
 
@@ -267,7 +303,6 @@ roughly 10–15× faster.
    verbatim.
 6. The build downloads the tarball from download.gnome.org. It's cached in
    `.cache/` and its sha256 is verified. The emsdk image is pinned by digest.
-7. There's no integration into `src/` yet. That's deliberate, since this
-   sub-project is self-contained. To adopt it: implement the plugin's
-   `SchemaValidator` with `createWasmValidator`. On workerd, add
-   `import wasm from ".../xsd.wasm"`. On Node, read the file.
+7. The Sizes and Benchmarks numbers were measured on the build before the
+   `nsWellFormed` check (404,849 B). The check adds 12 bytes and doesn't
+   change the hot path, so they weren't re-run.

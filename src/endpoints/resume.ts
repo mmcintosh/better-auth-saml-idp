@@ -23,7 +23,7 @@ export const resumeEndpoint = (state: PluginState) =>
       const session = await getSessionFromCtx(ctx);
       if (!session) {
         // Not consumed: the user can sign in and come back to the same URL.
-        throw ctx.redirect(loginRedirectUrl(ctx, state.options.loginPage, ctx.query.rid));
+        throw ctx.redirect(loginRedirectUrl(ctx, state, ctx.query.rid));
       }
 
       // R1: single-use consume through Better Auth's consume path. Everything below runs only
@@ -43,10 +43,6 @@ export const resumeEndpoint = (state: PluginState) =>
       if (pending.forceAuthn && new Date(session.session.createdAt).getTime() < pending.createdAt)
         return fail(ctx, "REAUTHENTICATION_REQUIRED", `SP ${sp.id}`);
 
-      return issueResponse(ctx, state, sp, session as any, {
-        requestId: pending.requestId,
-        acsUrl: pending.acsUrl,
-        relayState: pending.relayState,
-      });
+      return issueResponse(ctx, state, sp, session as any, pending);
     },
   );

@@ -153,7 +153,7 @@ The WASM validator was built in parallel in `wasm-validator/` (README there cove
 - Compiled with `emscripten/emsdk:6.0.10` (image digest pinned) as a **standalone wasm with no emscripten JS glue**. The hand-written loader implements exactly 7 imports, and a test pins that list.
 - No callbacks into JS. Schemas load only from an in-memory registry; libxml2's file callbacks are removed.
 - DOCTYPE is rejected in C. Errors go to a buffer, not stdio.
-- The build is reproducible: two builds gave the same wasm sha256, `d116cf5d…7750`.
+- The build is reproducible: two builds gave the same wasm sha256, `d116cf5d…7750` (rebuilt in D-015 with the namespace check: `cfef04b6…0103`).
 
 I re-ran its suite independently: `pnpm test:wasm` → 67 passed, 1 skipped (a workerd-only case) across Node and workerd. That includes 800 validations with 0 bytes of heap growth, and a workerd check that runtime codegen really is forbidden in that isolate.
 
@@ -279,3 +279,50 @@ The tier-2 e2e drives the **example app on workerd** (`wrangler dev`, local D1),
   2. The example also caches the plugin per isolate.
 - **pnpm workspace:** the root package `exports` temporarily point at `src/*.ts` until the Phase 4 build adds `dist/`. `src/index.ts` references its ambient `.d.ts` files, so consumers type-check.
 - **`pnpm.overrides["@better-auth/utils"] = "0.4.2"`:** after adding the workspace, pnpm resolved 0.5.0 for part of the tree, while Better Auth 1.7.x pins 0.4.2 (an unmet-peer warning). The override affects only this repo's installs, not the published package.
+
+## D-015: Adversarial review: 15 findings fixed, plus real-browser e2e (2026-09-25)
+
+A max-effort review of the whole codebase found 15 verified defects. The key lesson: **the test harness wasn't a real browser**. It sent every cookie everywhere and enforced no CSP, which hid findings 5 and 6.
+
+**Browser e2e.** It's now Playwright + Chromium over HTTPS, replacing the scripted `e2e/run.mjs`:
+- Every party is its own site: `idp.test`, `kc.test`, `ssp.test`, `sp.test`, `app.test`, all mapped via `--host-resolver-rules`, with a throwaway CA from `e2e/lib/tls.mjs`. So SameSite, `Secure` cookies and CSP behave as in production.
+- A new `node-saml` test SP uses the **HTTP-POST binding** and **redirects cross-site after its ACS**, like Cloudflare Access, AWS and HubSpot.
+- The example app got real email verification: a dev-only `/dev/mailbox`, behind `DEV_MAILBOX`.
+- **Failing first:** before the fixes, Chromium logged `Sending form data to 'https://sp.test:9100/acs' violates … "form-action https://sp.test:9100/acs"` and the flow hung (finding 5). After the fixes, 7/7 pass, including POST-binding while signed in, which skips the login page (finding 6), and IsPassive both ways.
+- Building it also exposed a real interop issue: **node-saml DEFLATEs HTTP-POST AuthnRequests**, contrary to Bindings §3.5.4. We now accept raw DEFLATE on POST when the payload isn't XML, under the same size cap.
+
+**Fixes.** Each has a test, and each test was proven by mutation (re-breaking the fix makes it fail) in `test/integration/review-findings.test.ts` and `security.test.ts`:
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | Assertions signed for **unverified** emails, admin impersonation and anonymous users, which enabled account takeover at the SP | `accountPolicy`: `requireEmailVerified` (default **true**), `allowImpersonatedSessions` (false), `allowAnonymousUsers` (false). It's checked on the fresh DB user and session row. |
+| 2 | Percent-encoded `Relay%53tate` smuggled an unsigned RelayState past Redirect signatures | `parseRedirectQuery` decodes names before matching, rejects duplicates, and builds the octets from exactly the parameters used, plus a guard that refuses signed requests with encoded SAML parameter names. **Either layer alone defeats the attack.** The mutation test removes both. |
+| 3 | Replay relied on a forced hashed primary key. `generateId: "serial"/"uuid"` dropped it (replays accepted), and MySQL's varchar(36) id made every request 500 | A separate **UNIQUE `key` column**, with the id left to Better Auth. Tested with `serial` and `uuid`. Hosts need migration `0002_seen_request_key.sql`. |
+| 4 | `banned === true` missed adapters that return `1` | Truthiness check, as in Better Auth's admin plugin |
+| 5 | The `form-action` CSP blocked SPs that redirect after the ACS | No `form-action` on the auto-POST page (the error page keeps `'none'`). The page has no injection point, and its action is an allow-listed ACS. |
+| 6 | The SP's cross-site POST carries no SameSite=Lax cookies: signed-in users were sent to log in, IsPassive failed, and the binding cookie was clobbered | The POST binding validates, records the replay, then **303s to a single-use same-site GET** (`sso?cid=`, 120 s) where cookies are present. The binding cookie is only read or created on that GET. |
+| 7 | An unbounded IdP cache keyed by the Host-derived base URL, and host-steerable metadata served `public` | A `baseURL` option pins the IdP's URLs (init warns if nothing is pinned). Otherwise the cache is a 32-entry LRU. Metadata is `private` with `Vary: Host, X-Forwarded-Host, X-Forwarded-Proto`. |
+| 8 | An expired certificate, even a rotation one, was fatal, taking every Better Auth route down | Expiry is a warning, and so is expiry within 30 days |
+| 9 | Pending AuthnRequests were never swept: Better Auth only deletes expired verification rows in `findVerificationValue` | A throttled sweep (60 s) of expired verification rows and seen-request rows on SSO requests |
+| 10 | `mergeSchema` mutated a shared module-level schema | A fresh schema object per plugin instance |
+| 11 | NameID was always the email, even for persistent/transient formats | persistent → per-SP HMAC of the user id (keyed with the Better Auth secret: rotating the secret changes these IDs); transient → random per assertion |
+| 12 | A requested `Subject` and `RequestedAuthnContext` were ignored | Subject mismatch → `UnknownPrincipal`. RequestedAuthnContext is matched against the new `authnContextClassRef` option (default `unspecified`; no class ordering is known, so `better` never matches) → `NoAuthnContext`. **All protocol-level refusals now go back as signed SAML error Responses** (also NoPassive and InvalidNameIDPolicy). |
+| 13 | The browser-binding test passed without the binding check | The attacker in the test now holds their own valid binding cookie |
+| 14 | No test depended on the R3 user re-read or the expired-session branch | Tests where each check alone decides the outcome |
+| 15 | The WASM tests exercised a copy of the loader and binary | One loader and one binary; the build writes `wasm/xsd.wasm`. xsdv.c now rejects namespace-ill-formed documents, and a failed compile is no longer cached. |
+
+Smaller verified items, also fixed:
+- `ForceAuthn`, `IsPassive` and `ID` are whitespace-collapsed.
+- `IssueInstant` must carry a time zone.
+- No `xsi:type` (its `xs` prefix sat outside exclusive c14n).
+- `loginPage` rejects backslashes and control characters.
+- An empty SP list is allowed with a warning.
+- Attacker-supplied text in debug logs is bounded and sanitised.
+- The private key is parsed once.
+- The e2e cleans up on Ctrl-C.
+- The unused samlify global is gone.
+
+**Behavioural changes for hosts:**
+- Unverified users no longer receive assertions (opt out with `accountPolicy.requireEmailVerified: false`).
+- SPs asking for `RequestedAuthnContext` classes the IdP doesn't assert now get `NoAuthnContext`. `node-saml` asks for `PasswordProtectedTransport` by default, so set `authnContextClassRef` to what your sign-in guarantees.
+- The seen-request table has a new `key` column.

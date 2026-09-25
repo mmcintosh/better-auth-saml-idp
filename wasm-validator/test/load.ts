@@ -1,8 +1,15 @@
 export const isWorkerd = typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers";
 
-/** workerd: the precompiled module from a static import; Node: raw bytes from disk. */
+/**
+ * Loads wasm/xsd.wasm through the plugin's own shipped loaders, so these tests
+ * exercise exactly what the package ships:
+ *  - workerd: src/saml/wasm/load.workerd.ts (static .wasm import -> precompiled WebAssembly.Module)
+ *  - Node:    src/saml/wasm/load.node.ts (reads the bytes from disk)
+ */
 export async function loadWasm(): Promise<WebAssembly.Module | Uint8Array<ArrayBuffer>> {
-  if (isWorkerd) return (await import("../dist/xsd.wasm")).default as WebAssembly.Module;
-  const { readFile } = await import("node:fs/promises");
-  return new Uint8Array(await readFile(new URL("../dist/xsd.wasm", import.meta.url)));
+  const m = isWorkerd
+    ? await import("../../src/saml/wasm/load.workerd")
+    : await import("../../src/saml/wasm/load.node");
+  // load.node.ts copies the file into a fresh (non-shared) ArrayBuffer.
+  return (await m.loadXsdWasm()) as WebAssembly.Module | Uint8Array<ArrayBuffer>;
 }

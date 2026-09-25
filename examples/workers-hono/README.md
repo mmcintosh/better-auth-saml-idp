@@ -14,12 +14,18 @@ pnpm install                 # from the repo root (pnpm workspace)
 cd examples/workers-hono
 pnpm keys                    # writes .dev.vars: a throwaway IdP key pair + BETTER_AUTH_SECRET
 pnpm db:migrate:local        # creates the tables in local D1
-pnpm dev                     # http://localhost:8787
+pnpm dev --var DEV_MAILBOX:true   # http://localhost:8787
 ```
 
 - IdP metadata: `http://localhost:8787/api/auth/saml2/idp/metadata`
 - Entity ID: `http://localhost:8787/api/auth/saml2/idp`
 - SSO URL: `http://localhost:8787/api/auth/saml2/idp/sso` (Redirect and POST)
+
+## Email verification
+
+The plugin only signs assertions for **verified** email addresses, so the example requires verification (`requireEmailVerification`, then auto sign-in after verifying):
+- **In production:** implement `sendVerificationEmail` in `src/auth.ts` with your email provider, for example Cloudflare Email Service.
+- **In development:** `DEV_MAILBOX=true` keeps the link in memory and serves it at `/dev/mailbox?email=…`. Never set it in production.
 
 ## Register service providers
 

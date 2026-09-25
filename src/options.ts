@@ -1,4 +1,4 @@
-import { X509Certificate, createPrivateKey, createPublicKey } from "node:crypto";
+import { type KeyObject, X509Certificate, createPrivateKey, createPublicKey } from "node:crypto";
 import * as z from "zod";
 import { defaultSchemaValidator } from "./saml/validator";
 import type {
@@ -9,6 +9,7 @@ import type {
 } from "./types";
 
 export const NAMEID_EMAIL = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress";
+export const AUTHN_CONTEXT_UNSPECIFIED = "urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified";
 export const RELAY_STATE_HARD_CAP = 1024;
 
 export class SamlIdpConfigError extends Error {
@@ -75,9 +76,16 @@ const serviceProviderSchema = z
 const optionsSchema = z
   .object({
     entityId: z.string().min(1).max(1024),
+    baseURL: z
+      .string()
+      .refine((v) => /^https?:\/\/[^/?#\s\\]+(\/[^?#\s\\]*)?$/.test(v), { message: "must be an absolute http(s) URL without query or fragment" })
+      .optional(),
     loginPage: z
       .string()
-      .refine((v) => v.startsWith("/") && !v.startsWith("//") || /^https?:\/\//.test(v), {
+      // Browsers treat "\" like "/" in URLs ("/\\evil.example" → "//evil.example"), so reject it
+      // along with control characters and whitespace.
+      .refine((v) => !/[\\\s\u0000-\u001f\u007f]/.test(v), { message: "must not contain backslashes, whitespace or control characters" })
+      .refine((v) => (v.startsWith("/") && !v.startsWith("//")) || /^https?:\/\//.test(v), {
         message: "must be a path starting with / or an absolute http(s) URL",
       }),
     signing: z
@@ -96,14 +104,23 @@ const optionsSchema = z
     clockSkewSeconds: z.number().int().min(0).max(300).optional(),
     pendingRequestTtlSeconds: z.number().int().min(60).max(3600).optional(),
     relayStateMaxBytes: z.number().int().min(80).max(RELAY_STATE_HARD_CAP).optional(),
-    serviceProviders: z.array(serviceProviderSchema).min(1, "must configure at least one service provider"),
+    authnContextClassRef: z.string().min(1).max(1024).optional(),
+    accountPolicy: z
+      .object({
+        requireEmailVerified: z.boolean().optional(),
+        allowImpersonatedSessions: z.boolean().optional(),
+        allowAnonymousUsers: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
+    serviceProviders: z.array(serviceProviderSchema),
     schema: z
       .object({
         samlIdpSeenRequest: z
           .object({
             modelName: z.string().min(1).optional(),
             fields: z
-              .object({ spId: z.string().min(1), requestId: z.string().min(1), expiresAt: z.string().min(1) })
+              .object({ key: z.string().min(1), spId: z.string().min(1), requestId: z.string().min(1), expiresAt: z.string().min(1) })
               .partial()
               .strict()
               .optional(),
@@ -126,18 +143,25 @@ function formatIssues(error: z.ZodError): string[] {
   return error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`);
 }
 
-/** Checks that need crypto: key type/size and that the key matches the certificate. */
-function checkKeyMaterial(o: SamlIdpOptions): string[] {
+const EXPIRY_WARNING_DAYS = 30;
+
+/**
+ * Checks that need crypto: key type/size and that the key matches the certificate.
+ * Expiry only warns: failing here would take every Better Auth route down the moment a
+ * (possibly publish-only rotation) certificate expires.
+ */
+function checkKeyMaterial(o: SamlIdpOptions, warnings: string[]): { issues: string[]; key?: KeyObject } {
   const issues: string[] = [];
   let publicFromKey: string;
+  let key: KeyObject;
   try {
-    const key = createPrivateKey(o.signing.privateKey);
+    key = createPrivateKey(o.signing.privateKey);
     if (key.asymmetricKeyType !== "rsa") issues.push(`signing.privateKey: must be an RSA key, got ${key.asymmetricKeyType}`);
     const bits = key.asymmetricKeyDetails?.modulusLength;
     if (bits !== undefined && bits < 2048) issues.push(`signing.privateKey: RSA key must be at least 2048 bits, got ${bits}`);
     publicFromKey = createPublicKey(key).export({ type: "spki", format: "pem" }).toString();
   } catch (e) {
-    return [`signing.privateKey: could not be parsed (${(e as Error).message})`];
+    return { issues: [`signing.privateKey: could not be parsed (${(e as Error).message})`] };
   }
   const certs: [string, string][] = [
     ["signing.certificate", o.signing.certificate],
@@ -150,12 +174,15 @@ function checkKeyMaterial(o: SamlIdpOptions): string[] {
         const publicFromCert = cert.publicKey.export({ type: "spki", format: "pem" }).toString();
         if (publicFromCert !== publicFromKey) issues.push(`${path}: does not match signing.privateKey`);
       }
-      if (new Date(cert.validTo).getTime() < Date.now()) issues.push(`${path}: expired on ${cert.validTo}`);
+      const validTo = new Date(cert.validTo).getTime();
+      if (validTo < Date.now()) warnings.push(`${path}: EXPIRED on ${cert.validTo}; SPs that check validity will reject it`);
+      else if (validTo < Date.now() + EXPIRY_WARNING_DAYS * 86_400_000)
+        warnings.push(`${path}: expires on ${cert.validTo} (within ${EXPIRY_WARNING_DAYS} days); plan a rotation`);
     } catch (e) {
       issues.push(`${path}: could not be parsed (${(e as Error).message})`);
     }
   }
-  return issues;
+  return { issues, key };
 }
 
 export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
@@ -188,11 +215,15 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
     entityIds.add(sp.entityId);
   }
 
-  issues.push(...checkKeyMaterial(o as SamlIdpOptions));
-  if (issues.length) throw new SamlIdpConfigError(issues);
+  if (o.serviceProviders.length === 0) warnings.push("serviceProviders is empty: every AuthnRequest will be rejected");
+
+  const keyCheck = checkKeyMaterial(o as SamlIdpOptions, warnings);
+  issues.push(...keyCheck.issues);
+  if (issues.length || !keyCheck.key) throw new SamlIdpConfigError(issues);
 
   return {
     entityId: o.entityId,
+    baseURL: o.baseURL?.replace(/\/+$/, ""),
     loginPage: o.loginPage,
     signing: {
       privateKey: o.signing.privateKey,
@@ -203,18 +234,25 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
       allowInsecureSha1: o.signing.allowInsecureSha1 ?? false,
       signResponse: o.signing.signResponse ?? true,
       signAssertion: o.signing.signAssertion ?? true,
+      keyObject: keyCheck.key,
     },
     assertionLifetimeSeconds: lifetime,
     clockSkewSeconds: o.clockSkewSeconds ?? 60,
     pendingRequestTtlSeconds: o.pendingRequestTtlSeconds ?? 600,
     relayStateMaxBytes: o.relayStateMaxBytes ?? 80,
+    authnContextClassRef: o.authnContextClassRef ?? AUTHN_CONTEXT_UNSPECIFIED,
+    accountPolicy: {
+      requireEmailVerified: o.accountPolicy?.requireEmailVerified ?? true,
+      allowImpersonatedSessions: o.accountPolicy?.allowImpersonatedSessions ?? false,
+      allowAnonymousUsers: o.accountPolicy?.allowAnonymousUsers ?? false,
+    },
     serviceProviders: o.serviceProviders.map(
       (sp): ResolvedServiceProvider => ({
         id: sp.id,
         entityId: sp.entityId,
         acsUrls: sp.acsUrls as [string, ...string[]],
         nameIdFormat: sp.nameIdFormat ?? NAMEID_EMAIL,
-        nameId: sp.nameId ?? ((user) => user.email),
+        nameId: sp.nameId,
         attributes: sp.attributes ?? (() => ({})),
         requireSignedAuthnRequests: sp.requireSignedAuthnRequests ?? false,
         spCertificate: sp.spCertificate,
