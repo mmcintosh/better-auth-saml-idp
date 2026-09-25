@@ -208,7 +208,11 @@ export async function readAutoPost(res: Response): Promise<PostedForm> {
 }
 
 /** The strict test SP: message AND assertion signatures required. */
-export async function strictSp(auth: { handler(r: Request): Promise<Response> }) {
+export async function strictSp(
+  auth: { handler(r: Request): Promise<Response> },
+  /** Encrypted assertions (D-020): the SP's decryption key; `wantMessageSigned` defaults to true. */
+  opts: { encPrivateKey?: string; encryptCert?: string; wantMessageSigned?: boolean } = {},
+) {
   // A samlify SP app must install samlify's (process-global) schema validator itself; the IdP
   // plugin no longer touches that global.
   samlify.setSchemaValidator({
@@ -219,12 +223,14 @@ export async function strictSp(auth: { handler(r: Request): Promise<Response> })
     },
   });
   const metadata = await (await auth.handler(new Request(`${AUTH_BASE}/saml2/idp/metadata`))).text();
-  const idp = samlify.IdentityProvider({ metadata });
+  // samlify decides whether to decrypt from the *IdP* entity's isAssertionEncrypted.
+  const idp = samlify.IdentityProvider({ metadata, ...(opts.encPrivateKey ? { isAssertionEncrypted: true } : {}) });
   const sp = samlify.ServiceProvider({
     entityID: SP_ENTITY_ID,
     wantAssertionsSigned: true,
-    wantMessageSigned: true,
+    wantMessageSigned: opts.wantMessageSigned ?? true,
     authnRequestsSigned: false,
+    ...(opts.encPrivateKey ? { isAssertionEncrypted: true, encPrivateKey: opts.encPrivateKey, encryptCert: opts.encryptCert } : {}),
     assertionConsumerService: [{ Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST", Location: SP_ACS }],
     clockDrifts: [-60_000, 60_000],
   });

@@ -413,3 +413,54 @@ Measured on production with the same method as D-017:
 The plugin also caches the metadata XML per IdP instance now; samlify was rebuilding it on every request.
 
 The browser e2e (7/7) and the live smoke test (16/16) passed after both changes. The smoke test now uses a dummy SP, `https://smoke.invalid/sp`, registered on the example deployment, because the Cloudflare SP requires signed requests. Right after a deploy, give the new version a few seconds to propagate before running it.
+
+## D-020: Encrypted assertions (2026-09-25)
+
+**What.** A per-SP option, `serviceProviders[].encryption: { certificate, dataAlgorithm?, keyAlgorithm?, allowInsecureCbc? }`. When it's set, the `<saml:Assertion>` is sent as a `<saml:EncryptedAssertion>` (SAML Core §2.3.4) holding one `xenc:EncryptedData Type="#Element"`. Its `ds:KeyInfo` carries an `xenc:EncryptedKey` with `Recipient` (the SP's entity ID), the SP certificate's `X509Data`, and the RSA-wrapped content key. The encryptor is `src/saml/encrypt.ts`, about 150 lines on `node:crypto` (`createCipheriv`, `publicEncrypt`). It has no new dependencies.
+
+**Algorithms.**
+- **Data:**
+  - `aes256-gcm` (`xmlenc11#aes256-gcm`) is the default.
+  - `aes128-gcm` is also available.
+  - GCM output is a 12-byte IV, then the ciphertext, then a 16-byte tag (XML Enc 1.1 §5.2.4).
+  - `aes256-cbc` (16-byte IV, PKCS#7 padding, which is a valid XML Enc padding) needs `allowInsecureCbc: true`, because of CBC's padding-oracle history. It logs a startup warning.
+  - Every assertion gets a fresh random key and IV.
+- **Key transport:**
+  - `rsa-oaep` (`xmlenc#rsa-oaep-mgf1p`, SHA-1 digest and MGF1-SHA1) is the default. It's the only OAEP form both SP libraries below can decrypt. SHA-1 inside OAEP isn't a collision-resistance use.
+  - `rsa-oaep-sha256` (`xmlenc11#rsa-oaep` with a SHA-256 `ds:DigestMethod` and `xenc11:MGF mgf1sha256`) is available for SPs that want it. node:crypto and WebCrypto tie MGF1's hash to the OAEP digest, so both are SHA-256 and declared as such.
+  - **RSA PKCS#1 v1.5 isn't implemented.** There's no table entry, options reject `rsa-1_5`, and unknown names throw.
+- **SP certificate at startup:** it must parse and be RSA ≥ 2048 bits. Expiry only warns, as for signing certificates.
+
+**Order: sign, then encrypt.**
+1. Sign the Assertion.
+2. Encrypt that exact serialized, signed element string.
+3. Sign the Response, when `signResponse` is set.
+
+SPs verify the assertion signature after decrypting. **Rule:** an encrypted assertion is always signed when the Response isn't. `buildSignedResponse` enforces this even if the options say otherwise, and the startup rule "at least one of signResponse/signAssertion" already implies it for global signing.
+
+SPs parse the decrypted element on its own, outside the Response that declares `saml:`. So an `xmlns:saml` declaration is added to the Assertion's start tag before encryption. That declaration is already in scope, so the exclusive-c14n form and the signature don't change: node-saml and our own xml-crypto check both verify the decrypted assertion's signature.
+
+**Workers findings:**
+- workerd's `publicEncrypt`/`privateDecrypt` reject `KeyObject`s ("Received an instance of PublicKeyObject"). The SP key is therefore kept as an SPKI PEM string.
+- workerd's `privateDecrypt` with OAEP padding and **no `oaepHash`** fails ("Failed to cipher/decipher"), where Node defaults to SHA-1. We always pass `oaepHash`. The gap breaks samlify's decryptor on workerd (below).
+
+**Evidence** (`test/unit/encrypt.test.ts`, `test/interop/encryption-interop.test.ts`, plus `test/support/xmlenc.ts`, a test-only decryptor that reads the algorithms from the XML and decrypts with node:crypto *and* WebCrypto):
+
+| SP library (decryptor) | aes256-gcm + rsa-oaep | aes128-gcm | aes256-cbc | signResponse: false | rsa-oaep-sha256 | Runtimes |
+|---|---|---|---|---|---|---|
+| `@node-saml/node-saml` 5.1 (`xml-encryption` 3.1), strict: both signatures, InResponseTo `always` | decrypts + validates | yes | yes | yes, the assertion signature is checked after decryption | **no**: "key encryption algorithm …xmlenc11#rsa-oaep not supported" | Node **and** workerd |
+| samlify 2.13.1 (`@authenio/xml-encryption` 2.0.2), strict XSD + signatures | decrypts + validates (NameID, attributes, InResponseTo) | yes | yes | yes, samlify verifies the decrypted assertion | **no**: XSD check rejects `xenc11:MGF`, and the library lacks `xmlenc11#rsa-oaep` | **Node only.** On workerd it can't decrypt any RSA-OAEP key (no `oaepHash`, see above). A workerd-only test pins this, so it flips if workerd changes. |
+
+- **Negative tests:**
+  - A wrong SP key fails in node-saml, samlify, node:crypto and WebCrypto.
+  - A missing key is refused by node-saml, and an SP not set up to decrypt fails closed in samlify.
+  - A flipped ciphertext or tag bit fails GCM in both crypto stacks.
+  - The NameID, attribute values, `<saml:Assertion`, `<saml:Subject>` and `SessionIndex` never appear in the posted Response XML.
+- **XSD:** the default encrypted Response validates against the vendored SAML/XML-Enc schemas (libxml2). `rsa-oaep-sha256`'s `xenc11:MGF` doesn't, because `EncryptionMethodType`'s wildcard is strict and the XML Enc 1.1 schema isn't vendored. This is tested and documented, and it's why `rsa-oaep` stays the default.
+- **Mutation proof:** with the `encryptAssertionInResponse` call removed from `buildSignedResponse`, the unit "plaintext never appears" test fails on both runtimes ("expected … not to contain 'secret-person@example.com'"). All 22 non-skipped interop tests fail too, most of them on the same plaintext check.
+- **Counts:** `pnpm test` went from 388 passed / 8 skipped to 462 passed / 14 skipped.
+  - Node: 235 passed / 3 skipped.
+  - workerd: 227 passed / 11 skipped. The new skips are the 5 Node-only samlify decryption tests on workerd and the workerd-only probe on Node.
+  - Per runtime, the new tests are 26 unit tests, plus 13 interop tests on Node or 9 on workerd.
+
+**Out of scope:** encryption certificates advertised in SP metadata (`KeyDescriptor use="encryption"`) are left to the SP-metadata import work. Encrypted NameID/attributes (`EncryptedID`, `EncryptedAttribute`) aren't implemented.

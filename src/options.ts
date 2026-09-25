@@ -1,5 +1,6 @@
 import { type KeyObject, X509Certificate, createPrivateKey, createPublicKey } from "node:crypto";
 import * as z from "zod";
+import type { AssertionEncryption } from "./saml/encrypt";
 import { defaultSchemaValidator } from "./saml/validator";
 import type {
   ResolvedSamlIdpOptions,
@@ -64,11 +65,28 @@ const serviceProviderSchema = z
     spCertificate: z.union([pem("CERTIFICATE"), z.array(pem("CERTIFICATE")).min(1)]).optional(),
     allowIdpInitiated: z.boolean().optional(),
     authorize: fn<ResolvedServiceProvider["authorize"]>().optional(),
+    encryption: z
+      .object({
+        certificate: pem("CERTIFICATE"),
+        dataAlgorithm: z.enum(["aes256-gcm", "aes128-gcm", "aes256-cbc"]).optional(),
+        // No "rsa-1_5": PKCS#1 v1.5 key transport is not offered at all.
+        keyAlgorithm: z.enum(["rsa-oaep", "rsa-oaep-sha256"]).optional(),
+        allowInsecureCbc: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((sp, ctx) => {
     if (sp.requireSignedAuthnRequests && !sp.spCertificate)
       ctx.addIssue({ code: "custom", path: ["spCertificate"], message: "is required when requireSignedAuthnRequests is true" });
+    if (sp.encryption?.dataAlgorithm === "aes256-cbc" && !sp.encryption.allowInsecureCbc)
+      ctx.addIssue({
+        code: "custom",
+        path: ["encryption", "dataAlgorithm"],
+        message:
+          "AES-CBC is vulnerable to padding-oracle attacks; use aes256-gcm, or set encryption.allowInsecureCbc: true for an SP that cannot do GCM",
+      });
     if (sp.allowIdpInitiated)
       ctx.addIssue({ code: "custom", path: ["allowIdpInitiated"], message: "IdP-initiated SSO is not supported in this version" });
   });
@@ -185,6 +203,47 @@ function checkKeyMaterial(o: SamlIdpOptions, warnings: string[]): { issues: stri
   return { issues, key };
 }
 
+/**
+ * An SP's encryption certificate: parse it, require RSA ≥ 2048 bits (OAEP key transport),
+ * and warn (not fail) on expiry, as for signing certificates.
+ */
+function checkEncryptionCertificate(
+  path: string,
+  pemText: string,
+  issues: string[],
+  warnings: string[],
+): Pick<AssertionEncryption, "publicKeyPem" | "certificateBase64"> | undefined {
+  let cert: X509Certificate;
+  try {
+    cert = new X509Certificate(pemText);
+  } catch (e) {
+    issues.push(`${path}: could not be parsed (${(e as Error).message})`);
+    return undefined;
+  }
+  const publicKey = cert.publicKey;
+  if (publicKey.asymmetricKeyType !== "rsa") {
+    issues.push(`${path}: must be an RSA certificate, got ${publicKey.asymmetricKeyType}`);
+    return undefined;
+  }
+  const bits = publicKey.asymmetricKeyDetails?.modulusLength;
+  if (bits !== undefined && bits < 2048) {
+    issues.push(`${path}: RSA key must be at least 2048 bits, got ${bits}`);
+    return undefined;
+  }
+  const validTo = new Date(cert.validTo).getTime();
+  if (validTo < Date.now()) warnings.push(`${path}: EXPIRED on ${cert.validTo}; the SP may no longer hold its key`);
+  else if (validTo < Date.now() + EXPIRY_WARNING_DAYS * 86_400_000)
+    warnings.push(`${path}: expires on ${cert.validTo} (within ${EXPIRY_WARNING_DAYS} days); ask the SP for its next certificate`);
+  const der = new Uint8Array(cert.raw);
+  let bin = "";
+  for (const b of der) bin += String.fromCharCode(b);
+  // Kept as SPKI PEM: on workerd, publicEncrypt() rejects KeyObjects ("Received an instance of
+  // PublicKeyObject"). Round-tripping through createPublicKey proves the PEM parses.
+  const publicKeyPem = publicKey.export({ type: "spki", format: "pem" }).toString();
+  createPublicKey(publicKeyPem);
+  return { publicKeyPem, certificateBase64: btoa(bin) };
+}
+
 export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
   const parsed = optionsSchema.safeParse(input);
   if (!parsed.success) throw new SamlIdpConfigError(formatIssues(parsed.error));
@@ -213,6 +272,17 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
     if (entityIds.has(sp.entityId)) issues.push(`serviceProviders.${i}.entityId: duplicate entityId "${sp.entityId}"`);
     ids.add(sp.id);
     entityIds.add(sp.entityId);
+  }
+
+  const encryption = new Map<number, AssertionEncryption>();
+  for (const [i, sp] of o.serviceProviders.entries()) {
+    if (!sp.encryption) continue;
+    const cert = checkEncryptionCertificate(`serviceProviders.${i}.encryption.certificate`, sp.encryption.certificate, issues, warnings);
+    if (!cert) continue;
+    const dataAlgorithm = sp.encryption.dataAlgorithm ?? "aes256-gcm";
+    if (dataAlgorithm === "aes256-cbc")
+      warnings.push(`serviceProviders.${i}.encryption: AES-CBC is enabled (allowInsecureCbc). Only use this for SPs that cannot do AES-GCM.`);
+    encryption.set(i, { ...cert, dataAlgorithm, keyAlgorithm: sp.encryption.keyAlgorithm ?? "rsa-oaep", recipient: sp.entityId });
   }
 
   if (o.serviceProviders.length === 0) warnings.push("serviceProviders is empty: every AuthnRequest will be rejected");
@@ -247,7 +317,7 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
       allowAnonymousUsers: o.accountPolicy?.allowAnonymousUsers ?? false,
     },
     serviceProviders: o.serviceProviders.map(
-      (sp): ResolvedServiceProvider => ({
+      (sp, i): ResolvedServiceProvider => ({
         id: sp.id,
         entityId: sp.entityId,
         acsUrls: sp.acsUrls as [string, ...string[]],
@@ -258,6 +328,7 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
         spCertificates: sp.spCertificate === undefined ? [] : Array.isArray(sp.spCertificate) ? sp.spCertificate : [sp.spCertificate],
         allowIdpInitiated: false,
         authorize: sp.authorize ?? (() => true),
+        ...(encryption.has(i) ? { encryption: encryption.get(i) } : {}),
       }),
     ),
     schemaValidator: o.schemaValidator ?? defaultSchemaValidator(),

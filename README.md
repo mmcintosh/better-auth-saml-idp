@@ -56,6 +56,8 @@ export const createAuth = (env: Env, cf: IncomingRequestCfProperties) =>
 
 **Defaults to know about.** Only users with a **verified email** receive assertions, and admin-impersonation sessions and anonymous users are refused (`accountPolicy`). The NameID follows each SP's `nameIdFormat`: the email for `emailAddress`, an opaque per-SP ID for `persistent`, and a one-time ID for `transient`. Requests the IdP can't satisfy (IsPassive without a session, an unsatisfiable RequestedAuthnContext, a Subject mismatch) get a signed SAML error Response.
 
+**Encrypted assertions (per SP).** Give an SP `encryption: { certificate: "<the SP's PEM encryption certificate>" }` and its assertions arrive as `<saml:EncryptedAssertion>`: AES-256-GCM with RSA-OAEP by default, signed before encryption and wrapped in a signed Response. `dataAlgorithm` also takes `aes128-gcm`, or `aes256-cbc` with `allowInsecureCbc: true` for SPs without GCM. `keyAlgorithm: "rsa-oaep-sha256"` is available, but node-saml and samlify can't decrypt it. RSA PKCS#1 v1.5 isn't offered. See DECISIONS.md D-020.
+
 Add the plugin's table to your Drizzle schema. Field maps use Drizzle **property keys**, not column names:
 
 ```ts
@@ -117,7 +119,7 @@ Ship what is built, safely.
 What admins and SPs assume every IdP has.
 
 - **IdP-initiated SSO (opt-in per SP).** Supported by 8 of the 11 products compared (partially by Ory Polis), including all four commercial IdPs. Off by default, as the spec intended.
-- **Encrypted assertions.** AES-256-GCM with RSA-OAEP. Shibboleth encrypts by default; Keycloak, authentik, Logto, Entra and Okta offer it per SP.
+- **Encrypted assertions (done).** AES-256-GCM with RSA-OAEP, per SP, sign-then-encrypt. Decrypted and validated by node-saml and samlify. Shibboleth encrypts by default; Keycloak, authentik, Logto, Entra and Okta offer it per SP.
 - **Register SPs from metadata XML.** A helper that turns an SP's metadata into a serviceProviders entry, including certificates and ACS URLs.
 - **Per-SP signing choice.** Move signResponse and signAssertion to each SP, as Shibboleth, Keycloak and authentik do.
 - **Signed IdP metadata.** Optional, for SPs and federations that verify metadata signatures.

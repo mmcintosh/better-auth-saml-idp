@@ -3,6 +3,7 @@ import { SignedXml } from "xml-crypto";
 import type { SamlStatus } from "./request";
 import type { DigestAlgorithm, ResolvedSamlIdpOptions, SamlAttributeValue, SignatureAlgorithm } from "../types";
 import { SIGNATURE_ALGORITHM_URI } from "./idp";
+import { type AssertionEncryption, encryptAssertionInResponse } from "./encrypt";
 
 const DIGEST_URI: Record<DigestAlgorithm, string> = {
   sha256: "http://www.w3.org/2001/04/xmlenc#sha256",
@@ -113,13 +114,21 @@ function sign(
   return sig.getSignedXml();
 }
 
-/** Build and sign per `options.signing`; returns the XML and its base64 form for the POST binding. */
-export function buildSignedResponse(options: ResolvedSamlIdpOptions, input: BuildResponseInput) {
+/**
+ * Build and sign per `options.signing`; returns the XML and its base64 form for the POST binding.
+ * With `encryption` (the SP's, D-020): sign the Assertion, encrypt it into an
+ * EncryptedAssertion, then sign the Response ("sign-then-encrypt", so the SP verifies the
+ * assertion signature after decrypting). An encrypted assertion is always signed when the
+ * Response is not, so the SP never receives an unsigned assertion.
+ */
+export function buildSignedResponse(options: ResolvedSamlIdpOptions, input: BuildResponseInput, encryption?: AssertionEncryption) {
   const built = buildResponseXml(options, input);
   let xml = built.xml;
-  if (options.signing.signAssertion) xml = sign(xml, "Assertion", options.signing);
+  const signAssertion = options.signing.signAssertion || (encryption !== undefined && !options.signing.signResponse);
+  if (signAssertion) xml = sign(xml, "Assertion", options.signing);
+  if (encryption) xml = encryptAssertionInResponse(xml, encryption);
   if (options.signing.signResponse) xml = sign(xml, "Response", options.signing);
-  return { ...built, xml, base64: toBase64(xml) };
+  return { ...built, xml, base64: toBase64(xml), encrypted: encryption !== undefined };
 }
 
 function toBase64(xml: string): string {
