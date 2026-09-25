@@ -31,4 +31,7 @@ jobs:
         run: pnpm typecheck && pnpm test && pnpm test:wasm
       - if: failure()
         env: { GH_TOKEN: "${{ github.token }}" }
-        run: gh issue create --title "Upstream canary failed: better-auth ${{ matrix.tag }} (${{ steps.ver.outputs.version }})" --body "See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        run: |
+          gh issue create \
+            --title "Upstream canary failed: better-auth ${{ matrix.tag }} (${{ steps.ver.outputs.version }})" \
+            --body "See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
