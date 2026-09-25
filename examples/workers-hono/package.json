@@ -1,0 +1,26 @@
+{
+  "name": "example-workers-hono",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "keys": "sh scripts/dev-keys.sh",
+    "db:migrate:local": "wrangler d1 migrations apply saml-idp-example --local",
+    "db:migrate:remote": "wrangler d1 migrations apply saml-idp-example --remote",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-auth": "1.7.5",
+    "better-auth-cloudflare": "file:../../vendor/better-auth-cloudflare-0.3.1-main-dbe08c51b.tgz",
+    "better-auth-saml-idp": "workspace:*",
+    "drizzle-orm": "^0.45.3",
+    "hono": "^4.13.9"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260924.1",
+    "@types/node": "^26.6.2",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.139.0"
+  }
+}

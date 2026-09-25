@@ -249,3 +249,33 @@ The cross-instance R1 test matters. `consumeVerificationValue`'s in-process lock
 - **`AssertionConsumerServiceIndex` without a URL is rejected**, because indexes refer to SP metadata that the static registry doesn't hold.
 - **Origin check:** `/saml2/idp/sso` is added to `skipOriginCheck` in `init`, the same way `@better-auth/sso` handles its ACS, because SPs POST there cross-origin.
 - **Logging:** errors log a code and a short detail at debug level, and never payloads. The logging test runs a full flow at debug level and asserts that no private-key fragment, SAMLResponse, SAMLRequest or rejected issuer appears in the logs.
+
+## D-013: Phase 3 gate amended: independent SPs in place of a live HubSpot login (2026-09-25)
+
+**Deviation from SPEC §9 Phase 3**, approved by the owner. There's no HubSpot portal with SSO available: HubSpot SSO generally needs a paid tier, and we have no entity ID or ACS URL. The gate's purpose is proof that *independent, strict* SP implementations accept our assertions, plus an external validator result. That's now covered in four tiers (`docs/testing-with-sps.md`). `docs/hubspot.md` stays as a guide marked "not yet verified live".
+
+| Tier | SP / validator | Evidence (2026-09-25) |
+|---|---|---|
+| 1 (CI) | `@better-auth/sso` 1.7.5 (Better Auth's own SP) | `test/interop/sp-interop.test.ts`, Node + workerd: SP-initiated flow ends with a Better Auth session on the SP for the same email |
+| 1 (CI) | `@node-saml/node-saml` 5.1.0, strict (`validateInResponseTo: always`, both signatures required) | same file: profile NameID, issuer and email verified; **rejects** the Response under the wrong IdP cert |
+| 2 (CI job + local) | Keycloak 26.4, SAML identity broker with `validateSignature` and `wantAssertionsSigned` | `pnpm e2e`: PASS. A new user was created in Keycloak and linked to `our-idp`; first/last name mapped from our attributes |
+| 2 | SimpleSAMLphp 2.5.0 SP | `pnpm e2e`: PASS (new user: NameID + `email, name, firstName, lastName`), PASS (existing IdP session → no login page) |
+| 3 | Cloudflare Access, AWS IAM Identity Center | **Pending, needs the owner's accounts.** Guides: `docs/sp-cloudflare-access.md`, `docs/sp-aws-iam-identity-center.md` |
+| 4 | SAMLtool (samltool.com/validate_response.php) | A throwaway local user and dev key, with the Response from `examples/workers-hono` on workerd → **"The SAML Response is valid."** The same Response with a wrong certificate → **"invalid. Response signature validation failed. Assertion signature validation failed."**, so the check is real |
+
+The tier-2 e2e drives the **example app on workerd** (`wrangler dev`, local D1), with a scripted browser that follows redirects and auto-submits SAML forms. Everything else about it is in `e2e/run.mjs`. Problems found and fixed while building it:
+- SimpleSAMLphp's image only aliases `/simplesaml` on its :443 vhost, so a `conf-enabled` alias was added for http.
+- Compose v1 (`docker-compose` 1.29) needs a `version:` key.
+- The script now refuses to start when a port is busy, after stale `wrangler dev` processes caused a false start.
+
+## D-014: Example app and repo plumbing (Phase 3)
+
+- **`examples/workers-hono`:** Hono + D1 + Drizzle + `withCloudflare`, with `samlIdp()` inside it (R6), `storeInDatabase`, database rate limits and `validateSchema`.
+  - SPs come from the `SAML_SERVICE_PROVIDERS` JSON var, so no code change is needed per SP.
+  - The sign-in page only follows same-origin `callbackURL`s and uses a nonce CSP.
+  - It depends on `better-auth-cloudflare` from `vendor/` until 0.4 is on npm.
+- **Performance fix from building it:** hosts on Workers typically build `betterAuth()` per request, to pass `cf`. A per-request `samlIdp()` would re-instantiate the wasm and recompile the XSDs (~40–55 ms) each time. Two layers prevent that:
+  1. The default validator is now an isolate-wide singleton (`defaultSchemaValidator()`).
+  2. The example also caches the plugin per isolate.
+- **pnpm workspace:** the root package `exports` temporarily point at `src/*.ts` until the Phase 4 build adds `dist/`. `src/index.ts` references its ambient `.d.ts` files, so consumers type-check.
+- **`pnpm.overrides["@better-auth/utils"] = "0.4.2"`:** after adding the workspace, pnpm resolved 0.5.0 for part of the tree, while Better Auth 1.7.x pins 0.4.2 (an unmet-peer warning). The override affects only this repo's installs, not the published package.

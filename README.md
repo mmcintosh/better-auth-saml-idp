@@ -4,7 +4,7 @@ A [Better Auth](https://www.better-auth.com) plugin that turns your Better Auth 
 
 > **Unofficial community plugin.** This project isn't affiliated with or endorsed by Better Auth.
 
-> Status: pre-release. Phases 0–2 are done: runtime, plugin skeleton and SP-initiated SSO. Design decisions and evidence are in `DECISIONS.md`.
+> Status: pre-release. Phases 0–3 are done: runtime, plugin skeleton, SP-initiated SSO, example app and interop. Design decisions and evidence are in `DECISIONS.md`.
 
 > [!WARNING]
 > **Cloudflare Workers users: put `samlIdp()` inside `withCloudflare`'s second argument.** If you write `plugins: [...]` next to `...withCloudflare(...)`, your array **replaces** the Cloudflare plugin. That silently disables its storage validation, IP detection and geolocation. You also need `better-auth-cloudflare` **≥ 0.4**.
@@ -83,6 +83,10 @@ All endpoints are relative to your Better Auth base path, e.g. `/api/auth`.
 
 The login page gets `?callbackURL=<absolute resume URL>`. After a successful sign-in, send the browser there.
 
+## Tested against
+
+`@better-auth/sso`, `@node-saml/node-saml` and samlify run in CI. Keycloak 26.4 and SimpleSAMLphp 2.5 run in Docker (`pnpm e2e`, also in CI). SAMLtool validates the Response. Guides for Cloudflare Access, AWS IAM Identity Center and HubSpot are included. See [docs/testing-with-sps.md](docs/testing-with-sps.md) and the [Workers example](examples/workers-hono/README.md).
+
 ## Security
 
 See [docs/security.md](docs/security.md) for the threat model, host configuration requirements (don't use KV for sessions; leave `cookieCache` off) and known limitations.
@@ -92,6 +96,7 @@ See [docs/security.md](docs/security.md) for the threat model, host configuratio
 ```sh
 pnpm test          # Node (node:sqlite) + workerd (D1/Drizzle, validateSchema on)
 pnpm test:wasm     # the libxml2 WASM validator, Node + workerd
+pnpm e2e           # Keycloak + SimpleSAMLphp in Docker against the example IdP on workerd
 pnpm typecheck
 scripts/use-better-auth.sh latest-1.7   # run the suite against another Better Auth version
 ```

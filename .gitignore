@@ -7,3 +7,4 @@ spike/out/
 *.key
 .dev.vars
 spike/.coexist-cfg.json
+e2e/.generated/

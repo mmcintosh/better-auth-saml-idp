@@ -1,0 +1,15 @@
+{
+  "name": "better-auth-saml-idp-example",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    // `wrangler d1 create saml-idp-example`, then paste the id here.
+    { "binding": "DB", "database_name": "saml-idp-example", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }
+  ],
+  "vars": {
+    // JSON array of { id, entityId, acsUrls } — see README.md.
+    "SAML_SERVICE_PROVIDERS": "[]"
+  }
+  // Secrets (wrangler secret put / .dev.vars): BETTER_AUTH_SECRET, SAML_IDP_PRIVATE_KEY, SAML_IDP_CERT
+}

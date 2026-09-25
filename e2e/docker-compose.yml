@@ -1,0 +1,26 @@
+version: "3.8" # needed by docker-compose v1; ignored by the v2 plugin
+# Independent third-party SPs for the Phase 3 e2e check (run via `pnpm e2e`).
+# The IdP (examples/workers-hono under `wrangler dev`) runs on the host at :8787; the SPs never
+# call it server-to-server — only the (scripted) browser does, exactly as in real SSO.
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    command: start-dev
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: "8080"
+    ports: ["8080:8080"]
+  simplesamlphp:
+    image: cirrusid/simplesamlphp:latest # SimpleSAMLphp 2.5.0
+    environment:
+      SSP_ADMIN_PASSWORD: e2e-only
+      SSP_SECRET_SALT: e2e-only-not-secret
+      SSP_LOG_LEVEL: "7"
+    ports: ["8081:80"]
+    volumes:
+      - ./simplesamlphp/authsources.php:/var/simplesamlphp/config/authsources.php:ro
+      - ./simplesamlphp/config-override.php:/var/simplesamlphp/config/config-override.php:ro
+      - ./.generated/saml20-idp-remote.php:/var/simplesamlphp/metadata/saml20-idp-remote.php:ro
+      - ./simplesamlphp/whoami.php:/var/www/html/whoami.php:ro
+      - ./simplesamlphp/ssp-http.conf:/etc/apache2/conf-enabled/ssp-http.conf:ro

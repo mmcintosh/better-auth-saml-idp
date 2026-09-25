@@ -60,3 +60,14 @@ export function libxml2Validator(options: Libxml2ValidatorOptions = {}): SchemaV
     },
   };
 }
+
+let shared: SchemaValidator | undefined;
+
+/**
+ * The process/isolate-wide default validator. Hosts that build `betterAuth()` per request
+ * (common on Workers) would otherwise re-instantiate the wasm and recompile the schemas on
+ * every request.
+ */
+export function defaultSchemaValidator(): SchemaValidator {
+  return (shared ??= libxml2Validator());
+}

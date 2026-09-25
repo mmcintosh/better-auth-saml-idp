@@ -15,8 +15,10 @@
     "@better-auth/core": "1.7.5",
     "@better-auth/drizzle-adapter": "1.7.5",
     "@better-auth/sso": "1.7.5",
+    "@better-auth/utils": "0.4.2",
     "@cloudflare/vitest-pool-workers": "0.22.0",
     "@cloudflare/workers-types": "^5.20260924.1",
+    "@node-saml/node-saml": "^5.1.0",
     "@types/node": "^26.6.2",
     "better-auth": "1.7.5",
     "better-auth-cloudflare": "file:vendor/better-auth-cloudflare-0.3.1-main-dbe08c51b.tgz",
@@ -33,7 +35,8 @@
     "test:workerd": "vitest run --project workerd",
     "typecheck": "tsc -p tsconfig.json",
     "build:schemas": "node scripts/build-schemas.mjs",
-    "test:wasm": "vitest run --config wasm-validator/vitest.config.ts"
+    "test:wasm": "vitest run --config wasm-validator/vitest.config.ts",
+    "e2e": "node e2e/run.mjs"
   },
   "peerDependencies": {
     "@better-auth/core": ">=1.7.5 <1.8.0",
@@ -69,5 +72,14 @@
     "cloudflare-workers",
     "hubspot"
   ],
-  "packageManager": "pnpm@10.10.0"
+  "packageManager": "pnpm@10.10.0",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts"
+  },
+  "pnpm": {
+    "overrides": {
+      "@better-auth/utils": "0.4.2"
+    }
+  }
 }

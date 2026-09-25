@@ -1,6 +1,6 @@
 import { X509Certificate, createPrivateKey, createPublicKey } from "node:crypto";
 import * as z from "zod";
-import { libxml2Validator } from "./saml/validator";
+import { defaultSchemaValidator } from "./saml/validator";
 import type {
   ResolvedSamlIdpOptions,
   ResolvedServiceProvider,
@@ -222,7 +222,7 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
         authorize: sp.authorize ?? (() => true),
       }),
     ),
-    schemaValidator: o.schemaValidator ?? libxml2Validator(),
+    schemaValidator: o.schemaValidator ?? defaultSchemaValidator(),
     schema: o.schema,
     warnings,
   };

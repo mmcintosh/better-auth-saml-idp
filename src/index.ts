@@ -1,3 +1,5 @@
+/// <reference path="./samlify-api.d.ts" />
+/// <reference path="./saml/wasm/wasm.d.ts" />
 import type { BetterAuthPlugin } from "better-auth";
 import { mergeSchema } from "better-auth/db";
 import * as samlify from "samlify";
