@@ -3,6 +3,9 @@ import type { Idp } from "../saml/idp";
 
 export const METADATA_PATH = "/saml2/idp/metadata";
 
+/** samlify rebuilds the XML on every call; an IdP's metadata never changes, so build it once. */
+const metadataXml = new WeakMap<Idp, string>();
+
 export const metadataEndpoint = (getIdp: (baseURL: string) => Idp) =>
   createAuthEndpoint(
     METADATA_PATH,
@@ -18,7 +21,9 @@ export const metadataEndpoint = (getIdp: (baseURL: string) => Idp) =>
       },
     },
     async (ctx) => {
-      const xml = getIdp(ctx.context.baseURL).getMetadata();
+      const idp = getIdp(ctx.context.baseURL);
+      let xml = metadataXml.get(idp);
+      if (xml === undefined) metadataXml.set(idp, (xml = idp.getMetadata()));
       return new Response(xml, {
         headers: {
           "Content-Type": "application/samlmetadata+xml; charset=utf-8",

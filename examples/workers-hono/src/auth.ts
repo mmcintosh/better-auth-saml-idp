@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { betterAuth } from "better-auth";
 import { admin } from "better-auth/plugins";
 import { withCloudflare } from "better-auth-cloudflare";
@@ -10,6 +11,11 @@ export interface Env {
   BETTER_AUTH_SECRET: string;
   SAML_IDP_PRIVATE_KEY: string;
   SAML_IDP_CERT: string;
+  /**
+   * Optional: extra PEM certificate(s), concatenated, published in metadata during a key
+   * rotation (see docs/key-rotation.md). They are advertised, never used to sign.
+   */
+  SAML_IDP_ADDITIONAL_CERTS?: string;
   /** JSON: [{ "id": "...", "entityId": "...", "acsUrls": ["..."] }] */
   SAML_SERVICE_PROVIDERS: string;
   /**
@@ -32,13 +38,17 @@ type SpJson = Pick<
 let plugin: { key: string; value: ReturnType<typeof samlIdp> } | undefined;
 
 function samlPlugin(env: Env, origin: string) {
-  const key = `${origin}\n${env.SAML_SERVICE_PROVIDERS}`;
+  const key = `${origin}\n${env.SAML_SERVICE_PROVIDERS}\n${env.SAML_IDP_CERT}\n${env.SAML_IDP_ADDITIONAL_CERTS ?? ""}`;
   if (plugin?.key === key) return plugin.value;
   const sps = JSON.parse(env.SAML_SERVICE_PROVIDERS || "[]") as SpJson[];
   const value = samlIdp({
     entityId: `${origin}/api/auth/saml2/idp`,
     loginPage: "/sign-in",
-    signing: { privateKey: env.SAML_IDP_PRIVATE_KEY, certificate: env.SAML_IDP_CERT },
+    signing: {
+      privateKey: env.SAML_IDP_PRIVATE_KEY,
+      certificate: env.SAML_IDP_CERT,
+      additionalCertificates: pemBlocks(env.SAML_IDP_ADDITIONAL_CERTS),
+    },
     serviceProviders: sps.map((sp) => ({
       ...sp,
       attributes: (user) => {
@@ -51,7 +61,10 @@ function samlPlugin(env: Env, origin: string) {
   return value;
 }
 
-export function createAuth(env: Env, cf: IncomingRequestCfProperties | Record<string, never>, origin: string) {
+/** The current request's `cf` geolocation, for the shared auth instance (see getAuth). */
+export const requestCf = new AsyncLocalStorage<IncomingRequestCfProperties | Record<string, never>>();
+
+function buildAuth(env: Env, origin: string) {
   return betterAuth({
     baseURL: origin,
     secret: env.BETTER_AUTH_SECRET,
@@ -59,7 +72,9 @@ export function createAuth(env: Env, cf: IncomingRequestCfProperties | Record<st
       {
         autoDetectIpAddress: true,
         geolocationTracking: true,
-        cf,
+        // One auth instance serves every request in this isolate; geolocation is looked up per
+        // request (better-auth-cloudflare supports a resolver function for exactly this).
+        cf: () => requestCf.getStore() ?? {},
         d1: { db: drizzle(env.DB, { schema }), options: { usePlural: true } },
       },
       {
@@ -87,4 +102,20 @@ export function createAuth(env: Env, cf: IncomingRequestCfProperties | Record<st
       },
     ),
   });
+}
+
+let cached: { env: Env; origin: string; auth: ReturnType<typeof buildAuth> } | undefined;
+
+/**
+ * Better Auth, built once per isolate (per env + origin) instead of per request. Building it
+ * per request roughly doubled warm CPU per SAML request (DECISIONS.md D-017/D-019).
+ */
+export function getAuth(env: Env, origin: string) {
+  if (cached?.env !== env || cached.origin !== origin) cached = { env, origin, auth: buildAuth(env, origin) };
+  return cached.auth;
+}
+
+/** Split concatenated PEM certificates into individual blocks. */
+function pemBlocks(text: string | undefined): string[] {
+  return (text ?? "").match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) ?? [];
 }

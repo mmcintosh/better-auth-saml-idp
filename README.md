@@ -109,7 +109,7 @@ Ship what is built, safely.
 
 - **Release engineering.** dist build with type declarations, lint, npm pack review, provenance, changelog, README quickstart from a clean project.
 - **better-auth-cloudflare 0.4.** Replace the vendored build once 0.4 is on npm (the README requires it for Workers users).
-- **Key rotation guide.** Document the add-next-certificate, switch, retire sequence using additionalCertificates. Every commercial IdP supports rollover.
+- **Key rotation guide (done).** docs/key-rotation.md: add next certificate, switch, retire. Rehearsed live with Cloudflare Access with zero downtime.
 - **Second adversarial review.** Review the new code paths from the first round: POST re-entry, error Responses, account policy, NameID.
 
 ### v1.1: Close the expected-feature gaps
@@ -150,7 +150,7 @@ Deliberately left out.
 
 ## Security
 
-See [docs/security.md](docs/security.md) for the threat model, host configuration requirements (don't use KV for sessions; leave `cookieCache` off) and known limitations.
+See [docs/security.md](docs/security.md) and the [key rotation guide](docs/key-rotation.md) for the threat model, host configuration requirements (don't use KV for sessions; leave `cookieCache` off) and known limitations.
 
 ## Development
 

@@ -386,3 +386,30 @@ On this machine Node needs `--network-family-autoselection-attempt-timeout=3000`
 - **ForceAuthn.** With "Require reauthentication" on (and signing still on), a Test from a browser **already signed in** to the IdP was sent to `/sign-in` again, then sign-in, then resume, and succeeded. That is the SSO → `/sign-in` → sign-in → `/resume` sequence in the logs at 9:09 (resume issues the assertion because the new session postdates the request).
 - The example's `SAML_SERVICE_PROVIDERS` now passes `requireSignedAuthnRequests` and `spCertificate` through.
 - Zero Trust state left as tested: signing **on**, reauthentication **on**, encryption and SCIM **off**.
+
+## D-019: Key rotation rehearsed live; example builds Better Auth once per isolate (2026-09-25)
+
+**Key rotation**, with Cloudflare Access as the SP. Guide: `docs/key-rotation.md`.
+- **#1 → #2 by coordinated switch.**
+  - Pasting **two PEM blocks into Cloudflare's single certificate box** saved without error, but then made Cloudflare trust **neither** certificate. Old-key and new-key Responses both failed with `Response uses a certificate that is not configured`.
+  - Setting the box to the new certificate alone, while signing with key #2, fixed it.
+- **#2 → #3 with zero downtime.**
+  1. Certificate #3 was published through `SAML_IDP_ADDITIONAL_CERTS`.
+  2. The owner added #3 in Cloudflare **as a separate certificate entry**, using the add-certificate button. Test passed, signed with #2.
+  3. Signing was switched to #3 without touching Cloudflare. **Test passed.**
+  4. #2 was removed from the metadata and from Cloudflare. Test passed.
+- Every private key went straight into `wrangler secret put`. Local copies were shredded right after use.
+- The example gained `SAML_IDP_ADDITIONAL_CERTS`, a secret of concatenated PEMs that are published but never used for signing.
+
+**Example performance.** `examples/workers-hono` now builds Better Auth **once per isolate** (per env and origin). Each request's `cf` geolocation reaches it through `AsyncLocalStorage`, using better-auth-cloudflare's documented resolver-function form of `cf`, which is safe for concurrent requests.
+
+Measured on production with the same method as D-017:
+
+| Request, warm | Before | After |
+|---|---|---|
+| Metadata, median / p90 | 8 / 16 ms | 6 / 11 ms |
+| Validation-only SSO, median / p90 | — | 8 / 12 ms |
+
+The plugin also caches the metadata XML per IdP instance now; samlify was rebuilding it on every request.
+
+The browser e2e (7/7) and the live smoke test (16/16) passed after both changes. The smoke test now uses a dummy SP, `https://smoke.invalid/sp`, registered on the example deployment, because the Cloudflare SP requires signed requests. Right after a deploy, give the new version a few seconds to propagate before running it.

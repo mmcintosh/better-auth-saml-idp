@@ -1,13 +1,15 @@
 import { Hono } from "hono";
-import { createAuth, devMailbox, type Env } from "./auth";
+import { devMailbox, getAuth, requestCf, type Env } from "./auth";
 import { signInPage } from "./sign-in";
 
 const app = new Hono<{ Bindings: Env }>();
 
-const authFor = (c: { env: Env; req: { raw: Request; url: string } }) =>
-  createAuth(c.env, ((c.req.raw as { cf?: IncomingRequestCfProperties }).cf ?? {}) as IncomingRequestCfProperties, new URL(c.req.url).origin);
+type Ctx = { env: Env; req: { raw: Request; url: string } };
+const authFor = (c: Ctx) => getAuth(c.env, new URL(c.req.url).origin);
+/** Run `fn` with this request's `cf` visible to the shared auth instance. */
+const withCf = <T>(c: Ctx, fn: () => T) => requestCf.run((c.req.raw as { cf?: IncomingRequestCfProperties }).cf ?? {}, fn);
 
-app.all("/api/auth/*", (c) => authFor(c).handler(c.req.raw));
+app.all("/api/auth/*", (c) => withCf(c, () => authFor(c).handler(c.req.raw)));
 
 app.get("/sign-in", (c) => signInPage(c.req.url));
 
@@ -21,7 +23,7 @@ app.get("/dev/mailbox", (c) => {
 
 app.get("/", async (c) => {
   const origin = new URL(c.req.url).origin;
-  const session = await authFor(c).api.getSession({ headers: c.req.raw.headers });
+  const session = await withCf(c, () => authFor(c).api.getSession({ headers: c.req.raw.headers }));
   const who = session ? `Signed in as ${escapeHtml(session.user.email)}` : "Not signed in";
   return c.html(
     `<!doctype html><meta charset="utf-8"><title>SAML IdP example</title>` +
