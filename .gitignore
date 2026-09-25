@@ -1,0 +1,9 @@
+node_modules/
+dist/
+!wasm-validator/dist/
+.wrangler/
+spike/out/
+*.pem
+*.key
+.dev.vars
+spike/.coexist-cfg.json

@@ -1,0 +1,7 @@
+{
+  // Used by the workerd vitest project only (see vitest.config.ts).
+  "name": "xsd-wasm-validator-test",
+  "main": "test/worker.ts",
+  "compatibility_date": "2026-08-15",
+  "compatibility_flags": ["nodejs_compat"]
+}

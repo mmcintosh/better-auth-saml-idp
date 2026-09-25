@@ -1,0 +1,34 @@
+# ADDENDUM-01 R4: weekly run against Better Auth's latest and next tags. Failures open an
+# issue; they never block PRs. Note: on 2026-09-24 the `next` dist-tag pointed at a stale
+# 0.8.7-beta.5, so the job skips any tag older than the pinned minimum.
+name: Upstream canary
+on:
+  schedule: [{ cron: "0 6 * * 1" }]
+  workflow_dispatch:
+permissions: { contents: read, issues: write }
+jobs:
+  canary:
+    strategy:
+      fail-fast: false
+      matrix:
+        tag: [latest, next]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - id: ver
+        run: |
+          v="$(npm view better-auth@${{ matrix.tag }} version)"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          node -e 'const [a,b]=process.argv.slice(1).map(s=>s.split(/[.-]/).slice(0,3).map(Number));process.exit(a[0]>b[0]||(a[0]===b[0]&&(a[1]>b[1]||(a[1]===b[1]&&a[2]>=b[2])))?0:1)' "$v" 1.7.5 \
+            && echo "run=true" >> "$GITHUB_OUTPUT" || echo "run=false" >> "$GITHUB_OUTPUT"
+      - if: steps.ver.outputs.run == 'true'
+        run: scripts/use-better-auth.sh ${{ steps.ver.outputs.version }}
+      - if: steps.ver.outputs.run == 'true'
+        run: pnpm typecheck && pnpm test && pnpm test:wasm
+      - if: failure()
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: gh issue create --title "Upstream canary failed: better-auth ${{ matrix.tag }} (${{ steps.ver.outputs.version }})" --body "See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

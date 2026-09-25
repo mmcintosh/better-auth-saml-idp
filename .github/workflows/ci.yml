@@ -1,0 +1,22 @@
+# ADDENDUM-01 R4: bounded peer range, tested at the pinned minimum and the latest 1.7.x.
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        better-auth: ["1.7.5", "latest-1.7"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: scripts/use-better-auth.sh ${{ matrix.better-auth }}
+      - run: pnpm typecheck
+      - run: pnpm test          # node + workerd (D1/Drizzle, validateSchema on)
+      - run: pnpm test:wasm     # validator suite, node + workerd
