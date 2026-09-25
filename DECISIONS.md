@@ -509,6 +509,8 @@ SPs parse the decrypted element on its own, outside the Response that declares `
 
 **Not done:** a Keycloak IdP-initiated e2e. Keycloak's broker accepts unsolicited Responses only at `/realms/{realm}/broker/{alias}/endpoint/clients/{client}`, with a realm client that has an "IDP-Initiated SSO URL name", which means extra realm setup and a second ACS URL. The node-saml SP already covers the real-browser path.
 
+**Live check with Cloudflare Access (2026-09-25).** With `allowIdpInitiated: true` on `cf-access`, `/saml2/idp/init?sp=cf-access` issued the unsolicited Response (signed, encrypted, no `InResponseTo`) and auto-posted it. Access rejected it with "Invalid login session. Please try going to the URL of your application again". Access doesn't support IdP-initiated SAML, and its callback requires the state from its own SP-initiated login. The opt-in was then removed again. The interop evidence for this feature therefore remains node-saml in Chromium, samlify and `@better-auth/sso` (in CI).
+
 ## D-022: Per-SP signing, signed metadata, SP registration from metadata (2026-09-25)
 
 - **Per-SP `signResponse` / `signAssertion`** override the global `signing` values. As before, at least one must be on. An SP is only rejected for turning both off when it set one itself, so a global both-off is reported once. Tests show that an assertion-only or response-only Response is accepted by an SP that requires exactly that, and refused by node-saml when it requires both. samlify's `wantMessageSigned` / `wantAssertionsSigned` are **not enforced** when it parses a Response, so a samlify SP can't be used to prove that a signature is missing.

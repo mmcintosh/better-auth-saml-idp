@@ -65,6 +65,10 @@ Verified live on 2026-09-25 (DECISIONS.md D-020): Cloudflare decrypted and accep
 
 To see what Cloudflare receives, capture the `SAMLResponse` from the browser's network tab. `npx better-auth-saml-idp decode` checks its structure, algorithms and Response signature. Decrypting it would need Cloudflare's private key, which you don't have.
 
+## IdP-initiated SSO: not supported by Cloudflare Access
+
+Tested on 2026-09-25 (DECISIONS.md D-021). With `allowIdpInitiated: true`, the IdP posts a signed, encrypted, unsolicited Response from `/saml2/idp/init?sp=cf-access`, and Access answers **"Invalid login session. Please try going to the URL of your application again."** Its callback only accepts Responses to logins that Access started itself. That limitation is known ([Cloudflare Community](https://community.cloudflare.com/t/idp-initiated-login/290252)). For an app portal, link to the protected application's URL instead, or to the Access App Launcher (`https://<team>.cloudflareaccess.com`). Access then starts an SP-initiated login, which this IdP answers without asking the user to sign in again.
+
 ## Troubleshooting
 
 - The IdP returns `ACS_URL_NOT_ALLOWED` or `UNKNOWN_SERVICE_PROVIDER`: the team name in `SAML_SERVICE_PROVIDERS` doesn't match exactly. Compare it with `https://<team>.cloudflareaccess.com/cdn-cgi/access/saml-metadata`.
