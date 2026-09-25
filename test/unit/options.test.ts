@@ -200,7 +200,7 @@ describe("resolveOptions: service providers", () => {
 
   it("requires spCertificate when requireSignedAuthnRequests is set", () => {
     expect(issuesFor(baseOptions({ serviceProviders: [sp({ requireSignedAuthnRequests: true })] }))).toEqual([
-      "serviceProviders.0.spCertificate: is required when requireSignedAuthnRequests is true",
+      "serviceProviders.0.spCertificate: is required when requireSignedAuthnRequests is true (or set metadata.url)",
     ]);
     expect(() =>
       resolveOptions(baseOptions({ serviceProviders: [sp({ requireSignedAuthnRequests: true, spCertificate: keys.sp.certificate })] })),

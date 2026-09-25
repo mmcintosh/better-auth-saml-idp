@@ -4,6 +4,7 @@ import { ERROR_STATUS, SAML_IDP_ERROR_CODES, type SamlIdpErrorCode } from "../er
 import { autoPostResponse, errorPage } from "../saml/post-form";
 import { logSafe, type SamlStatus } from "../saml/request";
 import { buildSignedErrorResponse, buildSignedResponse, newSamlId } from "../saml/response";
+import type { SpMetadataCache } from "../saml/sp-metadata-refresh";
 import type { SpRegistry } from "../saml/sp-registry";
 import { base64url, sha256b64url, type ValidatedRequest } from "../storage/pending";
 import { NAMEID_FORMAT, type ResolvedSamlIdpOptions, type ResolvedServiceProvider, type SamlIdpUser } from "../types";
@@ -20,6 +21,16 @@ function warnMissingField(ctx: GenericEndpointContext, sp: ResolvedServiceProvid
 export interface PluginState {
   options: ResolvedSamlIdpOptions;
   registry: SpRegistry;
+  metadata: SpMetadataCache;
+}
+
+/** The SP with certificates from its metadata URL merged in (D-026); unchanged without one. */
+export function prepareSp(ctx: GenericEndpointContext, state: PluginState, sp: ResolvedServiceProvider): Promise<ResolvedServiceProvider> {
+  return state.metadata.prepare(
+    sp,
+    { info: (m) => ctx.context.logger.info(m), warn: (m) => ctx.context.logger.warn(m) },
+    (p) => ctx.context.runInBackground(p),
+  );
 }
 
 type SessionWithUser = {
@@ -119,6 +130,7 @@ export async function issueResponse(
   session: SessionWithUser,
   request: ValidatedRequest,
 ): Promise<Response> {
+  sp = await prepareSp(ctx, state, sp); // the encryption certificate may come from metadata
   const now = new Date();
   const principal = await eligiblePrincipal(ctx, state, session, now);
   if ("code" in principal) return fail(ctx, principal.code, principal.detail);

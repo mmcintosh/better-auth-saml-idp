@@ -42,7 +42,7 @@ FEATURES = [
  ("Identity and access", "Attribute mapping", row(("y","per SP: declarative map (JSON-friendly) or a function"),("y","declarative + scripts"),("y",""),("y","mappers + scripts"),("p","fixed set + Actions"),("y","Python mappings"),("y","declarative"),("p",""),("y",""),("y",""),("y",""),("y","")), "test/integration/sso-flow.test.ts"),
  ("Identity and access", "Per-SP access control", row(("y","authorize() hook, deny = no assertion"),("y",""),("p","via authproc filters"),("p","via conditional flows"),("y","per project"),("y","policy bindings"),("u",""),("p","routing only"),("y","app assignment"),("y","app assignment"),("y","per OU or group"),("u","")), "test/integration/security.test.ts"),
  ("Identity and access", "MFA and step-up for SAML", row(("p","host's Better Auth 2FA; no step-up mapping yet"),("y",""),("p","via modules"),("y",""),("p","MFA, no step-up"),("p","ForceAuthn step-up"),("p","MFA, no step-up"),("n","delegated upstream"),("y","Conditional Access (P1)"),("y","policies"),("u",""),("p","")), ""),
- ("Operations", "Register an SP from its metadata XML or URL", row(("p","XML import helper; URL refresh on roadmap v1.2"),("y","file, URL, MDQ"),("p","converter, refresh add-on"),("y","XML import, URL for certificates"),("y","the only way"),("p","file import"),("n",""),("n",""),("p","fills URLs, not certificates"),("n","manual fields"),("n",""),("n","")), ""),
+ ("Operations", "Register an SP from its metadata XML or URL", row(("y","XML import (helper and CLI, also from a URL); certificates refreshed from the metadata URL, entity ID and ACS URLs pinned"),("y","file, URL, MDQ"),("p","converter, refresh add-on"),("y","XML import, URL for certificates"),("y","the only way"),("p","file import"),("n",""),("n",""),("p","fills URLs, not certificates"),("n","manual fields"),("n",""),("n","")), ""),
  ("Operations", "Admin UI or management API for SPs", row(("n","SPs are configured in code; DB registry on roadmap"),("n",""),("n",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y","")), ""),
  ("Operations", "Outbound SCIM provisioning", row(("n","not planned"),("n",""),("n",""),("p","preview"),("n","inbound only"),("y",""),("u",""),("n","inbound only"),("y","P1"),("y",""),("p","catalog apps only"),("n","")), ""),
  ("Platform", "Runs on serverless / edge (Cloudflare Workers)", row(("y","verified on a live Worker"),("n","Java server"),("u",""),("n","Java server"),("u",""),("u",""),("u",""),("u",""),("na","SaaS"),("na","SaaS"),("na","SaaS"),("na","SaaS")), "DECISIONS.md D-016, test runs on workerd"),
@@ -67,7 +67,7 @@ ROADMAP = [
  ("v1.2", "Operations at scale", "For hosts with many SPs or changing SPs.", [
    ("Single Logout", "SP-initiated, front-channel first. Entra, Okta, Keycloak and authentik support it; Shibboleth calls it best-effort."),
    ("Database-backed SP registry and API", "Add and change SPs at runtime without a redeploy (spec stretch goal)."),
-   ("SP metadata URL with refresh", "Pick up SP certificate rotation automatically."),
+   ("SP metadata URL with refresh (done)", "SP certificate rotation picked up automatically; certificates only, optional signature pinning."),
    ("Signed AuthnRequests over HTTP-POST (done)", "Enveloped XML signatures with XSW defences, pinned to the SP's certificates; node-saml interop; each defence mutation-tested."),
  ]),
  ("Later", "Considered", "Valuable, but needs design first or depends on the host.", [
@@ -90,7 +90,7 @@ LEADS = [
 ]
 TRAILS = [
  ("Breadth of flows", "No Single Logout yet."),
- ("SP onboarding", "SPs are configured in code or imported from metadata XML; no registry, URL refresh or UI yet."),
+ ("SP onboarding", "SPs are configured in code or imported from metadata; no database registry or UI yet."),
 ]
 
 HUBSPOT = [

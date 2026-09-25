@@ -95,6 +95,14 @@ const serviceProviderSchema = z
     allowedRelayStates: z.array(z.string().min(1)).optional(),
     authorize: fn<ResolvedServiceProvider["authorize"]>().optional(),
     signResponse: z.boolean().optional(),
+    metadata: z
+      .object({
+        url: z.url({ protocol: /^https$/, error: "must be an https:// URL" }),
+        refreshSeconds: z.number().int().min(300).max(7 * 86400).optional(),
+        signingCertificate: z.union([pem("CERTIFICATE"), z.array(pem("CERTIFICATE")).min(1)]).optional(),
+      })
+      .strict()
+      .optional(),
     signAssertion: z.boolean().optional(),
     encryption: z
       .object({
@@ -109,8 +117,8 @@ const serviceProviderSchema = z
   })
   .strict()
   .superRefine((sp, ctx) => {
-    if (sp.requireSignedAuthnRequests && !sp.spCertificate)
-      ctx.addIssue({ code: "custom", path: ["spCertificate"], message: "is required when requireSignedAuthnRequests is true" });
+    if (sp.requireSignedAuthnRequests && !sp.spCertificate && !sp.metadata)
+      ctx.addIssue({ code: "custom", path: ["spCertificate"], message: "is required when requireSignedAuthnRequests is true (or set metadata.url)" });
     // RelayState settings only apply to IdP-initiated SSO; setting them without the opt-in is
     // almost certainly a mistake (the host believes IdP-initiated SSO is on).
     for (const key of ["idpInitiatedRelayState", "allowedRelayStates"] as const)
@@ -243,7 +251,7 @@ function checkKeyMaterial(o: SamlIdpOptions, warnings: string[]): { issues: stri
  * An SP's encryption certificate: parse it, require RSA ≥ 2048 bits (OAEP key transport),
  * and warn (not fail) on expiry, as for signing certificates.
  */
-function checkEncryptionCertificate(
+export function checkEncryptionCertificate(
   path: string,
   pemText: string,
   issues: string[],
@@ -304,6 +312,8 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
   for (const [i, sp] of o.serviceProviders.entries()) {
     const response = sp.signResponse ?? o.signing.signResponse ?? true;
     const assertion = sp.signAssertion ?? o.signing.signAssertion ?? true;
+    if (sp.metadata && sp.metadata.signingCertificate === undefined)
+      warnings.push(`serviceProviders.${i}.metadata: the metadata's signature isn't pinned (signingCertificate); its certificates are trusted on TLS alone`);
     // Only when the SP sets it itself; an inherited global both-off is reported once, above.
     if (!response && !assertion && (sp.signResponse !== undefined || sp.signAssertion !== undefined))
       issues.push(`serviceProviders.${i}: at least one of signResponse and signAssertion must be true`);
@@ -380,6 +390,13 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
         nameId: sp.nameId,
         attributes: typeof sp.attributes === "function" ? sp.attributes : compileAttributeMap(sp.attributes ?? {}),
         attributeMap: typeof sp.attributes === "function" ? undefined : sp.attributes,
+        metadata: sp.metadata
+          ? {
+              url: sp.metadata.url,
+              refreshSeconds: sp.metadata.refreshSeconds ?? 86400,
+              signingCertificates: sp.metadata.signingCertificate === undefined ? [] : [sp.metadata.signingCertificate].flat(),
+            }
+          : undefined,
         requireSignedAuthnRequests: sp.requireSignedAuthnRequests ?? false,
         spCertificates: sp.spCertificate === undefined ? [] : Array.isArray(sp.spCertificate) ? sp.spCertificate : [sp.spCertificate],
         allowIdpInitiated: sp.allowIdpInitiated ?? false,

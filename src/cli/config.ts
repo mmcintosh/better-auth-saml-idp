@@ -86,6 +86,9 @@ export async function checkConfig(path: string | undefined): Promise<Report> {
       Encryption: sp.encryption ? `${sp.encryption.dataAlgorithm} + ${sp.encryption.keyAlgorithm}` : "off",
       "Signed requests": sp.requireSignedAuthnRequests ? `required (${sp.spCertificates.length} certificate${sp.spCertificates.length === 1 ? "" : "s"})` : "optional",
       "IdP-initiated": sp.allowIdpInitiated ? "allowed" : "off",
+      Metadata: sp.metadata
+        ? `${sp.metadata.url}\nrefresh every ${sp.metadata.refreshSeconds}s; signature ${sp.metadata.signingCertificates.length ? "pinned" : "not pinned"}`
+        : undefined,
       Attributes: sp.attributeMap
         ? Object.entries(sp.attributeMap)
             .map(([name, src]) => `${name} ← ${typeof src === "string" ? src : JSON.stringify(src)}`)

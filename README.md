@@ -73,6 +73,15 @@ const { serviceProvider, warnings } = await serviceProviderFromMetadata(cloudfla
 });
 ```
 
+**Keeping SP certificates current.** Give an SP `metadata: { url }` and its signing certificates, plus its encryption certificate when `encryption` is on, are refreshed from its metadata. The default refresh is daily. Only certificates are taken from it. The entity ID must match, and ACS URLs always come from your config, so a compromised metadata URL can't redirect assertions. Certificates you configure stay trusted, and if a fetch fails the last good copy is kept. Pin the metadata's signature with `metadata.signingCertificate` when the SP signs it.
+
+```ts
+{ id: "cf-access", entityId: "https://TEAM.cloudflareaccess.com/cdn-cgi/access/callback",
+  acsUrls: ["https://TEAM.cloudflareaccess.com/cdn-cgi/access/callback"],
+  requireSignedAuthnRequests: true,
+  metadata: { url: "https://TEAM.cloudflareaccess.com/cdn-cgi/access/saml-metadata" } }
+```
+
 **Attributes.** Each SP's `attributes` is either a function `(user) => ({ ... })` or a declarative map, which also works from JSON configuration:
 
 ```ts
@@ -205,7 +214,7 @@ For hosts with many SPs or changing SPs.
 
 - **Single Logout.** SP-initiated, front-channel first. Entra, Okta, Keycloak and authentik support it; Shibboleth calls it best-effort.
 - **Database-backed SP registry and API.** Add and change SPs at runtime without a redeploy (spec stretch goal).
-- **SP metadata URL with refresh.** Pick up SP certificate rotation automatically.
+- **SP metadata URL with refresh (done).** SP certificate rotation picked up automatically; certificates only, optional signature pinning.
 - **Signed AuthnRequests over HTTP-POST (done).** Enveloped XML signatures with XSW defences, pinned to the SP's certificates; node-saml interop; each defence mutation-tested.
 
 ### Later: Considered

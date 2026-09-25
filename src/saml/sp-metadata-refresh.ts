@@ -1,0 +1,174 @@
+// SP metadata URL with refresh (D-026): keep an SP's certificates current without a redeploy.
+//
+// Only certificates come from the metadata. The entity ID must match the configured one, and
+// the ACS URLs are never taken from it, so a compromised metadata endpoint can't redirect
+// assertions. Per isolate: the first use waits for a fetch (bounded), later uses get the cached
+// copy while a stale one refreshes in the background; failures keep the last good copy, and
+// the configured certificates always remain trusted.
+import { X509Certificate } from "node:crypto";
+import { checkEncryptionCertificate } from "../options";
+import type { ResolvedServiceProvider } from "../types";
+import type { AssertionEncryption } from "./encrypt";
+import { serviceProviderFromMetadata } from "./sp-metadata";
+import { precheckXml, type SchemaValidator } from "./validator";
+import { parseXmlStrict } from "./xml";
+import { verifyEnvelopedSignature } from "./xmldsig";
+
+const MAX_BYTES = 1024 * 1024;
+const FETCH_TIMEOUT_MS = 5000;
+/** First retry after a failure; doubles up to the refresh interval. */
+const MIN_BACKOFF_MS = 5 * 60_000;
+
+interface Learned {
+  signingCertificates: string[];
+  encryption: AssertionEncryption | undefined;
+  fetchedAt: number;
+  fingerprints: string;
+}
+
+interface Entry {
+  learned?: Learned;
+  nextAttempt: number;
+  backoff: number;
+  inflight?: Promise<void>;
+  lastError?: string;
+}
+
+export interface MetadataLogger {
+  info(message: string): void;
+  warn(message: string): void;
+}
+
+export interface MetadataStatus {
+  url: string;
+  fetchedAt?: Date;
+  certificates: number;
+  encryptionFromMetadata: boolean;
+  lastError?: string;
+}
+
+const fingerprint = (pem: string) => new X509Certificate(pem).fingerprint256;
+
+export class SpMetadataCache {
+  private readonly entries = new Map<string, Entry>();
+
+  constructor(
+    private readonly validator: SchemaValidator,
+    private readonly now: () => number = Date.now,
+  ) {}
+
+  /**
+   * The SP with certificates learned from its metadata merged in. Waits for the first fetch in
+   * this isolate (at most the fetch timeout); after that, a due refresh runs in the background.
+   */
+  async prepare(sp: ResolvedServiceProvider, log: MetadataLogger, background: (p: Promise<unknown>) => void): Promise<ResolvedServiceProvider> {
+    if (!sp.metadata) return sp;
+    let entry = this.entries.get(sp.id);
+    if (!entry) {
+      entry = { nextAttempt: 0, backoff: MIN_BACKOFF_MS };
+      this.entries.set(sp.id, entry);
+    }
+    const due = this.now() >= entry.nextAttempt;
+    if (due && !entry.inflight) entry.inflight = this.refresh(sp, entry, log).finally(() => (entry.inflight = undefined));
+    if (entry.inflight) {
+      if (entry.learned) background(entry.inflight);
+      else await entry.inflight; // first use: nothing learned yet, so wait (bounded by the fetch timeout)
+    }
+    return this.merge(sp, entry.learned);
+  }
+
+  status(sp: ResolvedServiceProvider): MetadataStatus | undefined {
+    if (!sp.metadata) return undefined;
+    const e = this.entries.get(sp.id);
+    return {
+      url: sp.metadata.url,
+      fetchedAt: e?.learned ? new Date(e.learned.fetchedAt) : undefined,
+      certificates: e?.learned?.signingCertificates.length ?? 0,
+      encryptionFromMetadata: e?.learned?.encryption !== undefined,
+      lastError: e?.lastError,
+    };
+  }
+
+  private merge(sp: ResolvedServiceProvider, learned: Learned | undefined): ResolvedServiceProvider {
+    if (!learned) return sp;
+    const certs = [...sp.spCertificates];
+    for (const c of learned.signingCertificates) if (!certs.includes(c)) certs.push(c);
+    return { ...sp, spCertificates: certs, encryption: learned.encryption ?? sp.encryption };
+  }
+
+  private async refresh(sp: ResolvedServiceProvider, entry: Entry, log: MetadataLogger): Promise<void> {
+    const md = sp.metadata;
+    if (!md) return;
+    try {
+      const learned = await this.load(sp, md);
+      if (learned.fingerprints !== entry.learned?.fingerprints)
+        log.info(`[saml-idp] SP ${sp.id}: certificates from metadata ${entry.learned ? "changed" : "loaded"} (${learned.signingCertificates.length} signing${learned.encryption ? ", 1 encryption" : ""})`);
+      entry.learned = learned;
+      entry.lastError = undefined;
+      entry.backoff = MIN_BACKOFF_MS;
+      entry.nextAttempt = this.now() + md.refreshSeconds * 1000;
+    } catch (e) {
+      entry.lastError = (e as Error).message;
+      entry.nextAttempt = this.now() + entry.backoff;
+      entry.backoff = Math.min(entry.backoff * 2, md.refreshSeconds * 1000);
+      log.warn(`[saml-idp] SP ${sp.id}: metadata refresh from ${md.url} failed (${entry.lastError}); ${entry.learned ? "keeping the last good copy" : "using the configured certificates"}`);
+    }
+  }
+
+  private async load(sp: ResolvedServiceProvider, md: NonNullable<ResolvedServiceProvider["metadata"]>): Promise<Learned> {
+    const res = await fetch(md.url, {
+      redirect: "error",
+      headers: { accept: "application/samlmetadata+xml, application/xml;q=0.9, text/xml;q=0.8" },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+    const declared = Number(res.headers.get("content-length") ?? 0);
+    if (declared > MAX_BYTES) throw new Error(`larger than ${MAX_BYTES} bytes`);
+    const xml = await res.text();
+    const pre = precheckXml(xml, MAX_BYTES);
+    if (pre.length) throw new Error(pre.join("; "));
+
+    const doc = parseXmlStrict(xml);
+    const root = doc.documentElement as any;
+    if (md.signingCertificates.length) {
+      const sig = verifyEnvelopedSignature(xml, doc, root, md.signingCertificates, { allowSha1: false });
+      if (sig.valid !== true) throw new Error(sig.present ? `metadata signature: ${sig.problem ?? "not verified"}` : "metadata is not signed");
+    }
+    // validUntil on the document (or an aggregate's root) and on the SP's own entity.
+    const entity =
+      root.localName === "EntityDescriptor"
+        ? root
+        : Array.from(root.getElementsByTagNameNS("urn:oasis:names:tc:SAML:2.0:metadata", "EntityDescriptor") as ArrayLike<any>).find(
+            (e) => e.getAttribute("entityID") === sp.entityId,
+          );
+    for (const el of [root, entity]) {
+      const until = el?.getAttribute("validUntil");
+      if (until && !(new Date(until).getTime() > this.now())) throw new Error(`metadata expired (validUntil ${until})`);
+    }
+
+    const result = await serviceProviderFromMetadata(xml, { id: sp.id }, { entityId: sp.entityId, schemaValidator: this.validator });
+    if (result.serviceProvider.entityId !== sp.entityId)
+      throw new Error(`metadata is for ${result.serviceProvider.entityId}, not the configured ${sp.entityId}`);
+
+    const signing = [result.serviceProvider.spCertificate ?? []].flat().filter((pem) => {
+      try {
+        const k = new X509Certificate(pem).publicKey;
+        return k.asymmetricKeyType === "rsa" && (k.asymmetricKeyDetails?.modulusLength ?? 0) >= 2048;
+      } catch {
+        return false;
+      }
+    });
+    let encryption: AssertionEncryption | undefined;
+    if (sp.encryption && result.encryptionCertificates[0]) {
+      const issues: string[] = [];
+      const cert = checkEncryptionCertificate("metadata encryption certificate", result.encryptionCertificates[0], issues, []);
+      if (cert) encryption = { ...sp.encryption, ...cert };
+    }
+    return {
+      signingCertificates: signing,
+      encryption,
+      fetchedAt: this.now(),
+      fingerprints: [...signing.map(fingerprint), encryption ? `enc:${encryption.certificateBase64.slice(-32)}` : ""].join(","),
+    };
+  }
+}

@@ -26,7 +26,7 @@ import {
 import { recordRequestId } from "../storage/seen";
 import { sweepExpired } from "../storage/sweep";
 import type { ResolvedServiceProvider } from "../types";
-import { fail, issueResponse, samlError, type PluginState } from "./issue";
+import { fail, issueResponse, type PluginState, prepareSp, samlError } from "./issue";
 
 export const RESUME_PATH = "/saml2/idp/resume";
 export const BINDING_COOKIE = "saml_idp_binding";
@@ -135,6 +135,7 @@ export const ssoEndpoint = (state: PluginState) =>
         info = await parseAuthnRequest(xml, options.schemaValidator, { now, clockSkewSeconds: options.clockSkewSeconds, ssoUrl });
         sp = registry.byEntityId(info.issuer);
         if (!sp) return fail(ctx, "UNKNOWN_SERVICE_PROVIDER", `issuer not registered (${info.issuer.length} chars)`);
+        sp = await prepareSp(ctx, state, sp); // the SP's signing certificates may come from metadata
         checkRequestSignature(raw, sp, { allowInsecureSha1: options.signing.allowInsecureSha1 }, xml);
         const acsUrl = resolveAcsUrl(sp, info.acsUrl);
         if (!acsUrl) return fail(ctx, "ACS_URL_NOT_ALLOWED", `SP ${sp.id}`);

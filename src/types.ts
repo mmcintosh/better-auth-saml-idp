@@ -88,6 +88,23 @@ export interface ServiceProviderConfig {
   allowedRelayStates?: string[];
   /** Decide whether this user may use this SP. Denial issues no assertion. */
   authorize?: (ctx: AuthorizeContext) => boolean | Promise<boolean>;
+  /**
+   * Keep this SP's certificates current from its metadata URL (D-026). Only certificates are
+   * taken from it: signing certificates (added to `spCertificate`) and, when `encryption` is on,
+   * the encryption certificate (replacing `encryption.certificate`). The entity ID and ACS URLs
+   * stay as configured here, so the metadata can never redirect assertions.
+   */
+  metadata?: {
+    /** https only. Fetched with a 5 s timeout, no redirects, at most 1 MiB. */
+    url: string;
+    /** Default 86400 (a day); 300 to 604800. */
+    refreshSeconds?: number;
+    /**
+     * Pin the metadata's own signature (recommended; required by federations). When set,
+     * unsigned or wrongly signed metadata is rejected and the last good copy is kept.
+     */
+    signingCertificate?: string | string[];
+  };
   /** Override the global `signing.signResponse` for this SP. */
   signResponse?: boolean;
   /** Override the global `signing.signAssertion` for this SP. At least one must stay on. */
@@ -205,6 +222,8 @@ export interface ResolvedServiceProvider {
   /** Host-supplied NameID function; undefined means "use the format's default". */
   nameId: ((user: SamlIdpUser) => string) | undefined;
   attributes: (user: SamlIdpUser, onMissingField?: (field: string) => void) => Record<string, SamlAttributeValue>;
+  /** Metadata refresh (D-026); certificates are normalised to a list. */
+  metadata: { url: string; refreshSeconds: number; signingCertificates: string[] } | undefined;
   /** The declarative map, when one was configured (for diagnostics). */
   attributeMap: AttributeMap | undefined;
   requireSignedAuthnRequests: boolean;

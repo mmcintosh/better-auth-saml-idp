@@ -602,3 +602,45 @@ The verified document is the same string, parsed by the same xmldom, that the re
   - POST verification removed entirely: 8 tests.
 - The CLI's `decode` now uses this same verifier, for Responses too. `request --binding post --sign-key` produces a signed POST request, which the IdP accepts in a test.
 
+## D-026: SP metadata URL with refresh (2026-09-25)
+
+**What.** `serviceProviders[].metadata: { url, refreshSeconds?, signingCertificate? }` keeps an SP's certificates current from its metadata.
+- Learned signing certificates are **added** to the configured `spCertificate`.
+- When `encryption` is on, the metadata's encryption certificate **replaces** `encryption.certificate`. The configured algorithms are kept.
+- `requireSignedAuthnRequests` no longer needs a configured `spCertificate` when a metadata URL is set.
+
+**Certificates only, by design.** Metadata controls security-relevant settings, so the blast radius is kept small:
+- The entity ID must equal the configured one.
+- **ACS URLs are never taken from metadata.** A compromised metadata endpoint therefore can't redirect assertions (tested).
+- The worst case is a swapped certificate:
+  - A swapped signing certificate lets an attacker sign AuthnRequests, but only for the pinned ACS URLs.
+  - A swapped encryption certificate makes assertions undecryptable by the SP, but they still only travel through the user's browser to the pinned ACS URL.
+- Pinning the metadata's signature (`signingCertificate`, checked by the D-025 verifier with SHA-1 refused) closes that gap. Without a pin, startup logs a warning.
+
+**Fetching.**
+- https only, 5 s timeout, `redirect: "error"`, at most 1 MiB.
+- Then `precheckXml`, a strict parse, the metadata XSD (through `serviceProviderFromMetadata`), and a refusal when `validUntil` has passed on the document or the entity.
+
+**Freshness, per isolate, with no shared storage.** The certificates are small and the SP is the source of truth, so every isolate fetches on its own.
+- The first use in an isolate waits for the fetch. It's bounded by the timeout, so a slow SP delays one request, not all of them.
+- After that, a due refresh runs through `ctx.context.runInBackground`, which is `waitUntil` on Workers when the host configures it, while requests use the cached copy.
+- A failure keeps the last good copy, or the configured certificates if there is none, and retries after 5 minutes, doubling up to the refresh interval. Tested: no retry storm.
+- Changes are logged, with counts, once per change.
+
+**Evidence.**
+- 26 tests (both runtimes):
+  - the first use waits for the fetch;
+  - rotation is picked up after the interval, and the old learned key stops being trusted;
+  - a failed fetch falls back to the configured certificates, with backoff;
+  - ACS URLs are never learned;
+  - rejected: another entity ID, an expired `validUntil`, unsigned metadata when pinned, metadata signed by another key than the pinned one, and non-XML;
+  - pinned and signed metadata is accepted;
+  - the encryption certificate from metadata wins;
+  - option validation and the unpinned warning.
+- **Mutation proof:** disabling each of these made tests fail:
+  - entity-ID pin: 1 test;
+  - `validUntil`: 1;
+  - signature pin: 2;
+  - merging learned certificates: 5;
+  - backoff: 1.
+

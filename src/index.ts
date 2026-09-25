@@ -9,6 +9,7 @@ import { SAML_IDP_ERROR_CODES } from "./errors";
 import { resolveOptions } from "./options";
 import { idpCache, SSO_PATH } from "./saml/idp";
 import { samlIdpSchema } from "./schema";
+import { SpMetadataCache } from "./saml/sp-metadata-refresh";
 import { createSpRegistry } from "./saml/sp-registry";
 import type { SamlIdpOptions } from "./types";
 
@@ -23,7 +24,7 @@ export const samlIdp = (options: SamlIdpOptions) => {
   const resolved = resolveOptions(options);
   const registry = createSpRegistry(resolved.serviceProviders);
   const getIdp = idpCache(resolved);
-  const state = { options: resolved, registry };
+  const state = { options: resolved, registry, metadata: new SpMetadataCache(resolved.schemaValidator) };
 
   return {
     id: "saml-idp",

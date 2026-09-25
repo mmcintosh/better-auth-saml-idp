@@ -43,6 +43,7 @@ type SpJson = Pick<
   | "signAssertion"
   | "encryption"
   | "attributes"
+  | "metadata"
 >;
 
 /** Sent to SPs whose JSON entry has no `attributes` (a declarative map; JSON can set its own). */
