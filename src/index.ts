@@ -12,6 +12,8 @@ import { samlIdpSchema } from "./schema";
 import { SpMetadataCache } from "./saml/sp-metadata-refresh";
 import { SpDirectory } from "./saml/sp-directory";
 import { registryEndpoints } from "./endpoints/registry";
+import { logoutEndpoint, sloEndpoint } from "./endpoints/slo";
+import { SLO_PATH } from "./saml/logout";
 import type { SamlIdpOptions } from "./types";
 
 export { SAML_IDP_ERROR_CODES } from "./errors";
@@ -38,7 +40,8 @@ export const samlIdp = (options: SamlIdpOptions) => {
       // SPs POST AuthnRequests cross-origin (HTTP-POST binding), like @better-auth/sso's ACS.
       const existing = ctx.skipOriginCheck;
       if (existing === true) return {};
-      return { context: { skipOriginCheck: [...(Array.isArray(existing) ? existing : []), SSO_PATH] } };
+      // /slo too: SPs POST LogoutRequests and LogoutResponses cross-origin (D-028).
+      return { context: { skipOriginCheck: [...(Array.isArray(existing) ? existing : []), SSO_PATH, ...(resolved.singleLogout ? [SLO_PATH] : [])] } };
     },
     endpoints: {
       getSamlIdpMetadata: metadataEndpoint(getIdp, resolved),
@@ -46,10 +49,11 @@ export const samlIdp = (options: SamlIdpOptions) => {
       samlIdpResume: resumeEndpoint(state),
       samlIdpInitiatedSignOn: initEndpoint(state),
       ...(resolved.registry?.canManage ? registryEndpoints(state) : {}),
+      ...(resolved.singleLogout ? { samlIdpSingleLogout: sloEndpoint(state), samlIdpLogout: logoutEndpoint(state) } : {}),
     },
     // A fresh schema object per plugin: mergeSchema mutates its first argument, so a shared
     // module-level object would leak one instance's renames into every other (finding #10).
-    schema: mergeSchema(samlIdpSchema({ registry: resolved.registry !== undefined }), resolved.schema),
+    schema: mergeSchema(samlIdpSchema({ registry: resolved.registry !== undefined, singleLogout: resolved.singleLogout }), resolved.schema),
     $ERROR_CODES: SAML_IDP_ERROR_CODES,
     options: { directory },
   } satisfies BetterAuthPlugin;

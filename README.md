@@ -27,6 +27,7 @@ Turn your [Better Auth](https://www.better-auth.com) server into a **SAML 2.0 Id
 - ✅ **Signed AuthnRequests** over Redirect *and* POST, with defences against XML signature wrapping. Each defence is mutation-tested.
 - 🔁 **Replay protection** you can check: a database unique key, tested under concurrency across separate instances.
 - 👤 **Strict identity**: only verified emails get assertions; impersonated and anonymous sessions are refused; the user and session are re-read right before signing.
+- 🚪 **Single Logout**: SP- and IdP-initiated, propagated through the browser to every SP that received an assertion in the session.
 - 🗂️ **SP registry**: add, change, disable and remove SPs at runtime through an admin-gated, audited API, or configure them in code.
 - 🔄 **Metadata refresh**: SP certificates stay current from their metadata URL, while the entity ID and ACS URLs stay pinned.
 - 🧩 **Attribute mapping**: a declarative map (fields, constants, lists, first/last name) or a function.
@@ -55,7 +56,7 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 
 **v1.2: Operations at scale**
 
-- [ ] **Single Logout**: SP-initiated, front-channel first. Entra, Okta, Keycloak and authentik support it; Shibboleth calls it best-effort.
+- [x] **Single Logout**: SP- and IdP-initiated, front-channel, propagated to every SP in the session; PartialLogout when one fails. Best effort by nature, as Shibboleth says.
 - [x] **Database-backed SP registry and API**: Add, change, disable and remove SPs at runtime without a redeploy; admin-gated, audited API.
 - [x] **SP metadata URL with refresh**: SP certificate rotation picked up automatically; certificates only, optional signature pinning.
 - [x] **Signed AuthnRequests over HTTP-POST**: Enveloped XML signatures with XSW defences, pinned to the SP's certificates; node-saml interop; each defence mutation-tested.
@@ -109,6 +110,7 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
   - [Attributes](#attributes)
   - [Signing and encryption](#signing-and-encryption)
   - [IdP-initiated SSO](#idp-initiated-sso)
+  - [Single Logout](#single-logout)
   - [Managing SPs at runtime (registry)](#managing-sps-at-runtime-registry)
   - [Keeping SP certificates current](#keeping-sp-certificates-current)
   - [Registering an SP from its metadata](#registering-an-sp-from-its-metadata)
@@ -262,6 +264,7 @@ npx better-auth-saml-idp smoke https://auth.example.com --sp <SP entity ID>
 | `signing.signResponse` / `.signAssertion` | boolean | `true` / `true` | Global default; each SP can override |
 | `serviceProviders` | array | (required) | See the next table |
 | `registry` | object | off | `{ enabled, canManage?, cacheSeconds?, authorize? }` [database registry](#managing-sps-at-runtime-registry) |
+| `singleLogout` | object | off | `{ enabled: true }` [Single Logout](#single-logout) |
 | `signMetadata` | boolean | `false` | Sign the metadata document |
 | `authnContextClassRef` | string | `…:unspecified` | What your sign-in guarantees |
 | `accountPolicy` | object | strict | `requireEmailVerified: true`, `allowImpersonatedSessions: false`, `allowAnonymousUsers: false` |
@@ -287,6 +290,7 @@ npx better-auth-saml-idp smoke https://auth.example.com --sp <SP entity ID>
 | `spCertificate` | PEM or PEM[] | none | The SP's signing certificates (several during its rotation) |
 | `metadata` | object | none | `{ url, refreshSeconds?, signingCertificate? }` [refresh certificates](#keeping-sp-certificates-current) |
 | `encryption` | object | none | `{ certificate, dataAlgorithm?, keyAlgorithm? }` [encrypt assertions](#signing-and-encryption) |
+| `singleLogoutService` | object | none | `{ url, binding? }` where the SP takes logout messages ([Single Logout](#single-logout)) |
 | `signResponse` / `signAssertion` | boolean | global | Per-SP signing choice (at least one stays on) |
 | `allowIdpInitiated` | boolean | `false` | [IdP-initiated SSO](#idp-initiated-sso) |
 | `idpInitiatedRelayState` / `allowedRelayStates` | string / string[] | none | RelayState for IdP-initiated SSO (exact-match allow-list) |
@@ -305,6 +309,8 @@ All paths are relative to your Better Auth base path, for example `/api/auth`.
 | GET, POST | `/saml2/idp/sso` | Receives AuthnRequests (HTTP-Redirect and HTTP-POST) |
 | GET | `/saml2/idp/resume?rid=` | Where the sign-in page returns the user (`callbackURL`) |
 | GET | `/saml2/idp/init?sp=<id>` | IdP-initiated SSO, for SPs with `allowIdpInitiated` |
+| GET, POST | `/saml2/idp/slo` | [Single Logout](#single-logout): SPs' LogoutRequests and LogoutResponses (both bindings) |
+| GET | `/saml2/idp/logout?returnTo=` | IdP-initiated logout: every SP, then back to `returnTo` |
 | GET, POST | `/saml2/idp/service-providers/*` | [Registry API](#managing-sps-at-runtime-registry), only with `registry.canManage` |
 
 ### Attributes
@@ -357,6 +363,35 @@ Link to `/api/auth/saml2/idp/init?sp=hubspot`.
 - **RelayState:** a caller's value is used only if it's on `allowedRelayStates`. Anything else is replaced, so a launcher link can't become an open redirect at the SP.
 
 Read the [security notes](docs/security.md#idp-initiated-sso) before you enable it.
+
+### Single Logout
+
+```ts
+samlIdp({
+  // ...
+  singleLogout: { enabled: true }, // adds the saml_idp_session_participants table (migration 0004)
+  serviceProviders: [
+    { id: "app", entityId: "…", acsUrls: ["…"], spCertificate: "…",
+      singleLogoutService: { url: "https://app.example.com/saml/slo" } }, // binding: "redirect" (default) or "post"
+  ],
+});
+```
+
+**What happens:**
+- The IdP remembers which SPs received an assertion in each session.
+- When one SP sends a LogoutRequest to `/saml2/idp/slo`:
+  1. The IdP ends its own session first, so it's over even if a later step breaks.
+  2. It sends a signed LogoutRequest through the browser to each other SP that has a `singleLogoutService`.
+  3. It answers the originating SP with a signed LogoutResponse: `Success`, or `PartialLogout` if an SP failed or couldn't be reached.
+- `/saml2/idp/logout?returnTo=/` does the same from your own "sign out everywhere" button. `returnTo` must be a same-origin path or a trusted origin.
+
+**Authentication:**
+- An SP with certificates must sign its LogoutRequests (Redirect or POST, with the same hardened checks as AuthnRequests).
+- An SP without certificates ends the session only with the right `SessionIndex`, an unguessable per-session value it received in the assertion. Anyone else's request ends nothing.
+- LogoutRequests are replay-protected.
+- A cross-site drive-by to `/logout` gets a confirmation page.
+
+Front-channel logout is best effort by nature: if an SP never sends the browser back, the chain stops there. The IdP session is already over by then.
 
 ### Managing SPs at runtime (registry)
 

@@ -23,7 +23,7 @@ export class SamlRequestError extends Error {
   }
 }
 
-const invalid = (detail: string) => new SamlRequestError("INVALID_SAML_REQUEST", detail);
+export const invalid = (detail: string) => new SamlRequestError("INVALID_SAML_REQUEST", detail);
 
 /** Attacker-controlled text in debug logs: bounded length, no control characters. */
 export function logSafe(s: string, max = 120): string {
@@ -46,7 +46,7 @@ export interface RawAuthnRequest {
 // HTTP-Redirect query parsing
 // ---------------------------------------------------------------------------------------
 
-const SAML_PARAMS = ["SAMLRequest", "RelayState", "SigAlg", "Signature"] as const;
+const SAML_PARAMS = ["SAMLRequest", "SAMLResponse", "RelayState", "SigAlg", "Signature"] as const;
 type SamlParam = (typeof SAML_PARAMS)[number];
 
 function formDecode(s: string): string {
@@ -71,7 +71,7 @@ function percentDecode(s: string): string {
  * reader; every SAML parameter may appear at most once; and the signed octet string is built
  * from the raw (undecoded) segments of precisely the parameters we then use (Bindings §3.4.4.1).
  */
-export function parseRedirectQuery(rawQuery: string): RawAuthnRequest {
+export function parseRedirectQuery(rawQuery: string, param: "SAMLRequest" | "SAMLResponse" = "SAMLRequest"): RawAuthnRequest {
   const found: Partial<Record<SamlParam, { raw: string; value: string }>> = {};
   for (const part of rawQuery.split("&")) {
     if (!part) continue;
@@ -86,19 +86,20 @@ export function parseRedirectQuery(rawQuery: string): RawAuthnRequest {
     const value = key === "RelayState" || key === "SigAlg" ? formDecode(rawValue) : percentDecode(rawValue);
     found[key as SamlParam] = { raw: `${key}=${rawValue}`, value };
   }
-  const req = found.SAMLRequest;
-  if (!req) throw invalid("missing SAMLRequest");
+  if (found.SAMLRequest && found.SAMLResponse) throw invalid("both SAMLRequest and SAMLResponse");
+  const req = found[param];
+  if (!req) throw invalid(`missing ${param}`);
   const out: RawAuthnRequest = { binding: "redirect", samlRequest: req.value, relayState: found.RelayState?.value };
   if (found.Signature || found.SigAlg) {
     if (!found.Signature || !found.SigAlg) throw invalid("Signature and SigAlg must be sent together");
     // A name that needed decoding cannot have been signed as "SAMLRequest"/"RelayState"/…:
     // rebuild the octets only from segments whose raw name is the canonical one.
-    const octets = [found.SAMLRequest, found.RelayState, found.SigAlg]
+    const octets = [req, found.RelayState, found.SigAlg]
       .flatMap((p) => (p ? [p.raw] : []))
       .join("&");
     out.signed = { octets, sigAlg: found.SigAlg.value, signature: found.Signature.value };
     const rawNames = rawQuery.split("&").map((p) => p.split("=")[0]);
-    for (const name of ["SAMLRequest", "RelayState", "SigAlg"] as const)
+    for (const name of [param, "RelayState", "SigAlg"] as const)
       if (found[name] && !rawNames.includes(name)) throw invalid(`${name} parameter name is encoded; cannot verify signature`);
   }
   return out;
@@ -205,7 +206,7 @@ function childElements(node: { childNodes: ArrayLike<any> }) {
   return Array.from(node.childNodes).filter((n: any) => n.nodeType === 1) as any[];
 }
 
-const child = (parent: any, ns: string, name: string) =>
+export const child = (parent: any, ns: string, name: string) =>
   childElements(parent).filter((e) => e.namespaceURI === ns && e.localName === name);
 
 /** xs:boolean after whitespace collapse. */
@@ -215,7 +216,7 @@ function xsBoolean(v: string | null): boolean {
 }
 
 /** xs:dateTime that states its time zone (a bare local time would depend on our server's zone). */
-const DATETIME_WITH_ZONE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
+export const DATETIME_WITH_ZONE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
 /**
  * Schema-validate and extract an AuthnRequest. Structural rules beyond the XSD:
@@ -362,15 +363,39 @@ export function checkRequestSignature(
   opts: { allowInsecureSha1: boolean },
   xml?: string,
 ): boolean {
-  if (raw.binding === "post") return checkPostSignature(xml, sp, opts);
-  if (!raw.signed) {
-    if (sp.requireSignedAuthnRequests) throw new SamlRequestError("UNSIGNED_SAML_REQUEST", "missing Signature");
+  if (!isSigned(raw, xml)) {
+    if (sp.requireSignedAuthnRequests) throw unsigned("missing Signature");
     return false;
   }
+  // A signature is only checked when the SP has certificates.
   if (sp.spCertificates.length === 0) {
-    if (sp.requireSignedAuthnRequests) throw new SamlRequestError("UNSIGNED_SAML_REQUEST", "no SP certificate configured");
+    if (sp.requireSignedAuthnRequests) throw unsigned("no SP certificate configured");
     return false;
   }
+  verifyMessageSignature(raw, xml, sp.spCertificates, opts);
+  return true;
+}
+
+const DS_NS = "http://www.w3.org/2000/09/xmldsig#";
+
+/** Does the message carry a signature for its binding (query signature, or an XML ds:Signature)? */
+export function isSigned(raw: RawAuthnRequest, xml: string | undefined): boolean {
+  if (raw.binding === "redirect") return raw.signed !== undefined;
+  if (xml === undefined) throw new Error("isSigned: the POST binding needs the decoded XML");
+  return parseXmlStrict(xml).getElementsByTagNameNS(DS_NS, "Signature").length > 0;
+}
+
+/**
+ * Verify a signed SAML message (AuthnRequest, LogoutRequest, LogoutResponse) against `certs`.
+ * Redirect: over the raw query octets. POST: an enveloped XML signature on the root, with the
+ * XSW rules of xmldsig.ts. Throws UNSIGNED_SAML_REQUEST when it doesn't verify.
+ */
+export function verifyMessageSignature(raw: RawAuthnRequest, xml: string | undefined, certs: string[], opts: { allowInsecureSha1: boolean }): void {
+  if (raw.binding === "post") {
+    verifyPostSignature(xml, certs, opts);
+    return;
+  }
+  if (!raw.signed) throw unsigned("missing Signature");
   const alg = REDIRECT_SIG_ALGS[raw.signed.sigAlg];
   if (!alg) throw invalid("unsupported SigAlg");
   if (alg.sha1 && !opts.allowInsecureSha1) throw invalid("SHA-1 signatures are not accepted");
@@ -380,17 +405,16 @@ export function checkRequestSignature(
   try {
     signature = base64ToBytes(raw.signed.signature);
   } catch {
-    throw new SamlRequestError("UNSIGNED_SAML_REQUEST", "AuthnRequest signature is not valid base64");
+    throw unsigned("signature is not valid base64");
   }
-  const ok = sp.spCertificates.some((cert) => {
+  const ok = certs.some((cert) => {
     try {
       return cryptoVerify(alg.hash, octets, createPublicKey(cert), signature);
     } catch {
       return false;
     }
   });
-  if (!ok) throw new SamlRequestError("UNSIGNED_SAML_REQUEST", "AuthnRequest signature is invalid");
-  return true;
+  if (!ok) throw unsigned("AuthnRequest signature is invalid");
 }
 
 const unsigned = (detail: string) => new SamlRequestError("UNSIGNED_SAML_REQUEST", detail);
@@ -400,26 +424,16 @@ function hasComments(node: any): boolean {
   return false;
 }
 
-function checkPostSignature(xml: string | undefined, sp: ResolvedServiceProvider, opts: { allowInsecureSha1: boolean }): boolean {
-  if (xml === undefined) throw new Error("checkRequestSignature: the POST binding needs the decoded XML");
+function verifyPostSignature(xml: string | undefined, certs: string[], opts: { allowInsecureSha1: boolean }): void {
+  if (xml === undefined) throw new Error("verifyMessageSignature: the POST binding needs the decoded XML");
   const doc = parseXmlStrict(xml);
-  const count = doc.getElementsByTagNameNS("http://www.w3.org/2000/09/xmldsig#", "Signature").length;
-  if (count === 0) {
-    if (sp.requireSignedAuthnRequests) throw unsigned("missing Signature");
-    return false;
-  }
-  // As with the Redirect binding, a signature is only checked when the SP has certificates.
-  if (sp.spCertificates.length === 0) {
-    if (sp.requireSignedAuthnRequests) throw unsigned("no SP certificate configured");
-    return false;
-  }
+  const count = doc.getElementsByTagNameNS(DS_NS, "Signature").length;
+  if (count === 0) throw unsigned("missing Signature");
   if (count > 1) throw unsigned(`${count} Signature elements`);
   // Comments are invisible to exclusive c14n, so text split by one is still "signed"; nothing
   // legitimate needs them, and refusing them closes the comment-truncation class of bugs.
   if (hasComments(doc)) throw unsigned("comments are not allowed in a signed AuthnRequest");
-  const r = verifyEnvelopedSignature(xml, doc, doc.documentElement, sp.spCertificates, { allowSha1: opts.allowInsecureSha1 });
+  const r = verifyEnvelopedSignature(xml, doc, doc.documentElement, certs, { allowSha1: opts.allowInsecureSha1 });
   if (!r.present) throw unsigned("the Signature is not a child of the AuthnRequest");
   if (r.valid !== true) throw unsigned(`AuthnRequest signature is invalid: ${logSafe(r.problem ?? "", 200)}`);
-  return true;
 }
-

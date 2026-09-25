@@ -46,6 +46,7 @@ type SpJson = Pick<
   | "encryption"
   | "attributes"
   | "metadata"
+  | "singleLogoutService"
 >;
 
 /** Sent to SPs whose JSON entry has no `attributes` (a declarative map; JSON can set its own). */
@@ -76,6 +77,8 @@ function samlPlugin(env: Env, origin: string) {
     serviceProviders: sps.map((sp) => ({ ...sp, attributes: sp.attributes ?? DEFAULT_ATTRIBUTES })),
     // SPs can also be stored in D1 (migration 0003). The API is only mounted for listed admins,
     // who must have a verified email.
+    // Single Logout (migration 0004): SPs with a singleLogoutService in their JSON take part.
+    singleLogout: { enabled: true },
     registry: {
       enabled: true,
       canManage: admins.size ? ({ user }) => user.emailVerified === true && admins.has(user.email.toLowerCase()) : undefined,

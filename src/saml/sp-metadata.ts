@@ -104,9 +104,19 @@ export async function serviceProviderFromMetadata(
       .flatMap((k) => descendants(k, NS_DS, "X509Certificate").map((c) => toPem(c.textContent ?? "")));
   const signingCerts = certsFor("signing");
 
+  // Single Logout endpoint (D-028): HTTP-Redirect preferred, else HTTP-POST.
+  const slo = children(sp, NS_MD, "SingleLogoutService");
+  const sloRedirect = slo.find((s) => s.getAttribute("Binding") === "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect");
+  const sloPost = slo.find((s) => s.getAttribute("Binding") === BINDING_POST);
+  const sloChoice = sloRedirect ?? sloPost;
+  const singleLogoutService = sloChoice
+    ? { url: (sloChoice.getAttribute("ResponseLocation") || sloChoice.getAttribute("Location")) as string, binding: sloChoice === sloRedirect ? ("redirect" as const) : ("post" as const) }
+    : undefined;
+
   const serviceProvider: ServiceProviderConfig = {
     entityId,
     acsUrls,
+    ...(singleLogoutService ? { singleLogoutService } : {}),
     ...(usable[0] ? { nameIdFormat: usable[0] } : {}),
     ...(sp.getAttribute("AuthnRequestsSigned") === "true" && signingCerts.length
       ? { requireSignedAuthnRequests: true, spCertificate: signingCerts }

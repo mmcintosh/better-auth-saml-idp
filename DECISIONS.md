@@ -692,3 +692,46 @@ The live test also found a **workerd incompatibility the stubbed tests couldn't*
 
 **Verified live on Workers + D1 (2026-09-25).** Migration `0003_service_providers.sql` was applied to the example's D1 database, and the example was deployed with `registry.enabled`. The API is limited to emails in `SAML_REGISTRY_ADMINS` with verified addresses. A stored SP (`smoke-db`) was inserted as a D1 row, and `npx better-auth-saml-idp smoke --sp https://smoke-db.invalid/sp` passed **15/15** against production. The code-configured SP still passed 15/15 as well.
 
+## D-028: SAML Single Logout (2026-09-25)
+
+**What.** `singleLogout: { enabled: true }` plus a per-SP `singleLogoutService: { url, binding? }`, which `serviceProviderFromMetadata` also reads, preferring Redirect.
+- A `samlIdpSessionParticipant` table records `(hash(session id), SP, NameID, format, SessionIndex)` on every issuance, one row per SP per session through a UNIQUE key, refreshed for transient NameIDs.
+- `/saml2/idp/slo` takes SPs' LogoutRequests and LogoutResponses over both bindings.
+- `/saml2/idp/logout?returnTo=` starts an IdP-initiated logout.
+- IdP metadata advertises `SingleLogoutService` only when enabled.
+
+**Flow.**
+1. The IdP session is ended **first**: the Better Auth session row, the session cookie and the participant rows.
+2. Then there's one front-channel hop per other participant: our LogoutRequest, always HTTP-Redirect and query-signed with the IdP key, about the NameID and SessionIndex that SP was given.
+3. The hop state is a single-use verification value named by the RelayState (5 min). The SP's answer, over either binding, continues the chain. No cookies are needed, so a cross-site POST answer works.
+4. Finally, the originator gets a signed LogoutResponse over its configured binding (Redirect query signature, or auto-POST with an enveloped XML signature): `Success`, or `Success/PartialLogout` if a participant failed, answered for another request, had a bad signature, or has no SLO endpoint.
+5. An IdP-initiated logout ends with a redirect to `returnTo`.
+
+**Authenticating a LogoutRequest** (Profiles §4.4.4.1: it must be authenticated):
+- With SP certificates, a valid signature is required: the D-025 POST verifier, or the Redirect query check. `verifyMessageSignature` refuses an unsigned message itself, so the explicit "must be signed" check is belt-and-braces. Its mutation didn't fail a test because the next line already refuses the message.
+- Without certificates, the session ends only if a `SessionIndex` equals this browser's session's value. That value is a hash of the session id, known only to SPs that got an assertion.
+- A signed request without `SessionIndex` must name the NameID stored for that SP and session.
+- A request that matches nothing is answered `Success` and ends nothing, because "this principal has no session here" is true from that SP's point of view.
+- LogoutRequest IDs go through the R2 replay table, namespaced `logout:`.
+
+**Cross-site POST:** an HTTP-POST LogoutRequest can't see `SameSite=Lax` cookies, so it re-enters on a single-use same-site `slo?cid=` GET, as the SSO POST binding does.
+
+**Logout CSRF:** `/logout` is GET, for "sign out" links, with the same Fetch-Metadata drive-by confirmation as `/init`. `returnTo` must be a same-origin path or a Better Auth trusted origin, with backslashes and control characters refused.
+
+**Evidence.**
+- 14 integration tests (both runtimes):
+  - the full two-SP chain, with IdP signatures on every outgoing message checked;
+  - `PartialLogout` for a failure status, a wrong `InResponseTo` and a wrong signing key;
+  - hop-state replay; unsigned and forged requests; `SessionIndex` authentication without certificates; LogoutRequest replay; no session;
+  - POST re-entry; a POST-binding originator (XML-signed, auto-POSTed, and the session cookie cleared on that raw Response too);
+  - an SP without SLO;
+  - IdP-initiated propagation to both SPs, then `returnTo`; `returnTo` validation; drive-by confirmation;
+  - **node-saml interop**: its signed LogoutRequest ends the session, and it validates our LogoutResponse (`loggedOut: true`);
+  - metadata advertised only when enabled.
+- **Mutation proof:** 9 of 10 rules fail at least one test when disabled:
+  - signature verified; SessionIndex binding; unsigned requests not matched by NameID; replay; the answer matching our request; the answer's signature; `returnTo`; drive-by confirmation;
+  - session cookie cleared (2 tests);
+  - the explicit "must be signed" check is the redundant one described above.
+
+**Live on Workers + D1 (2026-09-25).** Migration `0004_session_participants.sql` was applied, and the example deployed with `singleLogout` enabled. The live metadata advertises both SingleLogoutService bindings. `/logout` without a session redirects to `returnTo`. A hostile `returnTo` gets `400 INVALID_RETURN_TO` (the error page now says "Sign-out could not be completed" for logout errors). The code-configured SP and the D1-stored SP both still pass smoke 15/15. Cloudflare Access doesn't do SAML SLO, so SP interop is node-saml, in CI on both runtimes.
+

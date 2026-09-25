@@ -105,6 +105,11 @@ export interface ServiceProviderConfig {
      */
     signingCertificate?: string | string[];
   };
+  /**
+   * Where this SP receives SAML Single Logout messages (its SingleLogoutService). Needed for the
+   * SP to take part in logout (D-028). Default binding: HTTP-Redirect.
+   */
+  singleLogoutService?: { url: string; binding?: "redirect" | "post" };
   /** Override the global `signing.signResponse` for this SP. */
   signResponse?: boolean;
   /** Override the global `signing.signAssertion` for this SP. At least one must stay on. */
@@ -203,11 +208,21 @@ export interface SamlIdpOptions {
       modelName?: string;
       fields?: Partial<Record<"key" | "spId" | "requestId" | "expiresAt", string>>;
     };
+    samlIdpSessionParticipant?: {
+      modelName?: string;
+      fields?: Partial<Record<"key" | "sessionKey" | "spId" | "nameId" | "nameIdFormat" | "sessionIndex" | "expiresAt", string>>;
+    };
     samlIdpServiceProvider?: {
       modelName?: string;
       fields?: Partial<Record<"spId" | "entityId" | "config" | "enabled" | "createdAt" | "updatedAt" | "updatedBy", string>>;
     };
   };
+  /**
+   * SAML Single Logout (D-028): SP- and IdP-initiated logout, front-channel, propagated to every
+   * SP that received an assertion in the IdP session and has a `singleLogoutService`. Adds the
+   * `samlIdpSessionParticipant` table and the `/saml2/idp/slo` and `/saml2/idp/logout` endpoints.
+   */
+  singleLogout?: { enabled: boolean };
   /**
    * Database-backed SP registry (D-027): SPs stored in the `samlIdpServiceProvider` table, in
    * addition to `serviceProviders`, managed at runtime without a redeploy. Stored SPs are plain
@@ -245,6 +260,7 @@ export interface ResolvedServiceProvider {
   /** Host-supplied NameID function; undefined means "use the format's default". */
   nameId: ((user: SamlIdpUser) => string) | undefined;
   attributes: (user: SamlIdpUser, onMissingField?: (field: string) => void) => Record<string, SamlAttributeValue>;
+  singleLogoutService: { url: string; binding: "redirect" | "post" } | undefined;
   /** Metadata refresh (D-026); certificates are normalised to a list. */
   metadata: { url: string; refreshSeconds: number; signingCertificates: string[] } | undefined;
   /** The declarative map, when one was configured (for diagnostics). */
@@ -282,6 +298,7 @@ export interface ResolvedSamlIdpOptions {
   schemaValidator: SchemaValidator;
   schema: SamlIdpOptions["schema"];
   signMetadata: boolean;
+  singleLogout: boolean;
   registry: { canManage: NonNullable<SamlIdpOptions["registry"]>["canManage"]; cacheMs: number; authorize: ResolvedServiceProvider["authorize"] | undefined } | undefined;
   /** Non-fatal configuration warnings, logged once at startup. */
   warnings: string[];

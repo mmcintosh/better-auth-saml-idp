@@ -29,7 +29,7 @@ export function idpInitiatedRelayState(sp: ResolvedServiceProvider, requested: s
  * portal, bookmarks and typed URLs pass. Browsers without Fetch Metadata send neither header
  * and pass, so this narrows the attack, it does not close it (docs/security.md).
  */
-function isDriveByCrossSite(ctx: GenericEndpointContext): boolean {
+export function isDriveByCrossSite(ctx: GenericEndpointContext): boolean {
   const headers = ctx.request?.headers ?? ctx.headers;
   return headers?.get("sec-fetch-site") === "cross-site" && headers.get("sec-fetch-user") !== "?1";
 }

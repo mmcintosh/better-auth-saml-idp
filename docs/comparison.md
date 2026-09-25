@@ -13,7 +13,7 @@ Our own column links to the tests that prove each entry. The roadmap derived fro
 
 ## Where we trail
 
-- **Breadth of flows.** No Single Logout yet.
+- **Step-up authentication.** RequestedAuthnContext is matched exactly; there's no mapping to the host's 2FA state yet.
 - **SP onboarding.** No bundled admin UI: hosts build one on the registry API.
 
 ## Feature matrix
@@ -26,7 +26,7 @@ Products: **better-auth-saml-idp** (This plugin, pre-release); **Shibboleth IdP*
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | SP-initiated SSO | ✅ Yes<br><sub>HTTP-Redirect and HTTP-POST in, POST out</sub> | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes<br><sub>brokered to an upstream IdP</sub> | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
 | IdP-initiated SSO | ✅ Yes<br><sub>opt-in per SP; RelayState allow-list</sub> | ✅ Yes | ✅ Yes | ✅ Yes<br><sub>per client</sub> | ❌ No | ✅ Yes | ❌ No | 🟡 Partial<br><sub>OIDC-initiated only</sub> | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
-| Single Logout | ❌ No<br><sub>roadmap v1.2</sub> | ✅ Yes<br><sub>docs call it best-effort</sub> | 🟡 Partial<br><sub>front-channel only</sub> | ✅ Yes<br><sub>front and back channel</sub> | 🟡 Partial<br><sub>responds, ends nothing</sub> | ✅ Yes<br><sub>front and back channel</sub> | ❌ No | ❌ No | ✅ Yes<br><sub>Redirect only</sub> | ✅ Yes<br><sub>back-channel is Early Access</sub> | ❔ Not documented | 🟡 Partial<br><sub>no multi-app logout</sub> |
+| Single Logout | ✅ Yes<br><sub>SP- and IdP-initiated, front-channel propagation to every participating SP; node-saml interop</sub> | ✅ Yes<br><sub>docs call it best-effort</sub> | 🟡 Partial<br><sub>front-channel only</sub> | ✅ Yes<br><sub>front and back channel</sub> | 🟡 Partial<br><sub>responds, ends nothing</sub> | ✅ Yes<br><sub>front and back channel</sub> | ❌ No | ❌ No | ✅ Yes<br><sub>Redirect only</sub> | ✅ Yes<br><sub>back-channel is Early Access</sub> | ❔ Not documented | 🟡 Partial<br><sub>no multi-app logout</sub> |
 
 ### Bindings
 

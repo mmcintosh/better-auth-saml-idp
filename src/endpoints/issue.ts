@@ -6,7 +6,8 @@ import { logSafe, type SamlStatus } from "../saml/request";
 import { buildSignedErrorResponse, buildSignedResponse, newSamlId } from "../saml/response";
 import type { SpMetadataCache } from "../saml/sp-metadata-refresh";
 import type { SpDirectory } from "../saml/sp-directory";
-import { base64url, sha256b64url, type ValidatedRequest } from "../storage/pending";
+import { recordParticipant, sessionIndexOf } from "../storage/participants";
+import { base64url, type ValidatedRequest } from "../storage/pending";
 import { NAMEID_FORMAT, type ResolvedSamlIdpOptions, type ResolvedServiceProvider, type SamlIdpUser } from "../types";
 
 /** A mapped field the user object lacks: warn once per SP and field (typo, or a field not in the schema). */
@@ -49,7 +50,8 @@ type SessionWithUser = {
 /** Error page for a plugin error code; the detail goes to the debug log only. */
 export function fail(ctx: GenericEndpointContext, code: SamlIdpErrorCode, detail?: string): Response {
   ctx.context.logger.debug(`[saml-idp] ${code}${detail ? `: ${logSafe(detail, 300)}` : ""}`);
-  return errorPage(ERROR_STATUS[code], code, SAML_IDP_ERROR_CODES[code].message);
+  const logout = code === "LOGOUT_NOT_SUPPORTED" || code === "LOGOUT_STATE_NOT_FOUND" || code === "INVALID_RETURN_TO";
+  return errorPage(ERROR_STATUS[code], code, SAML_IDP_ERROR_CODES[code].message, logout ? "Sign-out could not be completed" : undefined);
 }
 
 /**
@@ -174,7 +176,7 @@ export async function issueResponse(
       return samlError(ctx, state, request, { code: "Responder", subCode: "UnknownPrincipal", message: "The signed-in user is not the requested subject" });
   }
 
-  const sessionIndex = `_${(await sha256b64url(`saml-idp:session\u0000${session.session.id}`)).slice(0, 32)}`;
+  const sessionIndex = await sessionIndexOf(session.session.id);
   const signed = buildSignedResponse(state.options, {
     requestId: request.requestId,
     acsUrl: request.acsUrl,
@@ -189,5 +191,12 @@ export async function issueResponse(
   ctx.context.logger.info(
     `[saml-idp] issued ${signed.encrypted ? "encrypted " : ""}assertion ${signed.assertionId} for SP ${sp.id} (user ${user.id})`,
   );
+  if (state.options.singleLogout) {
+    // Logout must reach this SP later (D-028). Best effort: a failure here costs this SP's
+    // logout propagation, not the sign-in.
+    await recordParticipant(ctx.context.adapter as any, session.session.id, { spId: sp.id, nameId, nameIdFormat: sp.nameIdFormat, sessionIndex }, new Date(session.session.expiresAt)).catch((e) =>
+      ctx.context.logger.error(`[saml-idp] could not record SP ${sp.id} as a logout participant`, e),
+    );
+  }
   return autoPostResponse(request.acsUrl, signed.base64, request.relayState);
 }

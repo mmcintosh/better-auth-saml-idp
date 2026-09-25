@@ -8,9 +8,10 @@ import type { BetterAuthPluginDBSchema } from "better-auth/db";
  * "serial" or "uuid", which ignore forced ids), so replay protection never depends on it.
  * Hosts' hand-written schemas should also add UNIQUE(spId, requestId) (see README).
  */
-export function samlIdpSchema(opts: { registry: boolean } = { registry: false }) {
+export function samlIdpSchema(opts: { registry?: boolean; singleLogout?: boolean } = {}) {
   return {
     ...(opts.registry ? registrySchema() : {}),
+    ...(opts.singleLogout ? logoutSchema() : {}),
     samlIdpSeenRequest: {
       fields: {
         key: { type: "string", required: true, unique: true, input: false },
@@ -38,6 +39,27 @@ function registrySchema() {
         createdAt: { type: "date", required: true, input: false },
         updatedAt: { type: "date", required: true, input: false },
         updatedBy: { type: "string", required: false, input: false },
+      },
+    },
+  } satisfies BetterAuthPluginDBSchema;
+}
+
+/**
+ * Which SPs received an assertion in which IdP session (D-028), so logout can reach them all.
+ * `sessionKey` is a hash of the Better Auth session id (never the id or token itself); `key`
+ * is hash(sessionKey, spId) and UNIQUE, so each SP appears once per session.
+ */
+function logoutSchema() {
+  return {
+    samlIdpSessionParticipant: {
+      fields: {
+        key: { type: "string", required: true, unique: true, input: false },
+        sessionKey: { type: "string", required: true, input: false, index: true },
+        spId: { type: "string", required: true, input: false },
+        nameId: { type: "string", required: true, input: false },
+        nameIdFormat: { type: "string", required: true, input: false },
+        sessionIndex: { type: "string", required: true, input: false },
+        expiresAt: { type: "date", required: true, input: false, index: true },
       },
     },
   } satisfies BetterAuthPluginDBSchema;

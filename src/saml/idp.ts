@@ -34,6 +34,14 @@ export function createIdp(options: ResolvedSamlIdpOptions, baseURL: string): Idp
       { Binding: BINDING_REDIRECT, Location: ssoUrl },
       { Binding: BINDING_POST, Location: ssoUrl },
     ],
+    ...(options.singleLogout
+      ? {
+          singleLogoutService: [
+            { Binding: BINDING_REDIRECT, Location: `${baseURL.replace(/\/+$/, "")}/saml2/idp/slo` },
+            { Binding: BINDING_POST, Location: `${baseURL.replace(/\/+$/, "")}/saml2/idp/slo` },
+          ],
+        }
+      : {}),
   });
 }
 

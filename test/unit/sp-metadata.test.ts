@@ -74,6 +74,14 @@ describe("serviceProviderFromMetadata", () => {
     expect(r.encryptionCertificates.map(b64Body)).toEqual([b64Body(keys.idpNext.certificate)]);
   });
 
+  it("picks up the SingleLogoutService (HTTP-Redirect preferred)", async () => {
+    const slo = (b: string, loc: string) => `<md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:${b}" Location="${loc}"/>`;
+    const both = md(spsso(slo("HTTP-POST", "https://sp.test/slo-post") + slo("HTTP-Redirect", "https://sp.test/slo") + acs("HTTP-POST", "https://sp.test/acs", 0)));
+    expect((await serviceProviderFromMetadata(both, { id: "x" })).serviceProvider.singleLogoutService).toEqual({ url: "https://sp.test/slo", binding: "redirect" });
+    const post = md(spsso(slo("HTTP-POST", "https://sp.test/slo-post") + acs("HTTP-POST", "https://sp.test/acs", 0)));
+    expect((await serviceProviderFromMetadata(post, { id: "x" })).serviceProvider.singleLogoutService).toEqual({ url: "https://sp.test/slo-post", binding: "post" });
+  });
+
   it("orders ACS URLs: isDefault first, then by index; a KeyDescriptor without use counts for both", async () => {
     const xml = md(
       spsso(

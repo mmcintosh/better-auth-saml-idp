@@ -94,6 +94,7 @@ const serviceProviderShape = z.object({
     allowedRelayStates: z.array(z.string().min(1)).optional(),
     authorize: fn<ResolvedServiceProvider["authorize"]>().optional(),
     signResponse: z.boolean().optional(),
+    singleLogoutService: z.object({ url: acsUrl, binding: z.enum(["redirect", "post"]).optional() }).strict().optional(),
     metadata: z
       .object({
         url: z.url({ protocol: /^https$/, error: "must be an https:// URL" }),
@@ -205,6 +206,25 @@ const optionsSchema = z
           })
           .strict()
           .optional(),
+        samlIdpSessionParticipant: z
+          .object({
+            modelName: z.string().min(1).optional(),
+            fields: z
+              .object({
+                key: z.string().min(1),
+                sessionKey: z.string().min(1),
+                spId: z.string().min(1),
+                nameId: z.string().min(1),
+                nameIdFormat: z.string().min(1),
+                sessionIndex: z.string().min(1),
+                expiresAt: z.string().min(1),
+              })
+              .partial()
+              .strict()
+              .optional(),
+          })
+          .strict()
+          .optional(),
         samlIdpServiceProvider: z
           .object({
             modelName: z.string().min(1).optional(),
@@ -228,6 +248,7 @@ const optionsSchema = z
       .strict()
       .optional(),
     signMetadata: z.boolean().optional(),
+    singleLogout: z.object({ enabled: z.boolean() }).strict().optional(),
     registry: z
       .object({
         enabled: z.boolean(),
@@ -403,6 +424,7 @@ function resolveServiceProvider(sp: ParsedServiceProvider, path: string, d: SpDe
         }
       : undefined,
     requireSignedAuthnRequests: sp.requireSignedAuthnRequests ?? false,
+    singleLogoutService: sp.singleLogoutService ? { url: sp.singleLogoutService.url, binding: sp.singleLogoutService.binding ?? "redirect" } : undefined,
     spCertificates: sp.spCertificate === undefined ? [] : [sp.spCertificate].flat(),
     allowIdpInitiated: sp.allowIdpInitiated ?? false,
     idpInitiatedRelayState: sp.idpInitiatedRelayState,
@@ -510,6 +532,7 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
     schemaValidator: o.schemaValidator ?? defaultSchemaValidator(),
     schema: o.schema,
     signMetadata: o.signMetadata ?? false,
+    singleLogout: o.singleLogout?.enabled ?? false,
     registry: o.registry?.enabled
       ? { canManage: o.registry.canManage, cacheMs: (o.registry.cacheSeconds ?? 60) * 1000, authorize: o.registry.authorize }
       : undefined,

@@ -26,7 +26,7 @@ def row(*vals):
 FEATURES = [
  ("Flows", "SP-initiated SSO", row(("y","HTTP-Redirect and HTTP-POST in, POST out"),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y","brokered to an upstream IdP"),("y",""),("y",""),("y",""),("y","")), "test/integration/sso-flow.test.ts, e2e/browser"),
  ("Flows", "IdP-initiated SSO", row(("y","opt-in per SP; RelayState allow-list"),("y",""),("y",""),("y","per client"),("n",""),("y",""),("n",""),("p","OIDC-initiated only"),("y",""),("y",""),("y",""),("y","")), "test/integration/idp-initiated.test.ts, test/interop/idp-initiated-interop.test.ts"),
- ("Flows", "Single Logout", row(("n","roadmap v1.2"),("y","docs call it best-effort"),("p","front-channel only"),("y","front and back channel"),("p","responds, ends nothing"),("y","front and back channel"),("n",""),("n",""),("y","Redirect only"),("y","back-channel is Early Access"),("u",""),("p","no multi-app logout")), ""),
+ ("Flows", "Single Logout", row(("y","SP- and IdP-initiated, front-channel propagation to every participating SP; node-saml interop"),("y","docs call it best-effort"),("p","front-channel only"),("y","front and back channel"),("p","responds, ends nothing"),("y","front and back channel"),("n",""),("n",""),("y","Redirect only"),("y","back-channel is Early Access"),("u",""),("p","no multi-app logout")), ""),
  ("Bindings", "AuthnRequest over Redirect and POST", row(("y","node-saml's DEFLATEd POST accepted too"),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("u",""),("u",""),("u","")), "test/integration/sso-flow.test.ts"),
  ("Bindings", "Artifact binding", row(("n","not planned"),("p","responses only"),("p","responses, needs memcache"),("y",""),("n",""),("n",""),("n",""),("n",""),("n","responses always POST"),("u",""),("u",""),("u","")), ""),
  ("Signing and encryption", "Response / Assertion signing choice", row(("y","per SP, with a global default; both signed by default"),("y","per SP"),("y","per SP"),("y","per client"),("n","always both"),("y","per SP"),("n","response only"),("n","always both"),("y",""),("y",""),("p","one checkbox"),("p","one or the other")), "test/integration/security.test.ts"),
@@ -65,7 +65,7 @@ ROADMAP = [
    ("Signed IdP metadata (done)", "Optional (signMetadata), for SPs and federations that verify metadata signatures."),
  ]),
  ("v1.2", "Operations at scale", "For hosts with many SPs or changing SPs.", [
-   ("Single Logout", "SP-initiated, front-channel first. Entra, Okta, Keycloak and authentik support it; Shibboleth calls it best-effort."),
+   ("Single Logout (done)", "SP- and IdP-initiated, front-channel, propagated to every SP in the session; PartialLogout when one fails. Best effort by nature, as Shibboleth says."),
    ("Database-backed SP registry and API (done)", "Add, change, disable and remove SPs at runtime without a redeploy; admin-gated, audited API."),
    ("SP metadata URL with refresh (done)", "SP certificate rotation picked up automatically; certificates only, optional signature pinning."),
    ("Signed AuthnRequests over HTTP-POST (done)", "Enveloped XML signatures with XSW defences, pinned to the SP's certificates; node-saml interop; each defence mutation-tested."),
@@ -89,7 +89,7 @@ LEADS = [
  ("Runs where your app runs", "A Better Auth plugin that runs on Cloudflare Workers and Node, verified live against Cloudflare Access. Every other self-hosted option here is a separate server."),
 ]
 TRAILS = [
- ("Breadth of flows", "No Single Logout yet."),
+ ("Step-up authentication", "RequestedAuthnContext is matched exactly; there's no mapping to the host's 2FA state yet."),
  ("SP onboarding", "No bundled admin UI: hosts build one on the registry API."),
 ]
 

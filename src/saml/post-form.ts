@@ -51,12 +51,12 @@ export function autoPostResponse(acsUrl: string, samlResponse: string, relayStat
 }
 
 /** A plain error page. Never includes request payloads, only the fixed message. */
-export function errorPage(status: number, code: string, message: string): Response {
+export function errorPage(status: number, code: string, message: string, title = "Sign-in could not be completed"): Response {
   const nonce = newNonce();
   const html =
     `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Sign-in error</title>` +
     `<style nonce="${nonce}">body{font:16px system-ui,sans-serif;margin:2rem}code{color:#666}</style></head>` +
-    `<body><h1>Sign-in could not be completed</h1><p>${escapeHtml(message)}</p><p><code>${escapeHtml(code)}</code></p></body></html>`;
+    `<body><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p><p><code>${escapeHtml(code)}</code></p></body></html>`;
   return new Response(html, { status, headers: pageHeaders(nonce, "error") });
 }
 
