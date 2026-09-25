@@ -9,5 +9,6 @@
     "types": ["node", "@cloudflare/workers-types"]
   },
   "include": ["src"],
-  "exclude": []
+  // The CLI is a Node binary, not an API: no declarations (and it uses Node-only Buffer APIs).
+  "exclude": ["src/cli"]
 }

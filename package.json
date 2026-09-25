@@ -41,7 +41,7 @@
     "build:schemas": "node scripts/build-schemas.mjs",
     "test:wasm": "vitest run --config wasm-validator/vitest.config.ts",
     "e2e": "node e2e/lib/tls.mjs && NODE_EXTRA_CA_CERTS=\"$PWD/e2e/.generated/tls/ca.pem\" playwright test -c e2e/playwright.config.mjs",
-    "smoke:live": "node --network-family-autoselection-attempt-timeout=3000 e2e/live/smoke.mjs",
+    "smoke:live": "pnpm build && node dist/cli/bin.js smoke",
     "build": "node scripts/build.mjs",
     "prepare": "node scripts/build.mjs",
     "pack:check": "pnpm build && publint --strict && attw --pack . --profile esm-only",
@@ -60,7 +60,7 @@
   "engines": {
     "node": ">=20"
   },
-  "description": "Unofficial Better Auth plugin: act as a SAML 2.0 Identity Provider (SP-initiated SSO). Runs on Cloudflare Workers and Node.",
+  "description": "Unofficial Better Auth plugin: act as a SAML 2.0 Identity Provider (SP- and IdP-initiated SSO, encrypted assertions). Runs on Cloudflare Workers and Node. Includes a CLI.",
   "author": "Mark McIntosh",
   "repository": {
     "type": "git",
@@ -105,5 +105,8 @@
     "wasm/xsd.wasm.sha256",
     "THIRD_PARTY_NOTICES.md"
   ],
-  "sideEffects": false
+  "sideEffects": false,
+  "bin": {
+    "better-auth-saml-idp": "./dist/cli/bin.js"
+  }
 }

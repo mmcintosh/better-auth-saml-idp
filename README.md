@@ -128,6 +128,29 @@ Off by default. Turn it on per SP to put "launch this app" links in your own UI:
 
 Link to `/api/auth/saml2/idp/init?sp=hubspot`. Without a session the user signs in first and continues through `resume`. The Response has no `InResponseTo`, so the SP must accept unsolicited Responses. A caller's `RelayState` is used only if it's on `allowedRelayStates`; anything else is ignored and `idpInitiatedRelayState` is sent instead, so launcher links can't become open redirects at the SP. Read the IdP-initiated section of [docs/security.md](docs/security.md#idp-initiated-sso) before you enable it.
 
+## Command-line tool
+
+The package includes a CLI for checking and debugging an IdP from the terminal. It runs on Node, with nothing extra to install:
+
+```sh
+npx better-auth-saml-idp inspect https://auth.example.com        # metadata, certificates, expiry
+npx better-auth-saml-idp decode "<URL or SAMLResponse=... copied from the browser>" \
+    --idp https://auth.example.com --sp <SP entity ID>           # explain and verify a message
+npx better-auth-saml-idp smoke https://auth.example.com --sp <SP entity ID>
+```
+
+| Command | What it does |
+|---|---|
+| `inspect <idp-url>` | Reads the IdP's metadata and reports what SPs see: entity ID, SSO URLs, certificates and their expiry, schema validity, and the metadata signature (`--cert` pins it) |
+| `decode [input]` | Explains a captured SAMLRequest or SAMLResponse. The input can be a URL, a form body, base64 or XML, passed as an argument, a file, or `-` for stdin. It verifies signatures, including the checks that stop signature wrapping, and reports time windows, Audience, Recipient and InResponseTo. `--key` decrypts an EncryptedAssertion |
+| `request <idp-url> --sp <id>` | Builds an AuthnRequest URL, or an HTML form with `--binding post`, to open in a browser. Options: `--passive`, `--force-authn`, `--name-id-format`, `--authn-context`, `--relay-state`, and `--sign-key` to sign it |
+| `smoke <idp-url> --sp <id>` | Checks 15 security behaviours against a deployed IdP. It needs no user account, and the only rows it leaves are short-lived ones that expire |
+| `sp-from-metadata <file\|url>` | Prints a `serviceProviders` entry for an SP's metadata, as JSON on stdout |
+| `check-config <file>` | Runs the plugin's startup validation on your options and reports every issue, warning and certificate. It takes a `.json` file (PEMs as `"file:./idp.crt"`) or a `.js`/`.mjs` module |
+| `keygen --cert-out idp.crt` | Creates an RSA key and a self-signed certificate. The key goes to `--key-out` (mode 0600), or to stdout only when stdout is a pipe, as in `\| npx wrangler secret put SAML_IDP_PRIVATE_KEY` |
+
+Every command takes `--json`. Exit codes: 0 means OK, 1 means a check failed, and 2 means a usage or input error, so the commands can be used in scripts and CI. The CLI only reads from an IdP; the one exception is `smoke`, which sends test requests. It never needs the IdP's private key.
+
 ## Tested against
 
 How it compares with eleven other SAML identity providers, feature by feature and with sources: **[interactive comparison](https://mmcintosh.github.io/better-auth-saml-idp/comparison/)** (or [docs/comparison.md](docs/comparison.md)).

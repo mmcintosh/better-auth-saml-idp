@@ -15,7 +15,7 @@ rmSync(dist, { recursive: true, force: true });
 
 await build({
   absWorkingDir: root,
-  entryPoints: ["src/index.ts", "src/client.ts", "src/saml/wasm/load.node.ts", "src/saml/wasm/load.workerd.ts"],
+  entryPoints: ["src/index.ts", "src/client.ts", "src/cli/bin.ts", "src/saml/wasm/load.node.ts", "src/saml/wasm/load.workerd.ts"],
   outbase: "src",
   outdir: "dist",
   bundle: true,

@@ -32,6 +32,8 @@ export default defineConfig(async () => {
             globalSetup,
             setupFiles: ["test/support/d1/apply-migrations.ts"],
             include: ["test/**/*.test.ts"],
+            // The CLI is Node-only (a developer tool, never deployed).
+            exclude: ["**/node_modules/**", "test/cli/**"],
           },
         },
       ],
