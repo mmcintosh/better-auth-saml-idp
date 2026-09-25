@@ -37,7 +37,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "build:schemas": "node scripts/build-schemas.mjs",
     "test:wasm": "vitest run --config wasm-validator/vitest.config.ts",
-    "e2e": "node e2e/lib/tls.mjs && NODE_EXTRA_CA_CERTS=\"$PWD/e2e/.generated/tls/ca.pem\" playwright test -c e2e/playwright.config.mjs"
+    "e2e": "node e2e/lib/tls.mjs && NODE_EXTRA_CA_CERTS=\"$PWD/e2e/.generated/tls/ca.pem\" playwright test -c e2e/playwright.config.mjs",
+    "smoke:live": "node --network-family-autoselection-attempt-timeout=3000 e2e/live/smoke.mjs"
   },
   "peerDependencies": {
     "@better-auth/core": ">=1.7.5 <1.8.0",

@@ -344,3 +344,34 @@ The IdP logs show the matching sequence: SSO → sign-in → resume, with the as
 **Real-world finding: Cloudflare Access sends a RelayState longer than 80 bytes.** The first attempt failed with `RELAY_STATE_TOO_LONG`. The plugin's default follows SAML Bindings §3.4.3 ("MUST NOT exceed 80 bytes"), and none of the IdPs in the comparison research is documented as enforcing that limit. The example now sets `relayStateMaxBytes: 1024`, the plugin's hard cap, and that made the login work. **Decided (owner, 2026-09-25):** the plugin default is now **1024**, with `relayStateMaxBytes: 80` as the strict-spec opt-in. The example no longer needs to set it.
 
 **Not a plugin issue:** the first password attempts failed with "Invalid password". The password typed didn't match the one set at sign-up. The account was deleted and re-created.
+
+## D-017: Measured on the live deployment (2026-09-25)
+
+These results come from the example deployed to Cloudflare (see D-016), with no local simulation.
+
+**CPU time per request**, from `wrangler tail --format json` (`cpuTime`) after a fresh deploy:
+
+| Request | Warm median / p90 | Notes |
+|---|---|---|
+| `/sign-in` (static page, no auth code) | 0 / 1 ms | baseline |
+| IdP metadata | 8 / 16 ms | includes building `betterAuth()` per request, as the example does |
+| SSO AuthnRequest | **16 / 24 ms** | adds XSD validation (WASM), replay insert and sweep on D1 |
+| First request on a fresh isolate | **56–162 ms** | bundle evaluation, WASM compile and first-time init |
+
+Conclusions:
+- **Workers Paid is required.** The Free plan's 10 ms CPU limit is exceeded even by warm SSO requests, not only by cold starts. README and docs should state this plainly, not as an estimate.
+- About half the warm cost is the example rebuilding `betterAuth()` per request, which is the upstream `withCloudflare` pattern for per-request `cf` geolocation. **Optimisation opportunity:** cache the auth instance per isolate when geolocation isn't needed, or build it once and pass `cf` per request. This is an example/host concern, not plugin code.
+
+**Live smoke test:** `e2e/live/smoke.mjs` (`pnpm smoke:live` with `IDP_URL` and `SP_ENTITY_ID`) passed **16/16** against production. It covers:
+- metadata caching headers
+- unknown SP and disallowed ACS (400, nothing reflected), and replay (302 then 400)
+- duplicate or percent-encoded SAML parameters, and RelayState limits (1025 bytes rejected, 200 accepted)
+- DOCTYPE, schema-invalid documents, a stale or zone-less IssueInstant, and a non-AuthnRequest root
+- a 5 MB DEFLATE bomb, rejected in 158 ms
+- the HTTP-POST 303 re-entry and its single use
+- a malformed `rid`, and the dev mailbox being off in production
+- **IsPassive producing a NoPassive Response whose RSA-SHA256 signature verifies against the metadata certificate**
+
+On this machine Node needs `--network-family-autoselection-attempt-timeout=3000`: there's no IPv6 route, and IPv4 connects to Cloudflare sometimes take longer than Node's 250 ms happy-eyeballs attempt. The npm script sets it.
+
+**SAMLtool on a production Response:** a throwaway account (created, verified in D1, then deleted) got an assertion for the Cloudflare Access SP. The assertion was captured and never posted. SAMLtool returned **"The SAML Response is valid."** with the production certificate, and "Response signature validation failed. Assertion signature validation failed." with a wrong one.
