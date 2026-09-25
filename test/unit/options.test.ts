@@ -183,9 +183,32 @@ describe("resolveOptions: service providers", () => {
     ).not.toThrow();
   });
 
-  it("refuses IdP-initiated SSO (not in v1)", () => {
-    expect(issuesFor(baseOptions({ serviceProviders: [sp({ allowIdpInitiated: true })] }))).toEqual([
-      "serviceProviders.0.allowIdpInitiated: IdP-initiated SSO is not supported in this version",
+  it("IdP-initiated SSO is opt-in per SP, with RelayState settings", () => {
+    const [s] = resolveOptions(
+      baseOptions({
+        serviceProviders: [sp({ allowIdpInitiated: true, idpInitiatedRelayState: "https://sp.test/home", allowedRelayStates: ["https://sp.test/a"] })],
+      }),
+    ).serviceProviders;
+    expect(s).toMatchObject({ allowIdpInitiated: true, idpInitiatedRelayState: "https://sp.test/home", allowedRelayStates: ["https://sp.test/a"] });
+    const [d] = resolveOptions(baseOptions()).serviceProviders;
+    expect(d).toMatchObject({ allowIdpInitiated: false, idpInitiatedRelayState: undefined, allowedRelayStates: [] });
+  });
+
+  it("IdP-initiated RelayState settings require the opt-in and respect relayStateMaxBytes", () => {
+    expect(issuesFor(baseOptions({ serviceProviders: [sp({ idpInitiatedRelayState: "x", allowedRelayStates: ["y"] })] }))).toEqual([
+      "serviceProviders.0.idpInitiatedRelayState: requires allowIdpInitiated: true",
+      "serviceProviders.0.allowedRelayStates: requires allowIdpInitiated: true",
+    ]);
+    expect(
+      issuesFor(
+        baseOptions({
+          relayStateMaxBytes: 80,
+          serviceProviders: [sp({ allowIdpInitiated: true, idpInitiatedRelayState: "a".repeat(81), allowedRelayStates: ["ok", "b".repeat(81)] })],
+        }),
+      ),
+    ).toEqual([
+      "serviceProviders.0.idpInitiatedRelayState: exceeds relayStateMaxBytes (80)",
+      "serviceProviders.0.allowedRelayStates.1: exceeds relayStateMaxBytes (80)",
     ]);
   });
 

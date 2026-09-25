@@ -30,7 +30,15 @@ export const devMailbox = new Map<string, string>();
 
 type SpJson = Pick<
   ServiceProviderConfig,
-  "id" | "entityId" | "acsUrls" | "nameIdFormat" | "requireSignedAuthnRequests" | "spCertificate"
+  | "id"
+  | "entityId"
+  | "acsUrls"
+  | "nameIdFormat"
+  | "requireSignedAuthnRequests"
+  | "spCertificate"
+  | "allowIdpInitiated"
+  | "idpInitiatedRelayState"
+  | "allowedRelayStates"
 >;
 
 // Built once per isolate. Better Auth itself is created per request (to pass that request's
@@ -113,6 +121,15 @@ let cached: { env: Env; origin: string; auth: ReturnType<typeof buildAuth> } | u
 export function getAuth(env: Env, origin: string) {
   if (cached?.env !== env || cached.origin !== origin) cached = { env, origin, auth: buildAuth(env, origin) };
   return cached.auth;
+}
+
+/** SP ids that opted in to IdP-initiated SSO, for the home page's app launcher. */
+export function idpInitiatedApps(env: Env): string[] {
+  try {
+    return (JSON.parse(env.SAML_SERVICE_PROVIDERS || "[]") as SpJson[]).filter((sp) => sp.allowIdpInitiated === true).map((sp) => sp.id);
+  } catch {
+    return [];
+  }
 }
 
 /** Split concatenated PEM certificates into individual blocks. */

@@ -25,7 +25,8 @@ export function newSamlId(): string {
 const instant = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, "Z");
 
 export interface BuildResponseInput {
-  requestId: string;
+  /** The AuthnRequest ID; undefined for an unsolicited (IdP-initiated) Response: no InResponseTo. */
+  requestId: string | undefined;
   acsUrl: string;
   audience: string;
   nameId: string;
@@ -53,6 +54,9 @@ function attributeStatement(attributes: Record<string, SamlAttributeValue>): str
   return `<saml:AttributeStatement>${attrs}</saml:AttributeStatement>`;
 }
 
+/** ` InResponseTo="…"`, or nothing for an unsolicited Response (Profiles §4.1.4.2, §4.1.5). */
+const inResponseToAttr = (requestId: string | undefined) => (requestId === undefined ? "" : ` InResponseTo="${escapeXml(requestId)}"`);
+
 /** The unsigned Response document, with every field from SPEC §6 step 7. */
 export function buildResponseXml(options: ResolvedSamlIdpOptions, input: BuildResponseInput) {
   const responseId = newSamlId();
@@ -61,9 +65,10 @@ export function buildResponseXml(options: ResolvedSamlIdpOptions, input: BuildRe
   const notBefore = instant(new Date(input.now.getTime() - options.clockSkewSeconds * 1000));
   const notOnOrAfter = instant(new Date(input.now.getTime() + options.assertionLifetimeSeconds * 1000));
   const e = escapeXml;
+  const inResponseTo = inResponseToAttr(input.requestId);
   const xml =
     `<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"` +
-    ` ID="${responseId}" Version="2.0" IssueInstant="${issueInstant}" Destination="${e(input.acsUrl)}" InResponseTo="${e(input.requestId)}">` +
+    ` ID="${responseId}" Version="2.0" IssueInstant="${issueInstant}" Destination="${e(input.acsUrl)}"${inResponseTo}>` +
     `<saml:Issuer>${e(options.entityId)}</saml:Issuer>` +
     `<samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>` +
     `<saml:Assertion ID="${assertionId}" Version="2.0" IssueInstant="${issueInstant}">` +
@@ -71,7 +76,7 @@ export function buildResponseXml(options: ResolvedSamlIdpOptions, input: BuildRe
     `<saml:Subject>` +
     `<saml:NameID Format="${e(input.nameIdFormat)}">${e(input.nameId)}</saml:NameID>` +
     `<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">` +
-    `<saml:SubjectConfirmationData NotOnOrAfter="${notOnOrAfter}" Recipient="${e(input.acsUrl)}" InResponseTo="${e(input.requestId)}"/>` +
+    `<saml:SubjectConfirmationData NotOnOrAfter="${notOnOrAfter}" Recipient="${e(input.acsUrl)}"${inResponseTo}/>` +
     `</saml:SubjectConfirmation>` +
     `</saml:Subject>` +
     `<saml:Conditions NotBefore="${notBefore}" NotOnOrAfter="${notOnOrAfter}">` +
@@ -137,14 +142,14 @@ const STATUS = "urn:oasis:names:tc:SAML:2.0:status:";
  */
 export function buildSignedErrorResponse(
   options: ResolvedSamlIdpOptions,
-  input: { requestId: string; acsUrl: string; status: SamlStatus; now: Date },
+  input: { requestId: string | undefined; acsUrl: string; status: SamlStatus; now: Date },
 ) {
   const e = escapeXml;
   const responseId = newSamlId();
   const sub = input.status.subCode ? `<samlp:StatusCode Value="${STATUS}${input.status.subCode}"/>` : "";
   const xml =
     `<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"` +
-    ` ID="${responseId}" Version="2.0" IssueInstant="${instant(input.now)}" Destination="${e(input.acsUrl)}" InResponseTo="${e(input.requestId)}">` +
+    ` ID="${responseId}" Version="2.0" IssueInstant="${instant(input.now)}" Destination="${e(input.acsUrl)}"${inResponseToAttr(input.requestId)}>` +
     `<saml:Issuer>${e(options.entityId)}</saml:Issuer>` +
     `<samlp:Status><samlp:StatusCode Value="${STATUS}${input.status.code}">${sub}</samlp:StatusCode>` +
     `<samlp:StatusMessage>${e(input.status.message)}</samlp:StatusMessage></samlp:Status>` +

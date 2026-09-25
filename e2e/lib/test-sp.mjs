@@ -30,6 +30,22 @@ function samlFor(cert, variant) {
   });
 }
 
+/** IdP-initiated SSO: a separate SP registration that accepts unsolicited Responses only. */
+function unsolicitedSaml(cert) {
+  return new SAML({
+    issuer: `${TEST_SP}/idp-initiated`,
+    callbackUrl: `${TEST_SP}/acs-idp-initiated`,
+    entryPoint: IDP_SSO,
+    idpIssuer: IDP_ENTITY,
+    idpCert: cert,
+    audience: `${TEST_SP}/idp-initiated`,
+    wantAssertionsSigned: true,
+    wantAuthnResponseSigned: true,
+    validateInResponseTo: "never",
+    acceptedClockSkewMs: 60_000,
+  });
+}
+
 const VARIANTS = {
   post: { binding: "post", passive: false },
   redirect: { binding: "redirect", passive: false },
@@ -49,6 +65,7 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 export function startTestSp(cert) {
   // One SAML instance per variant: InResponseTo is validated against that instance's cache.
   const sp = Object.fromEntries(Object.entries(VARIANTS).map(([k, v]) => [k, samlFor(cert, v)]));
+  const unsolicited = unsolicitedSaml(cert);
 
   const tls = { key: readFileSync(TLS.key), cert: readFileSync(TLS.cert) };
   const spServer = createServer(tls, async (req, res) => {
@@ -82,6 +99,19 @@ export function startTestSp(cert) {
         done.searchParams.set("result", JSON.stringify(result));
         return void res.writeHead(302, { location: done.href }).end(); // cross-site redirect
       }
+      if (req.method === "POST" && url.pathname === "/acs-idp-initiated") {
+        const form = new URLSearchParams(await readBody(req));
+        const result = { variant: "idp-initiated", relayState: form.get("RelayState") };
+        try {
+          const { profile } = await unsolicited.validatePostResponseAsync(Object.fromEntries(form));
+          Object.assign(result, { ok: true, nameID: profile?.nameID, inResponseTo: profile?.inResponseTo ?? null });
+        } catch (e) {
+          Object.assign(result, { ok: false, error: String(e?.message ?? e) });
+        }
+        const done = new URL("/done", TEST_APP);
+        done.searchParams.set("result", JSON.stringify(result));
+        return void res.writeHead(302, { location: done.href }).end();
+      }
       if (url.pathname === "/metadata") {
         return void res.writeHead(200, { "content-type": "application/xml" }).end(sp.post.generateServiceProviderMetadata(null, null));
       }
@@ -93,6 +123,15 @@ export function startTestSp(cert) {
 
   const appServer = createServer(tls, (req, res) => {
     const url = new URL(req.url, TEST_APP);
+    // IdP-initiated SSO from another site: a portal link the user clicks, and a drive-by
+    // script redirect without user activation (login-CSRF mitigation, docs/security.md).
+    const to = url.searchParams.get("to") ?? "";
+    if (url.pathname === "/portal")
+      return void res.writeHead(200, { "content-type": "text/html" }).end(`<!doctype html><title>Portal</title><a id="launch" href="${esc(to)}">Launch</a>`);
+    if (url.pathname === "/drive-by")
+      return void res
+        .writeHead(200, { "content-type": "text/html" })
+        .end(`<!doctype html><title>Drive-by</title><script>location.href = ${JSON.stringify(to).replace(/</g, "\\u003c")}</script>`);
     if (url.pathname !== "/done") return void res.writeHead(404).end();
     const result = url.searchParams.get("result") ?? "{}";
     res

@@ -1,6 +1,7 @@
 /// <reference path="./saml/wasm/wasm.d.ts" />
 import type { BetterAuthPlugin } from "better-auth";
 import { mergeSchema } from "better-auth/db";
+import { initEndpoint } from "./endpoints/init";
 import { metadataEndpoint } from "./endpoints/metadata";
 import { resumeEndpoint } from "./endpoints/resume";
 import { ssoEndpoint } from "./endpoints/sso";
@@ -39,6 +40,7 @@ export const samlIdp = (options: SamlIdpOptions) => {
       getSamlIdpMetadata: metadataEndpoint(getIdp),
       samlIdpSingleSignOn: ssoEndpoint(state),
       samlIdpResume: resumeEndpoint(state),
+      samlIdpInitiatedSignOn: initEndpoint(state),
     },
     // A fresh schema object per plugin: mergeSchema mutates its first argument, so a shared
     // module-level object would leak one instance's renames into every other (finding #10).

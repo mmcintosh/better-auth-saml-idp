@@ -43,6 +43,8 @@ SPs come from the `SAML_SERVICE_PROVIDERS` variable, a JSON array, so adding one
 
 Every SP gets NameID = the user's email, plus the attributes `email`, `name`, `firstName` and `lastName` (see `src/auth.ts`).
 
+Optional per-SP keys passed through: `nameIdFormat`, `requireSignedAuthnRequests`, `spCertificate`, and for IdP-initiated SSO `allowIdpInitiated`, `idpInitiatedRelayState` and `allowedRelayStates`. SPs with `"allowIdpInitiated": true` are listed under **Apps** on the home page, each linking to `/api/auth/saml2/idp/init?sp=<id>`.
+
 ## Deploy
 
 ```sh

@@ -55,10 +55,26 @@ betterAuth({
 | Re-assigned or linkable identifiers | The NameID follows the format: `persistent` is an opaque per-SP HMAC of the user id (never the email, never re-assigned); `transient` is random per assertion; `emailAddress` is the verified email. | `review-findings.test.ts` #11 |
 | Leaking secrets in logs | The private key, SAMLRequest/SAMLResponse payloads and rejected issuers are never logged. Debug logs carry error codes, IDs and, for schema errors, a short sanitised excerpt of the validator message (length-bounded, control characters removed). | `security.test.ts` ("logging") |
 | Access policy | The `authorize({ user, session, serviceProvider })` hook runs on the fresh user. A denial or an exception means no assertion is issued. | `security.test.ts` |
+| Unsolicited assertions to SPs that didn't ask for them | IdP-initiated SSO (`/saml2/idp/init`) is off unless the SP has `allowIdpInitiated: true`, re-checked when a parked request resumes. It always posts to the SP's first registered ACS URL; the caller can't choose one. | `idp-initiated.test.ts` |
+| Open redirect at the SP through IdP-initiated RelayState | A caller-supplied `RelayState` is used only if it exactly matches the SP's `allowedRelayStates`; otherwise `idpInitiatedRelayState` (or nothing) is sent. | `idp-initiated.test.ts` |
+
+## IdP-initiated SSO
+
+`GET /saml2/idp/init?sp=<id>` sends an **unsolicited** Response: one that answers no AuthnRequest. It's off by default and enabled per SP with `allowIdpInitiated: true`. Before you enable it, know what it gives up. The SAML2Int profile and `@better-auth/sso` both advise against it unless an SP needs it.
+
+- **Login CSRF.** Any website can link or redirect a signed-in user's browser to the init URL, and the user is then signed in to the SP without having asked. The identity is still the user's own (the IdP asserts only who is signed in), so this is not the classic "log the victim into the attacker's account". The risk is being dropped into an SP session, and at a deep link, that the user didn't choose. Mitigations:
+  - The endpoint is **GET only**: launcher links and bookmarks are GETs. POST is not routed, and a cross-site POST would carry no `SameSite=Lax` cookies anyway.
+  - **Fetch Metadata check.** A cross-site navigation that the user didn't trigger (`Sec-Fetch-Site: cross-site` without `Sec-Fetch-User: ?1`, for example a script or meta-refresh redirect on another site) gets a confirmation page on the IdP's origin instead of a Response. The page can't be framed. User clicks from a portal on another site, bookmarks, typed URLs and same-site links go straight through. Browsers that don't send Fetch Metadata, and user-activated clicks on an attacker's page, aren't stopped: this narrows the attack but doesn't close it.
+  - The caller can't pick the ACS URL (always the SP's first) or an arbitrary RelayState (below).
+  - Better Auth's rate limiter applies to the endpoint like every other route. Keep it on.
+  - Enable it only for SPs that need it.
+- **RelayState is an open-redirect vector at the SP.** In IdP-initiated SSO, RelayState conventionally carries the URL the SP should send the user to after sign-in, and many SPs follow it without checking. Forwarding a caller's value would let anyone craft a link to your IdP that signs the user in to the SP and then bounces them to a site of the attacker's choice, under a trusted-looking domain. So a caller's `RelayState` is used **only if it exactly matches** one of the SP's `allowedRelayStates`. Anything else is **ignored**, not rejected, so that a stale bookmark still signs the user in: the SP's `idpInitiatedRelayState` is sent instead, or no RelayState at all.
+- **Replay.** An unsolicited assertion isn't tied to a request ID, so the SP can't use `InResponseTo` to check that it's fresh and single-use. The assertion is still short-lived (`NotOnOrAfter`, 5 minutes by default; keep `assertionLifetimeSeconds` low), audience-restricted, and addressed to one ACS URL (`Destination`, `Recipient`). **SPs that accept unsolicited Responses must remember assertion IDs until they expire and reject repeats.** Check that yours does. Every assertion ID is logged at info level (`issued assertion <id> for SP <sp>`) for correlation.
+- Everything else is as for SP-initiated SSO: the user and session are re-read from the database, the account policy and `authorize()` run, the NameID follows the SP's format, and the Response and assertion are signed. Without a session, the request is parked as a single-use, browser-bound pending request (the same machinery as SP-initiated SSO) and resumes after sign-in.
 
 ## Known limitations (v1)
 
-- There's no Single Logout, no IdP-initiated SSO and no encrypted assertions.
+- There's no Single Logout and no encrypted assertions. IdP-initiated SSO has no `acs` parameter: it always uses the SP's first ACS URL.
 - The HTTP-POST binding is answered through a single-use, 120-second, same-site GET re-entry (`sso?cid=`), because the SP's cross-site POST carries no `SameSite=Lax` cookies. Forwarding that link is equivalent to forwarding an HTTP-Redirect AuthnRequest URL.
 - `AssertionConsumerServiceIndex` without a URL is rejected. SPs must send `AssertionConsumerServiceURL`.
 - The `persistent` NameID is keyed with the Better Auth secret. Rotating the secret changes every persistent NameID.

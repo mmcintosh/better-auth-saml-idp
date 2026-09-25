@@ -63,14 +63,19 @@ const serviceProviderSchema = z
     requireSignedAuthnRequests: z.boolean().optional(),
     spCertificate: z.union([pem("CERTIFICATE"), z.array(pem("CERTIFICATE")).min(1)]).optional(),
     allowIdpInitiated: z.boolean().optional(),
+    idpInitiatedRelayState: z.string().min(1).optional(),
+    allowedRelayStates: z.array(z.string().min(1)).optional(),
     authorize: fn<ResolvedServiceProvider["authorize"]>().optional(),
   })
   .strict()
   .superRefine((sp, ctx) => {
     if (sp.requireSignedAuthnRequests && !sp.spCertificate)
       ctx.addIssue({ code: "custom", path: ["spCertificate"], message: "is required when requireSignedAuthnRequests is true" });
-    if (sp.allowIdpInitiated)
-      ctx.addIssue({ code: "custom", path: ["allowIdpInitiated"], message: "IdP-initiated SSO is not supported in this version" });
+    // RelayState settings only apply to IdP-initiated SSO; setting them without the opt-in is
+    // almost certainly a mistake (the host believes IdP-initiated SSO is on).
+    for (const key of ["idpInitiatedRelayState", "allowedRelayStates"] as const)
+      if (sp[key] !== undefined && !sp.allowIdpInitiated)
+        ctx.addIssue({ code: "custom", path: [key], message: "requires allowIdpInitiated: true" });
   });
 
 const optionsSchema = z
@@ -215,6 +220,17 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
     entityIds.add(sp.entityId);
   }
 
+  const relayMax = o.relayStateMaxBytes ?? RELAY_STATE_HARD_CAP;
+  for (const [i, sp] of o.serviceProviders.entries()) {
+    const values: [string, string][] = [
+      ...(sp.idpInitiatedRelayState !== undefined ? [["idpInitiatedRelayState", sp.idpInitiatedRelayState] as [string, string]] : []),
+      ...(sp.allowedRelayStates ?? []).map((v, j): [string, string] => [`allowedRelayStates.${j}`, v]),
+    ];
+    for (const [path, v] of values)
+      if (new TextEncoder().encode(v).byteLength > relayMax)
+        issues.push(`serviceProviders.${i}.${path}: exceeds relayStateMaxBytes (${relayMax})`);
+  }
+
   if (o.serviceProviders.length === 0) warnings.push("serviceProviders is empty: every AuthnRequest will be rejected");
 
   const keyCheck = checkKeyMaterial(o as SamlIdpOptions, warnings);
@@ -256,7 +272,9 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
         attributes: sp.attributes ?? (() => ({})),
         requireSignedAuthnRequests: sp.requireSignedAuthnRequests ?? false,
         spCertificates: sp.spCertificate === undefined ? [] : Array.isArray(sp.spCertificate) ? sp.spCertificate : [sp.spCertificate],
-        allowIdpInitiated: false,
+        allowIdpInitiated: sp.allowIdpInitiated ?? false,
+        idpInitiatedRelayState: sp.idpInitiatedRelayState,
+        allowedRelayStates: sp.allowedRelayStates ?? [],
         authorize: sp.authorize ?? (() => true),
       }),
     ),

@@ -25,6 +25,15 @@ export const SERVICE_PROVIDERS = [
     acsUrls: [`${SSP}/simplesaml/module.php/saml/sp/saml2-acs.php/default-sp`],
   },
   { id: "test-sp", entityId: `${TEST_SP}/metadata`, acsUrls: [`${TEST_SP}/acs`] },
+  // The same node-saml SP, registered a second time for IdP-initiated SSO (unsolicited Responses).
+  {
+    id: "test-sp-idp-init",
+    entityId: `${TEST_SP}/idp-initiated`,
+    acsUrls: [`${TEST_SP}/acs-idp-initiated`],
+    allowIdpInitiated: true,
+    idpInitiatedRelayState: "default-landing",
+    allowedRelayStates: ["reports"],
+  },
 ];
 
 export const PORTS = [8787, 8080, 8081, 9100, 9101];

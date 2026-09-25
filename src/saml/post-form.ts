@@ -59,3 +59,19 @@ export function errorPage(status: number, code: string, message: string): Respon
     `<body><h1>Sign-in could not be completed</h1><p>${escapeHtml(message)}</p><p><code>${escapeHtml(code)}</code></p></body></html>`;
   return new Response(html, { status, headers: pageHeaders(nonce, "error") });
 }
+
+/**
+ * IdP-initiated SSO reached by a cross-site navigation without user activation (a drive-by
+ * redirect from another site): the user confirms on this origin before being signed in to the
+ * SP (login-CSRF mitigation, docs/security.md). `href` is the same init URL; following it is a
+ * same-origin, user-activated navigation. Framing is denied, so the link can't be clickjacked.
+ */
+export function confirmPage(href: string, appLabel: string): Response {
+  const nonce = newNonce();
+  const html =
+    `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Continue sign-in</title>` +
+    `<style nonce="${nonce}">body{font:16px system-ui,sans-serif;margin:2rem}</style></head>` +
+    `<body><h1>Continue to ${escapeHtml(appLabel)}?</h1><p>Another site sent you here to sign in to this application.</p>` +
+    `<p><a href="${escapeHtml(href)}">Continue</a></p></body></html>`;
+  return new Response(html, { status: 200, headers: pageHeaders(nonce, "error") });
+}

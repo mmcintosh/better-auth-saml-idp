@@ -25,7 +25,7 @@ def row(*vals):
 # (group, feature, {key: (status, note)}, our evidence)
 FEATURES = [
  ("Flows", "SP-initiated SSO", row(("y","HTTP-Redirect and HTTP-POST in, POST out"),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y","brokered to an upstream IdP"),("y",""),("y",""),("y",""),("y","")), "test/integration/sso-flow.test.ts, e2e/browser"),
- ("Flows", "IdP-initiated SSO", row(("n","roadmap v1.1"),("y",""),("y",""),("y","per client"),("n",""),("y",""),("n",""),("p","OIDC-initiated only"),("y",""),("y",""),("y",""),("y","")), ""),
+ ("Flows", "IdP-initiated SSO", row(("y","opt-in per SP; RelayState allow-list"),("y",""),("y",""),("y","per client"),("n",""),("y",""),("n",""),("p","OIDC-initiated only"),("y",""),("y",""),("y",""),("y","")), "test/integration/idp-initiated.test.ts, test/interop/idp-initiated-interop.test.ts"),
  ("Flows", "Single Logout", row(("n","roadmap v1.2"),("y","docs call it best-effort"),("p","front-channel only"),("y","front and back channel"),("p","responds, ends nothing"),("y","front and back channel"),("n",""),("n",""),("y","Redirect only"),("y","back-channel is Early Access"),("u",""),("p","no multi-app logout")), ""),
  ("Bindings", "AuthnRequest over Redirect and POST", row(("y","node-saml's DEFLATEd POST accepted too"),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("u",""),("u",""),("u","")), "test/integration/sso-flow.test.ts"),
  ("Bindings", "Artifact binding", row(("n","not planned"),("p","responses only"),("p","responses, needs memcache"),("y",""),("n",""),("n",""),("n",""),("n",""),("n","responses always POST"),("u",""),("u",""),("u","")), ""),
@@ -58,7 +58,7 @@ ROADMAP = [
    ("Second adversarial review", "Review the new code paths from the first round: POST re-entry, error Responses, account policy, NameID."),
  ]),
  ("v1.1", "Close the expected-feature gaps", "What admins and SPs assume every IdP has.", [
-   ("IdP-initiated SSO (opt-in per SP)", "Supported by 8 of the 11 products compared (partially by Ory Polis), including all four commercial IdPs. Off by default, as the spec intended."),
+   ("IdP-initiated SSO (done)", "Opt-in per SP, off by default; RelayState only from a per-SP allow-list. Supported by 8 of the 11 products compared (partially by Ory Polis), including all four commercial IdPs."),
    ("Encrypted assertions", "AES-256-GCM with RSA-OAEP. Shibboleth encrypts by default; Keycloak, authentik, Logto, Entra and Okta offer it per SP."),
    ("Register SPs from metadata XML", "A helper that turns an SP's metadata into a serviceProviders entry, including certificates and ACS URLs."),
    ("Per-SP signing choice", "Move signResponse and signAssertion to each SP, as Shibboleth, Keycloak and authentik do."),
@@ -89,7 +89,7 @@ LEADS = [
  ("Runs where your app runs", "A Better Auth plugin that runs on Cloudflare Workers and Node, verified live against Cloudflare Access. Every other self-hosted option here is a separate server."),
 ]
 TRAILS = [
- ("Breadth of flows", "No IdP-initiated SSO or Single Logout yet."),
+ ("Breadth of flows", "No Single Logout yet."),
  ("Encryption", "No encrypted assertions yet; several SPs and federations expect the option."),
  ("SP onboarding", "SPs are configured in code; no metadata import, registry or UI yet."),
 ]

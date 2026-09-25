@@ -413,3 +413,43 @@ Measured on production with the same method as D-017:
 The plugin also caches the metadata XML per IdP instance now; samlify was rebuilding it on every request.
 
 The browser e2e (7/7) and the live smoke test (16/16) passed after both changes. The smoke test now uses a dummy SP, `https://smoke.invalid/sp`, registered on the example deployment, because the Cloudflare SP requires signed requests. Right after a deploy, give the new version a few seconds to propagate before running it.
+
+## D-021: IdP-initiated SSO (SPEC §5 stretch, roadmap v1.1)
+
+`GET /saml2/idp/init?sp=<id>[&RelayState=…]` sends an **unsolicited** Response. It's off by default and enabled per SP with `allowIdpInitiated: true`, which startup validation used to reject as "not supported in this version".
+
+**Design choices:**
+- **Opt-in per SP, checked twice.** `init` refuses an SP without the opt-in (`IDP_INITIATED_NOT_ALLOWED`, 400) and an unknown or missing `sp` (`UNKNOWN_SERVICE_PROVIDER`, 400; the value isn't reflected). When the user has to sign in first, `resume` checks the opt-in again, because the configuration may change while the user signs in.
+- **GET only.** Launcher links and bookmarks are GETs. A POST from another site would carry no `SameSite=Lax` cookies, so it would always detour through the login page, and it would add surface for no use case. POST isn't routed, and `init` isn't added to `skipOriginCheck`.
+- **No request, so no `InResponseTo`.** `ValidatedRequest.requestId` is now `string | undefined`. Undefined means unsolicited, and `buildResponseXml` then omits `InResponseTo` on both the Response and `SubjectConfirmationData` (Profiles §4.1.4.2, §4.1.5). Everything else is the SP-initiated path unchanged: `issueResponse` does the R3 re-read, account policy, `authorize()`, NameID per format, attributes, `Destination`/`Recipient`/`Audience`/`NotOnOrAfter` and signing. There's no replay record (R2), because there's no request ID to record. As a safety net, a POST-binding continuation (`sso?cid=`) without a request ID is refused, since only `init` creates unsolicited requests.
+- **Without a session**, the request is parked through the same code as SP-initiated SSO (`parkForLogin`, extracted from `sso.ts`): a single-use pending value bound to the browser, consumed only by `consumeVerificationValue` in `resume`. R1 is unchanged.
+- **ACS URL:** always the SP's first registered URL. There's no `acs` parameter, which is one less caller-controlled input. SPs with several ACS URLs should list the IdP-initiated one first.
+- **RelayState: allow-list, and ignore anything else.** In IdP-initiated SSO, RelayState conventionally names the SP-side landing URL, and many SPs redirect to it after sign-in. So a RelayState forwarded from the query string would turn every launcher link into an open redirect *at the SP*, behind a trusted IdP domain. New per-SP options:
+  - `idpInitiatedRelayState`: the default target.
+  - `allowedRelayStates`: caller values accepted by **exact** string match. Near-misses (trailing slash, case, an added query) are tested.
+  - Anything else is **ignored**, not rejected: the default is sent, or no RelayState at all. Rejecting would break stale bookmarks for no security gain, since an ignored value never reaches the SP.
+  - Both options require `allowIdpInitiated` and must fit in `relayStateMaxBytes`. Both rules are startup errors.
+- **Login CSRF.** Any site can send a signed-in user's browser to `init`. The user lands in their *own* SP account, so this isn't the classic "log the victim into the attacker's account". Mitigations:
+  - GET only, a fixed ACS URL, and the RelayState allow-list.
+  - A **Fetch Metadata check.** `Sec-Fetch-Site: cross-site` without `Sec-Fetch-User: ?1` means another site navigated the browser without a user gesture (a script or meta-refresh). That gets a confirmation page on the IdP's origin: `frame-ancestors 'none'`, one "Continue" link back to the same URL. Clicking it is a same-origin navigation, which goes through.
+  - Real clicks from a portal, bookmarks, typed URLs and same-site links go straight through.
+  - Browsers without Fetch Metadata send neither header and aren't challenged. The check narrows the attack; it doesn't close it (docs/security.md).
+  - Better Auth's global rate limiter covers the endpoint. A dedicated rule wasn't added, because launch clicks are rare and the limiter keys on IP.
+- **Replay** can't be tied to a request, so the SP must track assertion IDs until `NotOnOrAfter`. The lifetime stays short (default 300 s). This is documented in docs/security.md, and every issued assertion ID is logged at info level.
+
+**Evidence** (Node and workerd, `pnpm test`):
+
+| Check | Result |
+|---|---|
+| `test/integration/idp-initiated.test.ts` (20 tests) | refusals (no opt-in with and without a session, unknown or missing `sp`, POST); an unsolicited Response with no `InResponseTo` anywhere, verified by the **strict samlify SP** (both signatures required); NameID format and attributes; login → resume → single use; browser binding; opt-in removed between init and resume; the RelayState default, allow-listed, near-miss and dropped cases, plus RelayState across the login detour; unverified email, `authorize()` denial and a banned user; Fetch Metadata confirmation and pass-through |
+| `test/interop/idp-initiated-interop.test.ts` (4 tests) | **node-saml** accepts with `validateInResponseTo: "never"` and rejects with `"always"` with exactly `InResponseTo is missing from response`. **`@better-auth/sso`** signs the user in with `saml.allowIdpInitiated: true` (redirects to `idpInitiatedCallbackUrl`) and rejects it as `unsolicited_response` without it |
+| `pnpm e2e` (Chromium, 12/12) | The node-saml test SP is registered a second time (`test-sp-idp-init`, `validateInResponseTo: "never"`). It covers: init without a session → sign-in → resume → SP accepts (`inResponseTo: null`); a portal link click from `app.test` goes straight through with an allow-listed RelayState; a disallowed RelayState is replaced by the default; a **script redirect from `app.test` gets the confirmation page in real Chromium**, and Continue then signs in; an SP without the opt-in gets 400. The IdP-initiated tests sign in with the file's existing account, because a fifth sign-up from 127.0.0.1 tripped Better Auth's sign-up rate limit (3 per 10 s) in the first run. |
+
+**Mutation proofs** (each re-broken, run on Node, then restored):
+- **Opt-in check removed from `init`:** 2 tests fail.
+- **`InResponseTo="_forged"` always emitted:** the node-saml `"always"` test flips to `InResponseTo is not valid`, the `"never"` test's no-`InResponseTo` assertion fails, and both `@better-auth/sso` tests fail (`unknown or expired request ID`).
+- **Caller RelayState passed through:** 2 tests fail.
+- **Opt-in re-check removed from `resume`:** 1 test fails.
+- **Fetch Metadata check removed:** 1 test fails.
+
+**Not done:** a Keycloak IdP-initiated e2e. Keycloak's broker accepts unsolicited Responses only at `/realms/{realm}/broker/{alias}/endpoint/clients/{client}`, with a realm client that has an "IDP-Initiated SSO URL name", which means extra realm setup and a second ACS URL. The node-saml SP already covers the real-browser path.

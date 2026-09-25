@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { devMailbox, getAuth, requestCf, type Env } from "./auth";
+import { devMailbox, getAuth, idpInitiatedApps, requestCf, type Env } from "./auth";
 import { signInPage } from "./sign-in";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -25,9 +25,17 @@ app.get("/", async (c) => {
   const origin = new URL(c.req.url).origin;
   const session = await withCf(c, () => authFor(c).api.getSession({ headers: c.req.raw.headers }));
   const who = session ? `Signed in as ${escapeHtml(session.user.email)}` : "Not signed in";
+  // IdP-initiated SSO launcher: SPs with "allowIdpInitiated": true in SAML_SERVICE_PROVIDERS.
+  const apps = idpInitiatedApps(c.env);
+  const appList = apps.length
+    ? `<h2>Apps</h2><ul>${apps
+        .map((id) => `<li><a href="/api/auth/saml2/idp/init?sp=${encodeURIComponent(id)}">${escapeHtml(id)}</a></li>`)
+        .join("")}</ul>`
+    : "";
   return c.html(
     `<!doctype html><meta charset="utf-8"><title>SAML IdP example</title>` +
       `<body style="font:16px system-ui;margin:2rem"><h1>better-auth-saml-idp example</h1><p>${who}</p>` +
+      appList +
       `<p>IdP metadata: <a href="/api/auth/saml2/idp/metadata">${origin}/api/auth/saml2/idp/metadata</a></p>` +
       `<p><a href="/sign-in">Sign in / sign up</a></p></body>`,
   );
