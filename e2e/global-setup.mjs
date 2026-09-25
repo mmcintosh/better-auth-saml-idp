@@ -38,6 +38,9 @@ export default async function globalSetup() {
     await configureKeycloak(idp.cert);
     return teardown;
   } catch (e) {
+    try {
+      compose(["logs", "--tail", "60"]); // make startup failures self-explaining (CI)
+    } catch {}
     await teardown();
     throw e;
   }

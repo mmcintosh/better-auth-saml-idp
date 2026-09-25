@@ -2,7 +2,7 @@
 // Written to e2e/.generated/tls (gitignored). Run before Playwright so NODE_EXTRA_CA_CERTS
 // can point at the CA; Chromium uses ignoreHTTPSErrors for the same certificate.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { GENERATED } from "./config.mjs";
 
@@ -22,6 +22,9 @@ export function ensureTls() {
   );
   o("x509", "-req", "-in", "leaf.csr", "-CA", "ca.pem", "-CAkey", "ca.key", "-CAcreateserial", "-days", "30", "-sha256",
     "-extfile", "ext.cnf", "-out", "cert.pem");
+  // Throwaway, test-only key: containers (Keycloak runs as uid 1000) must be able to read it
+  // whatever uid created it (GitHub runners use 1001). Never committed (e2e/.generated/).
+  chmodSync(TLS.key, 0o644);
   return TLS;
 }
 
