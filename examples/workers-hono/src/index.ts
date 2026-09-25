@@ -1,13 +1,17 @@
 import { Hono } from "hono";
-import { devMailbox, getAuth, idpInitiatedApps, requestCf, type Env } from "./auth";
+import { devMailbox, getAuth, idpInitiatedApps, requestCf, requestWaitUntil, type Env } from "./auth";
 import { signInPage } from "./sign-in";
 
 const app = new Hono<{ Bindings: Env }>();
 
-type Ctx = { env: Env; req: { raw: Request; url: string } };
+type Ctx = { env: Env; req: { raw: Request; url: string }; executionCtx: { waitUntil(p: Promise<unknown>): void } };
 const authFor = (c: Ctx) => getAuth(c.env, new URL(c.req.url).origin);
 /** Run `fn` with this request's `cf` visible to the shared auth instance. */
-const withCf = <T>(c: Ctx, fn: () => T) => requestCf.run((c.req.raw as { cf?: IncomingRequestCfProperties }).cf ?? {}, fn);
+const withCf = <T>(c: Ctx, fn: () => T) =>
+  requestWaitUntil.run(
+    (p) => c.executionCtx.waitUntil(p),
+    () => requestCf.run((c.req.raw as { cf?: IncomingRequestCfProperties }).cf ?? {}, fn),
+  );
 
 app.all("/api/auth/*", (c) => withCf(c, () => authFor(c).handler(c.req.raw)));
 

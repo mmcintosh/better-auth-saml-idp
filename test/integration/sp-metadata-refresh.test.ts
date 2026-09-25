@@ -138,6 +138,30 @@ describe("SP metadata URL with refresh", () => {
     expect(logs.some((m) => /metadata refresh .* failed/.test(m))).toBe(true);
   });
 
+  it("a refresh that never settles (cancelled background work on Workers) doesn't block later refreshes", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    let hang = false;
+    let calls = 0;
+    vi.stubGlobal("fetch", async () => {
+      calls++;
+      if (hang) return new Promise<Response>(() => {}); // never settles, ignores any abort signal
+      return new Response(metadata(), { headers: { "content-type": "application/samlmetadata+xml" } });
+    });
+    const browser = await host();
+    expect((await browser.fetch(await signedRedirect(keys.sp.privateKey))).status).toBe(200);
+    hang = true;
+    vi.setSystemTime(Date.now() + 86_400_000 + 1000); // due: a background refresh starts and hangs
+    expect((await browser.fetch(await signedRedirect(keys.sp.privateKey))).status).toBe(200); // cached copy still serves
+    expect(calls).toBe(2);
+    hang = false;
+    vi.setSystemTime(Date.now() + 10_000); // still "in flight": no second attempt yet
+    await browser.fetch(await signedRedirect(keys.sp.privateKey));
+    expect(calls).toBe(2);
+    vi.setSystemTime(Date.now() + 31_000); // abandoned: a fresh refresh starts
+    await browser.fetch(await signedRedirect(keys.sp.privateKey));
+    expect(calls).toBe(3);
+  });
+
   it("accepts metadata signed with the pinned key", async () => {
     serve(() => metadata({ signWith: { key: keys.idpNext.privateKey } }));
     const browser = await host({ metadata: { url: MD_URL, signingCertificate: keys.idpNext.certificate } });

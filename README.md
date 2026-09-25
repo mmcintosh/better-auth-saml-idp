@@ -8,6 +8,8 @@ Turn your [Better Auth](https://www.better-auth.com) server into a **SAML 2.0 Id
 [![Runs on](https://img.shields.io/badge/runs%20on-Cloudflare%20Workers%20%7C%20Node%2020%2B-f38020)](examples/workers-hono/README.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
+📖 **[Read the guide](docs/guide/README.md)**: getting started, every option, every error code, security controls, schema, Single Logout, `@better-auth/sso` interop, Cloudflare Workers, the CLI and troubleshooting.
+
 **LIVE**:
 
 - **Example IdP (Workers + Hono + D1)**: [better-auth-saml-idp-example.mmcintosh-f61.workers.dev](https://better-auth-saml-idp-example.mmcintosh-f61.workers.dev/), which serves Cloudflare Access sign-ins, verified live
@@ -94,6 +96,8 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 - [ ] HubSpot and AWS IAM Identity Center: guides written ([HubSpot](docs/hubspot.md), [AWS](docs/sp-aws-iam-identity-center.md)), not yet run live
 
 ## 📚 Table of Contents
+
+> The full documentation is the **[guide](docs/guide/README.md)**. This README is the overview.
 
 - [Quick Start](#-quick-start)
 - [Installation](#-installation)

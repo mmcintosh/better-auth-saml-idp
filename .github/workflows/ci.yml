@@ -19,6 +19,7 @@ jobs:
       - run: scripts/use-better-auth.sh ${{ matrix.better-auth }}
       - run: pnpm typecheck
       - run: pnpm lint          # Biome: recommended + security rules
+      - run: pnpm docs:check    # every relative link and #anchor in README and docs/
       - run: pnpm -C examples/workers-hono typecheck
       - run: pnpm test          # node + workerd (D1/Drizzle, validateSchema on), incl. SP interop
       - run: pnpm test:wasm     # validator suite, node + workerd

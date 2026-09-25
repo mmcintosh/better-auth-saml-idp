@@ -23,7 +23,7 @@ Every option `samlIdp()` accepts. Options are validated when `samlIdp()` is call
 |---|---|---|---|
 | `entityId` | `string` | **required** | The IdP's entity ID, published in metadata and sent as the `Issuer` of every Response. Usually `https://<host>/<basePath>/saml2/idp`. SPs pin it, so choose it once. |
 | `baseURL` | `string` | request host | The Better Auth base URL the IdP builds its own URLs from: the SSO URL in metadata, the expected `Destination`, resume links. Without it they follow the request's `Host` header, and a warning is logged. **Set it in production.** An absolute http(s) URL without query or fragment. |
-| `loginPage` | `string` | **required** | Where signed-out users are sent, with `?callbackURL=<absolute resume URL>`. A path starting with `/` (not `//`), or an absolute http(s) URL. Backslashes, whitespace and control characters are refused. See [the sign-in page contract](getting-started.md#4-return-users-from-your-sign-in-page). |
+| `loginPage` | `string` | **required** | Where signed-out users are sent, with `?callbackURL=<absolute resume URL>`. A path starting with `/` (not `//`), or an absolute http(s) URL. Backslashes, whitespace and control characters are refused. See [the sign-in page contract](getting-started.md#5-return-users-from-your-sign-in-page). |
 | `signing` | `object` | **required** | The IdP's key and certificate, and signing choices. See [`signing`](#signing). |
 | `serviceProviders` | `ServiceProviderConfig[]` | **required** | SPs defined in code. May be `[]` with a `registry`. See [Service provider options](#service-provider-options). |
 | `assertionLifetimeSeconds` | `number` | `300` | How long an assertion is valid (`NotOnOrAfter`). 30 to 3600; above 300 logs a warning. |

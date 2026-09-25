@@ -91,6 +91,13 @@ function samlPlugin(env: Env, origin: string) {
 /** The current request's `cf` geolocation, for the shared auth instance (see getAuth). */
 export const requestCf = new AsyncLocalStorage<IncomingRequestCfProperties | Record<string, never>>();
 
+/**
+ * The current request's `waitUntil`. Better Auth's background tasks (for example the SAML
+ * plugin's SP metadata refresh) must use it on Workers: work left running after a response
+ * is otherwise cancelled.
+ */
+export const requestWaitUntil = new AsyncLocalStorage<(p: Promise<unknown>) => void>();
+
 function buildAuth(env: Env, origin: string) {
   return betterAuth({
     baseURL: origin,
@@ -122,7 +129,16 @@ function buildAuth(env: Env, origin: string) {
         // ADDENDUM-01: single-use state and rate limits in the database, never KV.
         verification: { storeInDatabase: true },
         rateLimit: { enabled: true, storage: "database" },
-        advanced: { database: { validateSchema: true } },
+        advanced: {
+          database: { validateSchema: true },
+          backgroundTasks: {
+            handler: (p: Promise<unknown>) => {
+              const waitUntil = requestWaitUntil.getStore();
+              if (waitUntil) waitUntil(p);
+              else p.catch(() => {});
+            },
+          },
+        },
         // Plugins go INSIDE withCloudflare's second argument (a `plugins` key next to the
         // spread would replace the Cloudflare plugin and silently drop its storage checks).
         plugins: [admin(), samlPlugin(env, origin)],

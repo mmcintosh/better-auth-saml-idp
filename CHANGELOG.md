@@ -32,6 +32,7 @@ The first npm release (1.0.0) waits for `better-auth-cloudflare` 0.4, which Work
   - `@better-auth/sso`, node-saml and samlify.
   - Keycloak 26.4, SimpleSAMLphp 2.5 and a node-saml POST-binding SP in real Chromium over HTTPS.
   - Verified live with Cloudflare Access.
+- **The guide** (`docs/guide/`): getting started, service providers, flows, users and access, signing and encryption, Single Logout, `@better-auth/sso` interop, Cloudflare Workers, CLI, troubleshooting; and complete references for options, errors, security controls and schema. Links are checked in CI.
 - **Better Auth integration:** organization-scoped SPs and organization attributes (organization plugin), registry permissions through admin-plugin access control (`samlIdpStatements`), a typed client plugin with `signOutEverywhere()` / `launch()`, and tables verified with `npx auth generate`.
 - **Single Logout:** SP- and IdP-initiated, front-channel propagation to every SP in the session, `PartialLogout` reporting, and an authenticated LogoutRequest (signature, or the per-session SessionIndex).
 - **Database-backed SP registry** with an admin-gated management API: add, change, disable and remove SPs without a redeploy.

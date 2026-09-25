@@ -158,6 +158,10 @@ authClient.samlIdp.signOutEverywhere({ returnTo: "/" })
 | `samlIdpServiceProvider` | `registry.enabled` | SPs stored at runtime (JSON config, validated on every write and read) |
 | `samlIdpSessionParticipant` | `singleLogout.enabled` | Which SPs received an assertion in which session |
 
+## Further reading
+
+The full guide covers every option, error code, security control and table: [docs/guide](https://github.com/mmcintosh/better-auth-saml-idp/tree/main/docs/guide).
+
 ## Options
 
 See the [configuration reference](https://github.com/mmcintosh/better-auth-saml-idp#-configuration-options). Run `npx better-auth-saml-idp check-config` to validate your options, and `npx better-auth-saml-idp smoke <url> --sp <entity ID>` to test a deployment.

@@ -847,3 +847,20 @@ The goal is for the plugin to feel native to Better Auth, using its own plugins'
 - **Better Auth CLI.** `npx auth generate` (the CLI moved from `@better-auth/cli` to the `auth` package) was checked from a packed tarball in a clean project. It emits all three plugin tables with their UNIQUE constraints and indexes, for whatever is enabled.
 - **Docs.** `docs/better-auth/saml-idp.mdx` follows Better Auth's plugin-page format (Steps, `package-install`, migrate/generate tabs). `docs/better-auth/community-plugin-entry.ts` is the proposed entry for their Community Plugins list, which currently has no SAML plugin. It hasn't been submitted.
 
+## D-032: The guide, and background work on Workers (2026-09-26)
+
+**Documentation.** Better Auth's `@better-auth/sso` page is about 1,900 lines, and it documents each security control as *how it works / options / errors*, plus a full schema and options reference. Our equivalent material was spread across the README, docs/security.md and this file, so it was consolidated into `docs/guide/`:
+- how-to pages: getting started, service providers, flows, users and access, signing and encryption, Single Logout, `@better-auth/sso` interop, Cloudflare Workers, the CLI, troubleshooting;
+- complete references: options, errors, security controls, schema.
+
+Writing the references surfaced three corrections:
+- `PASSIVE_SIGN_IN_NOT_POSSIBLE` was never produced (IsPassive gets a SAML `NoPassive` Response instead), so it was removed from the public codes before v1.0.
+- `NAMEID_FORMAT` was documented but not exported; it now is.
+- The example Worker didn't wire Better Auth's background tasks to `waitUntil`. See below.
+
+`scripts/check-links.mjs` (`pnpm docs:check`, in CI) checks every relative link and heading anchor.
+
+**Background work on Workers.** Better Auth runs background tasks fire-and-forget unless `advanced.backgroundTasks.handler` is set. On Workers, a promise left running after the response can be cancelled and never settle. Our metadata-refresh cache would then have kept that refresh "in flight" forever, so that isolate would never refresh again. Two fixes:
+- **In the plugin:** a refresh unsettled after 30 s counts as abandoned and is replaced. The first-use wait is also bounded by its own timer, not only by the fetch's abort signal. Tested with a fetch that never settles; mutation-checked (without the rule, no second attempt happens).
+- **In the example:** `advanced.backgroundTasks.handler` passes work to the current request's `waitUntil` (through `AsyncLocalStorage`, since one auth instance serves every request in the isolate). The Workers guide documents this as a requirement.
+

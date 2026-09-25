@@ -18,6 +18,8 @@ const MAX_BYTES = 1024 * 1024;
 const FETCH_TIMEOUT_MS = 5000;
 /** First retry after a failure; doubles up to the refresh interval. */
 const MIN_BACKOFF_MS = 5 * 60_000;
+/** After this long, an unsettled refresh counts as abandoned. */
+const STUCK_MS = 30_000;
 
 interface Learned {
   signingCertificates: string[];
@@ -31,6 +33,7 @@ interface Entry {
   nextAttempt: number;
   backoff: number;
   inflight?: Promise<void>;
+  inflightSince?: number;
   lastError?: string;
 }
 
@@ -105,11 +108,22 @@ export class SpMetadataCache {
       entry = { nextAttempt: 0, backoff: MIN_BACKOFF_MS };
       this.entries.set(key, entry);
     }
+    // A refresh "in flight" for too long was abandoned: on Workers, background work can be
+    // cancelled once a response has gone out, and its promise then never settles. Start afresh.
+    if (entry.inflight && this.now() - (entry.inflightSince ?? 0) > STUCK_MS) entry.inflight = undefined;
     const due = this.now() >= entry.nextAttempt;
-    if (due && !entry.inflight) entry.inflight = this.refresh(sp, entry, log).finally(() => (entry.inflight = undefined));
+    if (due && !entry.inflight) {
+      const run = this.refresh(sp, entry, log).finally(() => {
+        if (entry.inflight === run) entry.inflight = undefined;
+      });
+      entry.inflight = run;
+      entry.inflightSince = this.now();
+    }
     if (entry.inflight) {
       if (entry.learned) background(entry.inflight);
-      else await entry.inflight; // first use: nothing learned yet, so wait (bounded by the fetch timeout)
+      // First use: nothing learned yet, so wait, but never longer than the fetch timeout (plus a
+      // margin), even if a fetch implementation ignores its abort signal.
+      else await Promise.race([entry.inflight, new Promise<void>((r) => setTimeout(r, FETCH_TIMEOUT_MS + 1000))]);
     }
     return this.merge(sp, entry.learned);
   }
