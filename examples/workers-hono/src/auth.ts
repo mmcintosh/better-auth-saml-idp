@@ -39,6 +39,9 @@ type SpJson = Pick<
   | "allowIdpInitiated"
   | "idpInitiatedRelayState"
   | "allowedRelayStates"
+  | "signResponse"
+  | "signAssertion"
+  | "encryption"
 >;
 
 // Built once per isolate. Better Auth itself is created per request (to pass that request's
