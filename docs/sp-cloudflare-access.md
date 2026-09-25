@@ -26,6 +26,9 @@ Cloudflare uses a single URL as both its SP entity ID and its ACS URL. `<team>` 
 
 Put this in `SAML_SERVICE_PROVIDERS`, then redeploy. The plugin's default NameID format is `emailAddress`, which is what Cloudflare requires.
 
+> [!IMPORTANT]
+> **Cloudflare Access sends a RelayState longer than the SAML spec's 80 bytes.** With the default `relayStateMaxBytes` (80), the IdP answers `RELAY_STATE_TOO_LONG`. Set `relayStateMaxBytes: 1024`, as `examples/workers-hono` does. This was verified against a real Zero Trust team on 2026-09-25.
+
 ## 3. Add the IdP in Zero Trust
 
 **Zero Trust → Integrations → Identity providers → Add new identity provider → SAML**
@@ -39,7 +42,7 @@ Put this in `SAML_SERVICE_PROVIDERS`, then redeploy. The plugin's default NameID
 | Email attribute name | `email` (optional; the NameID is already the email) |
 | Sign SAML authentication requests | **off** (signed requests are only supported with HTTP-Redirect; leave this off unless you also configure `requireSignedAuthnRequests` + `spCertificate`) |
 
-Save, then use **Test** on the provider. You'll be sent to the IdP's `/sign-in` page. After you sign in, Cloudflare shows the identity and attributes it received. **Take a screenshot; this is the Phase 3 evidence.**
+Save, then use **Test** on the provider. Run it in a private window: an existing Access session from another login method is reused otherwise, and the result shows that identity instead. You'll be sent to the IdP's `/sign-in` page. After you sign in, Cloudflare shows the identity and attributes it received. **Take a screenshot; this is the Phase 3 evidence.**
 
 ## 4. Protect an app (optional, for a real login)
 

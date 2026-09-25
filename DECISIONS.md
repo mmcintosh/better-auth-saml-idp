@@ -260,7 +260,8 @@ The cross-instance R1 test matters. `consumeVerificationValue`'s in-process lock
 | 1 (CI) | `@node-saml/node-saml` 5.1.0, strict (`validateInResponseTo: always`, both signatures required) | same file: profile NameID, issuer and email verified; **rejects** the Response under the wrong IdP cert |
 | 2 (CI job + local) | Keycloak 26.4, SAML identity broker with `validateSignature` and `wantAssertionsSigned` | `pnpm e2e`: PASS. A new user was created in Keycloak and linked to `our-idp`; first/last name mapped from our attributes |
 | 2 | SimpleSAMLphp 2.5.0 SP | `pnpm e2e`: PASS (new user: NameID + `email, name, firstName, lastName`), PASS (existing IdP session → no login page) |
-| 3 | Cloudflare Access, AWS IAM Identity Center | **Pending, needs the owner's accounts.** Guides: `docs/sp-cloudflare-access.md`, `docs/sp-aws-iam-identity-center.md` |
+| 3 | **Cloudflare Access** (Zero Trust Free, team `aged-bird-8df2`) | **PASS 2026-09-25** (see D-016). |
+| 3 | AWS IAM Identity Center | Pending; needs a sandbox AWS account. Guide: `docs/sp-aws-iam-identity-center.md` |
 | 4 | SAMLtool (samltool.com/validate_response.php) | A throwaway local user and dev key, with the Response from `examples/workers-hono` on workerd → **"The SAML Response is valid."** The same Response with a wrong certificate → **"invalid. Response signature validation failed. Assertion signature validation failed."**, so the check is real |
 
 The tier-2 e2e drives the **example app on workerd** (`wrangler dev`, local D1), with a scripted browser that follows redirects and auto-submits SAML forms. Everything else about it is in `e2e/run.mjs`. Problems found and fixed while building it:
@@ -326,3 +327,20 @@ Smaller verified items, also fixed:
 - Unverified users no longer receive assertions (opt out with `accountPolicy.requireEmailVerified: false`).
 - SPs asking for `RequestedAuthnContext` classes the IdP doesn't assert now get `NoAuthnContext`. `node-saml` asks for `PasswordProtectedTransport` by default, so set `authnContextClassRef` to what your sign-in guarantees.
 - The seen-request table has a new `key` column.
+
+## D-016: Tier-3 evidence: a real Cloudflare Access login (2026-09-25)
+
+**Setup:**
+- `examples/workers-hono` deployed to the owner's Cloudflare account as `better-auth-saml-idp-example.mmcintosh-f61.workers.dev`, with its own D1 database `saml-idp-example` and migrations 0001–0002.
+- Production signing key (RSA-2048, valid until 2028) generated and piped straight into `wrangler secret put`. It was never printed or stored.
+- The deploy config with account-specific IDs is the gitignored `wrangler.deploy.jsonc`.
+- The SP entry was taken from Cloudflare's published SP metadata (`/cdn-cgi/access/saml-metadata`). Its entity ID and ACS URL are both `https://aged-bird-8df2.cloudflareaccess.com/cdn-cgi/access/callback`. The metadata says `AuthnRequestsSigned="true"`, but with "Sign SAML authentication requests" off, Cloudflare sends unsigned requests.
+- The owner's IdP account was verified by hand in D1, because the example sends no email in production.
+
+**Result:** Zero Trust's identity-provider **Test** returned
+`{"email":"mmcintosh@infowall.ai","name":"Mark McIntosh","givenName":"Mark","surName":"McIntosh","saml_attributes":{"email":"mmcintosh@infowall.ai"}}`.
+The IdP logs show the matching sequence: SSO → sign-in → resume, with the assertion auto-posted to Cloudflare.
+
+**Real-world finding: Cloudflare Access sends a RelayState longer than 80 bytes.** The first attempt failed with `RELAY_STATE_TOO_LONG`. The plugin's default follows SAML Bindings §3.4.3 ("MUST NOT exceed 80 bytes"), and none of the IdPs in the comparison research is documented as enforcing that limit. The example now sets `relayStateMaxBytes: 1024`, the plugin's hard cap, and that made the login work. **Open decision for the owner:** raise the plugin default to 1024 and keep 80 as a strict opt-in.
+
+**Not a plugin issue:** the first password attempts failed with "Invalid password". The password typed didn't match the one set at sign-up. The account was deleted and re-created.

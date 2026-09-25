@@ -9,3 +9,4 @@ spike/.coexist-cfg.json
 e2e/.generated/
 test-results/
 playwright-report/
+wrangler.deploy.jsonc
