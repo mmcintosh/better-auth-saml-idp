@@ -319,8 +319,13 @@ async function requestReport(msg: Message, doc: any, opts: DecodeOptions, report
         report.fail(`signature: ${(e as Error).message}`);
       }
     }
-  } else if (child(r, NS.ds, "Signature")) report.info("embedded XML signature (POST binding): not verified here, and the IdP only verifies Redirect-binding signatures");
-  else report.info("unsigned");
+  } else if (child(r, NS.ds, "Signature")) {
+    const sig = verifyEnveloped(msg.xml, doc, r, certs);
+    if (sig.valid === true) report.pass(`embedded XML signature is valid (${sig.algorithm}/${sig.digest})`);
+    else if (sig.valid === false) report.fail(`embedded XML signature: ${sig.problem}`);
+    else report.warn(`signed (embedded XML signature, ${sig.algorithm}/${sig.digest}) but not verified: pass --cert <sp.crt>`);
+    if (msg.source === "redirect") report.warn("an embedded signature on a Redirect-binding request is ignored by the IdP (the binding signs the query)");
+  } else report.info("unsigned");
 }
 
 export async function decode(arg: string | undefined, opts: DecodeOptions): Promise<Report> {

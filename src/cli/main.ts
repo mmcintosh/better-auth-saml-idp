@@ -34,7 +34,8 @@ Commands
       --relay-state <value>    --force-authn  --passive
       --name-id-format <f>     email | persistent | transient | <URI>
       --authn-context <uri>    RequestedAuthnContext (exact)
-      --sign-key <file>        Sign it (Redirect binding) with the SP's key; --sig-alg rsa-sha256|rsa-sha512
+      --sign-key <file>        Sign it with the SP's key (query signature for redirect, XML
+                               signature for post); --sig-alg rsa-sha256|rsa-sha512
   smoke <idp-url>              Security smoke test against a deployed IdP (no user needed)
       --sp <entity-id>         A registered SP (required); --acs if its first ACS URL differs
   sp-from-metadata [file|url|-]  Print a serviceProviders entry from an SP's metadata

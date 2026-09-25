@@ -517,7 +517,7 @@ describe("§7 signed AuthnRequests", () => {
     expect(res.status).toBe(400);
   });
 
-  it("rejects the POST binding when signatures are required (v1: Redirect only)", async () => {
+  it("rejects an unsigned POST-binding request when signatures are required", async () => {
     const { browser } = await signedHost();
     const res = await postBinding(browser, authnRequestXml().xml);
     expect(res.status).toBe(400);

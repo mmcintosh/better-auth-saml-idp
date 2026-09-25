@@ -2,6 +2,7 @@ import { createPublicKey, verify as cryptoVerify } from "node:crypto";
 import { NAMEID_FORMAT, type ResolvedServiceProvider } from "../types";
 import { precheckXml, type SchemaValidator } from "./validator";
 import { parseXmlStrict } from "./xml";
+import { verifyEnvelopedSignature } from "./xmldsig";
 
 export const NS_PROTOCOL = "urn:oasis:names:tc:SAML:2.0:protocol";
 export const NS_ASSERTION = "urn:oasis:names:tc:SAML:2.0:assertion";
@@ -352,15 +353,16 @@ const REDIRECT_SIG_ALGS: Record<string, { hash: string; sha1: boolean }> = {
 
 /**
  * Enforce the SP's signing policy. Redirect-binding signatures are verified over octets built
- * by parseRedirectQuery. POST-binding (embedded XML) signatures are not supported in v1
- * (DECISIONS.md D-012).
+ * by parseRedirectQuery; HTTP-POST signatures are enveloped XML signatures on the AuthnRequest,
+ * verified with the XSW rules in xmldsig.ts (D-025). `xml` is the decoded request (POST only).
  */
-export function checkRequestSignature(raw: RawAuthnRequest, sp: ResolvedServiceProvider, opts: { allowInsecureSha1: boolean }): boolean {
-  if (raw.binding === "post") {
-    if (sp.requireSignedAuthnRequests)
-      throw new SamlRequestError("UNSIGNED_SAML_REQUEST", "signed AuthnRequests must use the HTTP-Redirect binding");
-    return false;
-  }
+export function checkRequestSignature(
+  raw: RawAuthnRequest,
+  sp: ResolvedServiceProvider,
+  opts: { allowInsecureSha1: boolean },
+  xml?: string,
+): boolean {
+  if (raw.binding === "post") return checkPostSignature(xml, sp, opts);
   if (!raw.signed) {
     if (sp.requireSignedAuthnRequests) throw new SamlRequestError("UNSIGNED_SAML_REQUEST", "missing Signature");
     return false;
@@ -390,3 +392,34 @@ export function checkRequestSignature(raw: RawAuthnRequest, sp: ResolvedServiceP
   if (!ok) throw new SamlRequestError("UNSIGNED_SAML_REQUEST", "AuthnRequest signature is invalid");
   return true;
 }
+
+const unsigned = (detail: string) => new SamlRequestError("UNSIGNED_SAML_REQUEST", detail);
+
+function hasComments(node: any): boolean {
+  for (let n = node.firstChild; n; n = n.nextSibling) if (n.nodeType === 8 || (n.nodeType === 1 && hasComments(n))) return true;
+  return false;
+}
+
+function checkPostSignature(xml: string | undefined, sp: ResolvedServiceProvider, opts: { allowInsecureSha1: boolean }): boolean {
+  if (xml === undefined) throw new Error("checkRequestSignature: the POST binding needs the decoded XML");
+  const doc = parseXmlStrict(xml);
+  const count = doc.getElementsByTagNameNS("http://www.w3.org/2000/09/xmldsig#", "Signature").length;
+  if (count === 0) {
+    if (sp.requireSignedAuthnRequests) throw unsigned("missing Signature");
+    return false;
+  }
+  // As with the Redirect binding, a signature is only checked when the SP has certificates.
+  if (sp.spCertificates.length === 0) {
+    if (sp.requireSignedAuthnRequests) throw unsigned("no SP certificate configured");
+    return false;
+  }
+  if (count > 1) throw unsigned(`${count} Signature elements`);
+  // Comments are invisible to exclusive c14n, so text split by one is still "signed"; nothing
+  // legitimate needs them, and refusing them closes the comment-truncation class of bugs.
+  if (hasComments(doc)) throw unsigned("comments are not allowed in a signed AuthnRequest");
+  const r = verifyEnvelopedSignature(xml, doc, doc.documentElement, sp.spCertificates, { allowSha1: opts.allowInsecureSha1 });
+  if (!r.present) throw unsigned("the Signature is not a child of the AuthnRequest");
+  if (r.valid !== true) throw unsigned(`AuthnRequest signature is invalid: ${logSafe(r.problem ?? "", 200)}`);
+  return true;
+}
+

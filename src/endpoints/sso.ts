@@ -135,7 +135,7 @@ export const ssoEndpoint = (state: PluginState) =>
         info = await parseAuthnRequest(xml, options.schemaValidator, { now, clockSkewSeconds: options.clockSkewSeconds, ssoUrl });
         sp = registry.byEntityId(info.issuer);
         if (!sp) return fail(ctx, "UNKNOWN_SERVICE_PROVIDER", `issuer not registered (${info.issuer.length} chars)`);
-        checkRequestSignature(raw, sp, { allowInsecureSha1: options.signing.allowInsecureSha1 });
+        checkRequestSignature(raw, sp, { allowInsecureSha1: options.signing.allowInsecureSha1 }, xml);
         const acsUrl = resolveAcsUrl(sp, info.acsUrl);
         if (!acsUrl) return fail(ctx, "ACS_URL_NOT_ALLOWED", `SP ${sp.id}`);
         req = {

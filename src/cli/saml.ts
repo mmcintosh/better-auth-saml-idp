@@ -1,9 +1,9 @@
 // SAML reading helpers for the CLI: IdP metadata, enveloped-signature verification and
 // XML Encryption decryption. Written for diagnostics: every step reports what it found.
 import { constants, createDecipheriv, privateDecrypt } from "node:crypto";
-import { SignedXml } from "xml-crypto";
 import { precheckXml } from "../saml/validator";
 import { parseXmlStrict } from "../saml/xml";
+import { type EnvelopedSignatureResult, verifyEnvelopedSignature } from "../saml/xmldsig";
 import { certFromBase64, UsageError } from "./util";
 
 export const NS = {
@@ -78,50 +78,17 @@ export function readIdpMetadata(xml: string): IdpMetadata {
 // Enveloped signatures
 // ---------------------------------------------------------------------------------------
 
-export interface SignatureResult {
-  present: boolean;
-  /** undefined when no certificate was available to check against. */
-  valid: boolean | undefined;
-  algorithm?: string;
-  digest?: string;
-  /** Index into the certificates that verified it. */
-  certIndex?: number;
-  problem?: string;
-}
+export type SignatureResult = EnvelopedSignatureResult;
 
 const short = (uri: string | null | undefined) => (uri ? (uri.split("#")[1] ?? uri) : "?");
 
 /**
- * Verify the ds:Signature that is a direct child of `el` against each certificate. Beyond the
- * cryptographic check, the signature must reference exactly `el` (URI="#<its ID>") and that ID
- * must be unique in the document — the checks that stop signature-wrapping attacks.
+ * Verify the ds:Signature that is a direct child of `el` — the plugin's own verifier (XSW rules in
+ * src/saml/xmldsig.ts), so the CLI reports exactly what the IdP would accept. SHA-1 is allowed
+ * here and reported separately.
  */
 export function verifyEnveloped(xml: string, doc: any, el: any, certs: string[]): SignatureResult {
-  const sigEl = child(el, NS.ds, "Signature");
-  if (!sigEl) return { present: false, valid: undefined };
-  const signedInfo = child(sigEl, NS.ds, "SignedInfo");
-  const algorithm = short(child(signedInfo, NS.ds, "SignatureMethod")?.getAttribute("Algorithm"));
-  const refs = children(signedInfo, NS.ds, "Reference");
-  const digest = short(child(refs[0], NS.ds, "DigestMethod")?.getAttribute("Algorithm"));
-  const base = { present: true, algorithm, digest };
-  const id = el.getAttribute("ID");
-  if (refs.length !== 1) return { ...base, valid: false, problem: `${refs.length} References (expected exactly 1)` };
-  if (!id || refs[0].getAttribute("URI") !== `#${id}`)
-    return { ...base, valid: false, problem: `Reference URI ${refs[0].getAttribute("URI")} does not point at this element (ID ${id})` };
-  const sameId = descendants(doc, "*", "*").filter((e) => e.getAttribute?.("ID") === id).length;
-  if (sameId !== 1) return { ...base, valid: false, problem: `ID ${id} appears ${sameId} times (signature wrapping?)` };
-  if (certs.length === 0) return { ...base, valid: undefined };
-  let lastError = "signature value does not verify with any given certificate";
-  for (const [i, cert] of certs.entries()) {
-    try {
-      const sig = new SignedXml({ publicCert: cert, getCertFromKeyInfo: () => null });
-      sig.loadSignature(sigEl);
-      if (sig.checkSignature(xml)) return { ...base, valid: true, certIndex: i };
-    } catch (e) {
-      lastError = (e as Error).message;
-    }
-  }
-  return { ...base, valid: false, problem: lastError };
+  return verifyEnvelopedSignature(xml, doc, el, certs, { allowSha1: true });
 }
 
 // ---------------------------------------------------------------------------------------

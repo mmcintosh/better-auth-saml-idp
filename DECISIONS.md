@@ -240,7 +240,7 @@ The cross-instance R1 test matters. `consumeVerificationValue`'s in-process lock
   2. `precheckXml`, then the XSD check (libxml2 WASM), then a strict xmldom parse.
   3. Structural checks: the root is `samlp:AuthnRequest` with Version 2.0, it has exactly one direct `Issuer`, `IssueInstant` is within 300 s plus skew and not in the future, `Destination` (if present) equals our SSO URL, `ProtocolBinding` (if present) is HTTP-POST, and `NameIDPolicy@Format` is absent, unspecified or the SP's format.
   4. Then the SP lookup, the signature policy, the ACS allow-list and the R2 insert.
-- **Signed AuthnRequests.** HTTP-Redirect only, verified over the raw query octets (`SAMLRequest`, `RelayState`, `SigAlg`, as received) using `node:crypto` and the SP certificate. This has no XML-signature surface and so no XSW exposure. **POST-binding signed requests aren't supported in v1:** an SP that requires signing and posts is rejected with `UNSIGNED_SAML_REQUEST`. This matches SPEC §9's stretch list. SHA-1 `SigAlg` is refused unless `allowInsecureSha1` is set.
+- **Signed AuthnRequests.** HTTP-Redirect only, verified over the raw query octets (`SAMLRequest`, `RelayState`, `SigAlg`, as received) using `node:crypto` and the SP certificate. This has no XML-signature surface and so no XSW exposure. **POST-binding signed requests weren't supported in v1:** an SP that required signing and posted was rejected with `UNSIGNED_SAML_REQUEST` (SPEC §9 stretch list). They're supported since D-025. SHA-1 `SigAlg` is refused unless `allowInsecureSha1` is set.
 - **Issuance** (`src/endpoints/issue.ts`), right before signing:
   1. **R3:** `findUserById` (a database read) → missing or banned (admin `banned`, respecting `banExpires`) → `ACCOUNT_INACTIVE`. Where the database holds sessions (no secondary storage, or `storeSessionInDatabase`), the session row is re-read by token → missing or expired → `ACCOUNT_INACTIVE`. This covers #61: a KV-cached session is refused once its database row is gone (tested with an atomic in-memory cache standing in for KV).
   2. `authorize()` runs on the fresh user. A denial or an exception gives `ACCESS_DENIED` (403).
@@ -563,4 +563,42 @@ Spec open question 5. `serviceProviders[].attributes` accepts a map as well as a
 - Validation messages name the exact problem (for example `part: must be "first" or "last"`), not zod's generic "Invalid input".
 
 **Tests.** Unit tests cover every source type and edge case, inherited properties, and each validation message. An integration test has the strict samlify SP read mapped fields, the admin plugin's `role`, name parts, constants and escaped values. It also checks that a missing field is left out and warned about exactly once.
+
+## D-025: Signed AuthnRequests over HTTP-POST (2026-09-25)
+
+**What.** A POST-binding AuthnRequest may carry an enveloped XML signature. Policy is unchanged: `requireSignedAuthnRequests` and `spCertificate` work as for Redirect.
+- A signature is verified whenever the SP has certificates.
+- An invalid signature is always rejected.
+- With no SP certificates and no requirement, a signature is ignored.
+
+The Redirect binding still verifies the query octets. An embedded signature on a Redirect request is ignored, because that binding signs the query.
+
+**Signature wrapping is the risk, so verification is by allow-list, in `src/saml/xmldsig.ts`, before any cryptography:**
+1. Exactly one `ds:Signature` in the document, and it's a direct child of the AuthnRequest. The XSD also allows at most one.
+2. Exactly one `Reference`, whose URI is `#` plus the AuthnRequest's `ID`.
+3. That value appears on exactly one element across `ID`, `Id` and `id` attributes, which is every attribute xml-crypto may resolve a reference through. The XSD's `xs:ID` uniqueness catches the plain duplicate first. Our check also covers `Id`/`id` on foreign elements.
+4. Canonicalization is exc-c14n or c14n 1.0, with no `WithComments`. Transforms are enveloped-signature and those two only, so no XPath or XSLT. Signatures are rsa-sha256 or rsa-sha512, and digests sha256 or sha512. SHA-1 is allowed only with `allowInsecureSha1`.
+5. No XML comments anywhere in a signed request. Exclusive c14n drops comments, so `sp<!---->.evil` would keep a valid signature. We read text with `textContent`, which isn't vulnerable, but refusing comments closes that class of bug outright.
+6. Verification uses the SP's configured certificates only (`getCertFromKeyInfo: () => null`). A certificate in the message's `KeyInfo` is never trusted.
+
+The verified document is the same string, parsed by the same xmldom, that the request pipeline reads. So what's verified is what's processed.
+
+**Evidence.**
+- 14 integration tests (both runtimes):
+  - accepted: sha256 and sha512;
+  - interop: node-saml's own signed POST request;
+  - refused: unsigned, altered, wrong key with the attacker's certificate in `KeyInfo`, SHA-1 without the opt-in, wrapping inside `Extensions`, a duplicated ID, comment injection, `WithComments`, two signatures;
+  - SP key rotation;
+  - optional-signature policy.
+- 10 unit tests exercise each rule without the XSD in front.
+- **Mutation proof:** disabling each rule in turn made at least one test fail:
+  - Reference-URI check: 2 tests. Without it, xml-crypto accepted the wrapped request **end to end**. So this rule, not the library, is what stops signature wrapping.
+  - ID uniqueness: 1 test.
+  - c14n allow-list: 1 test.
+  - transform allow-list: 1 test.
+  - ignoring KeyInfo: 5 tests.
+  - comment refusal: 1 test.
+  - multiple signatures: 1 test.
+  - POST verification removed entirely: 8 tests.
+- The CLI's `decode` now uses this same verifier, for Responses too. `request --binding post --sign-key` produces a signed POST request, which the IdP accepts in a test.
 

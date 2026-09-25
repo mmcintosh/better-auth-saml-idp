@@ -1,6 +1,7 @@
 // `request`: build an AuthnRequest to try an IdP by hand (open the URL in a browser).
 import { createPrivateKey, sign } from "node:crypto";
 import { deflateRawSync } from "node:zlib";
+import { SignedXml } from "xml-crypto";
 import { escapeXml, newSamlId } from "../saml/response";
 import { metadataUrl, readIdpMetadata } from "./saml";
 import { fetchText, httpsOnly, readFileArg, Report, UsageError } from "./util";
@@ -20,10 +21,12 @@ export interface RequestOptions {
   allowHttp: boolean;
 }
 
-const SIG_ALGS: Record<string, { uri: string; hash: string }> = {
-  "rsa-sha256": { uri: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256", hash: "sha256" },
-  "rsa-sha512": { uri: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha512", hash: "sha512" },
+const SIG_ALGS: Record<string, { uri: string; hash: string; digest: string }> = {
+  "rsa-sha256": { uri: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256", hash: "sha256", digest: "http://www.w3.org/2001/04/xmlenc#sha256" },
+  "rsa-sha512": { uri: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha512", hash: "sha512", digest: "http://www.w3.org/2001/04/xmlenc#sha512" },
 };
+const EXC_C14N = "http://www.w3.org/2001/10/xml-exc-c14n#";
+const ENVELOPED = "http://www.w3.org/2000/09/xmldsig#enveloped-signature";
 
 const NAMEID: Record<string, string> = {
   email: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
@@ -57,7 +60,6 @@ export async function request(target: string | undefined, opts: RequestOptions):
   if (!target) throw new UsageError("request needs the IdP URL");
   if (!opts.sp) throw new UsageError("--sp <entity ID of a registered SP> is required");
   if (opts.binding !== "redirect" && opts.binding !== "post") throw new UsageError("--binding must be redirect or post");
-  if (opts.signKey && opts.binding === "post") throw new UsageError("--sign-key works with --binding redirect (the IdP verifies Redirect-binding signatures only)");
   const report = new Report();
 
   const url = metadataUrl(httpsOnly(target, opts.allowHttp).href, opts.basePath);
@@ -70,7 +72,7 @@ export async function request(target: string | undefined, opts: RequestOptions):
 
   const id = newSamlId();
   const nameIdFormat = opts.nameIdFormat ? (NAMEID[opts.nameIdFormat] ?? opts.nameIdFormat) : undefined;
-  const xml = buildAuthnRequest({ id, issuer: opts.sp, destination: sso, acs: opts.acs, forceAuthn: opts.forceAuthn, passive: opts.passive, nameIdFormat, authnContext: opts.authnContext });
+  let xml = buildAuthnRequest({ id, issuer: opts.sp, destination: sso, acs: opts.acs, forceAuthn: opts.forceAuthn, passive: opts.passive, nameIdFormat, authnContext: opts.authnContext });
   report.section("AuthnRequest", {
     ID: id,
     Issuer: opts.sp,
@@ -85,6 +87,17 @@ export async function request(target: string | undefined, opts: RequestOptions):
   report.data = { id, xml, sso };
 
   if (opts.binding === "post") {
+    if (opts.signKey) {
+      const alg = SIG_ALGS[opts.sigAlg];
+      if (!alg) throw new UsageError(`--sig-alg must be one of ${Object.keys(SIG_ALGS).join(", ")}`);
+      // Enveloped XML signature after the Issuer, as the schema requires (D-025).
+      const sig = new SignedXml({ privateKey: readFileArg(opts.signKey, "signing key"), signatureAlgorithm: alg.uri, canonicalizationAlgorithm: EXC_C14N });
+      sig.addReference({ xpath: "/*", transforms: [ENVELOPED, EXC_C14N], digestAlgorithm: alg.digest });
+      sig.computeSignature(xml, { prefix: "ds", location: { reference: "/*/*[local-name(.)='Issuer']", action: "after" } });
+      xml = sig.getSignedXml();
+      report.data.xml = xml;
+      report.pass(`signed with ${opts.sigAlg} (enveloped XML signature)`);
+    }
     const form =
       `<!doctype html><meta charset="utf-8"><title>SAML AuthnRequest</title>` +
       `<form method="post" action="${escapeXml(sso)}">` +

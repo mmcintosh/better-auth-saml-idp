@@ -151,7 +151,7 @@ describe("cli: decode a Response", () => {
     const assertion = doc.getElementsByTagNameNS("urn:oasis:names:tc:SAML:2.0:assertion", "Assertion")[0];
     const r = verifyEnveloped(form.xml, doc, assertion, [keys.idp.certificate]);
     expect(r.valid).toBe(false);
-    expect(r.problem).toMatch(/appears 2 times/);
+    expect(r.problem).toMatch(/appears on 2 elements/);
   });
 
   it("refuses a DOCTYPE", async () => {
@@ -182,6 +182,26 @@ describe("cli: request + decode an AuthnRequest", () => {
     expect(failures(await json(["decode", url, "--cert", SP_CERT]))).toEqual([]);
     const bad = await json(["decode", url, "--cert", OTHER_CERT]);
     expect(failures(bad).join()).toMatch(/signature is invalid/);
+  });
+
+  it("post binding with --sign-key: an XML-signed request that decode verifies and the IdP accepts", async () => {
+    const { browser } = await host({ saml: { serviceProviders: [{ id: "test-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], requireSignedAuthnRequests: true, spCertificate: keys.sp.certificate }] } });
+    await browser.signUp();
+    const r = await json(["request", BASE_URL, "--sp", SP_ENTITY_ID, "--binding", "post", "--sign-key", SP_KEY]);
+    const b64 = /name="SAMLRequest" value="([^"]+)"/.exec(r.report.output!)![1]!;
+    const d = await json(["decode", `SAMLRequest=${b64}`, "--cert", SP_CERT]);
+    expect(d.report.checks.some((c) => c.status === "pass" && /embedded XML signature is valid/.test(c.message))).toBe(true);
+    expect(failures(await json(["decode", `SAMLRequest=${b64}`, "--cert", OTHER_CERT])).join()).toMatch(/embedded XML signature/);
+    const res = await browser.follow(
+      await browser.fetch(`${BASE_URL}/api/auth/saml2/idp/sso`, {
+        method: "POST",
+        crossSite: true,
+        headers: { "content-type": "application/x-www-form-urlencoded", origin: "https://sp.test" },
+        body: new URLSearchParams({ SAMLRequest: b64 }).toString(),
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect((await readAutoPost(res)).xml).toMatch(/status:Success/);
   });
 
   it("post binding prints an auto-submit form", async () => {

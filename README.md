@@ -206,7 +206,7 @@ For hosts with many SPs or changing SPs.
 - **Single Logout.** SP-initiated, front-channel first. Entra, Okta, Keycloak and authentik support it; Shibboleth calls it best-effort.
 - **Database-backed SP registry and API.** Add and change SPs at runtime without a redeploy (spec stretch goal).
 - **SP metadata URL with refresh.** Pick up SP certificate rotation automatically.
-- **Signed AuthnRequests over HTTP-POST.** XML-signature verification with XSW defences, pinned to the SP's certificate.
+- **Signed AuthnRequests over HTTP-POST (done).** Enveloped XML signatures with XSW defences, pinned to the SP's certificates; node-saml interop; each defence mutation-tested.
 
 ### Later: Considered
 
