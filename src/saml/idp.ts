@@ -25,7 +25,9 @@ export function createIdp(options: ResolvedSamlIdpOptions, baseURL: string): Idp
     isAssertionEncrypted: false,
     // Per-SP enforcement happens in the sso endpoint; metadata advertises the strict
     // setting only if every SP requires it.
-    wantAuthnRequestsSigned: options.serviceProviders.every((sp) => sp.requireSignedAuthnRequests),
+    // Only a promise we can keep: with a registry, SPs added later may not sign.
+    wantAuthnRequestsSigned:
+      options.registry === undefined && options.serviceProviders.length > 0 && options.serviceProviders.every((sp) => sp.requireSignedAuthnRequests),
     requestSignatureAlgorithm: SIGNATURE_ALGORITHM_URI[options.signing.signatureAlgorithm],
     nameIDFormat: nameIdFormats,
     singleSignOnService: [

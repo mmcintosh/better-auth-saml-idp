@@ -16,6 +16,12 @@ export const SAML_IDP_ERROR_CODES = defineErrorCodes({
   REAUTHENTICATION_REQUIRED: "This application requires you to sign in again",
   PASSIVE_SIGN_IN_NOT_POSSIBLE: "You must sign in before continuing to this application",
   INTERNAL_ERROR: "Sign-in could not be completed",
+  // Registry API (D-027)
+  REGISTRY_NOT_ALLOWED: "You are not allowed to manage SAML service providers",
+  INVALID_SERVICE_PROVIDER: "Invalid service provider configuration",
+  SERVICE_PROVIDER_EXISTS: "A service provider with this id or entity ID already exists",
+  SERVICE_PROVIDER_NOT_FOUND: "Service provider not found",
+  SERVICE_PROVIDER_IN_CODE: "This service provider is defined in code and can't be managed here",
 });
 
 export type SamlIdpErrorCode = keyof typeof SAML_IDP_ERROR_CODES;
@@ -36,4 +42,9 @@ export const ERROR_STATUS: Record<SamlIdpErrorCode, number> = {
   REAUTHENTICATION_REQUIRED: 401,
   PASSIVE_SIGN_IN_NOT_POSSIBLE: 401,
   INTERNAL_ERROR: 500,
+  REGISTRY_NOT_ALLOWED: 403,
+  INVALID_SERVICE_PROVIDER: 400,
+  SERVICE_PROVIDER_EXISTS: 409,
+  SERVICE_PROVIDER_NOT_FOUND: 404,
+  SERVICE_PROVIDER_IN_CODE: 409,
 };

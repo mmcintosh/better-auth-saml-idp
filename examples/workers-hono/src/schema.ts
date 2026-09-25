@@ -102,4 +102,16 @@ export const samlIdpSeenRequests = sqliteTable(
   ],
 );
 
-export const schema = { users, sessions, accounts, verifications, rateLimits, samlIdpSeenRequests };
+/** Database-backed SP registry (only needed with `registry.enabled`; D-027). */
+export const samlIdpServiceProviders = sqliteTable("saml_idp_service_providers", {
+  id: text("id").primaryKey(),
+  spId: text("sp_id").notNull().unique(),
+  entityId: text("entity_id").notNull().unique(),
+  config: text("config").notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  updatedBy: text("updated_by"),
+});
+
+export const schema = { users, sessions, accounts, verifications, rateLimits, samlIdpSeenRequests, samlIdpServiceProviders };

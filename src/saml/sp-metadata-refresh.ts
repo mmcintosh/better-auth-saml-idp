@@ -63,10 +63,13 @@ export class SpMetadataCache {
    */
   async prepare(sp: ResolvedServiceProvider, log: MetadataLogger, background: (p: Promise<unknown>) => void): Promise<ResolvedServiceProvider> {
     if (!sp.metadata) return sp;
-    let entry = this.entries.get(sp.id);
+    // Keyed by SP and URL: a registry SP's URL can change at runtime.
+    const key = `${sp.id}\u0000${sp.metadata.url}`;
+    let entry = this.entries.get(key);
     if (!entry) {
+      if (this.entries.size >= 1000) this.entries.clear();
       entry = { nextAttempt: 0, backoff: MIN_BACKOFF_MS };
-      this.entries.set(sp.id, entry);
+      this.entries.set(key, entry);
     }
     const due = this.now() >= entry.nextAttempt;
     if (due && !entry.inflight) entry.inflight = this.refresh(sp, entry, log).finally(() => (entry.inflight = undefined));
@@ -79,7 +82,7 @@ export class SpMetadataCache {
 
   status(sp: ResolvedServiceProvider): MetadataStatus | undefined {
     if (!sp.metadata) return undefined;
-    const e = this.entries.get(sp.id);
+    const e = this.entries.get(`${sp.id}\u0000${sp.metadata.url}`);
     return {
       url: sp.metadata.url,
       fetchedAt: e?.learned ? new Date(e.learned.fetchedAt) : undefined,

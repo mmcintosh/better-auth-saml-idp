@@ -26,7 +26,7 @@ import {
 import { recordRequestId } from "../storage/seen";
 import { sweepExpired } from "../storage/sweep";
 import type { ResolvedServiceProvider } from "../types";
-import { fail, issueResponse, type PluginState, prepareSp, samlError } from "./issue";
+import { fail, issueResponse, lookupLog, type PluginState, prepareSp, samlError, spById } from "./issue";
 
 export const RESUME_PATH = "/saml2/idp/resume";
 export const BINDING_COOKIE = "saml_idp_binding";
@@ -106,7 +106,7 @@ export const ssoEndpoint = (state: PluginState) =>
       },
     },
     async (ctx) => {
-      const { options, registry } = state;
+      const { options } = state;
       await sweepExpired(ctx.context.adapter as any, (what, e) => ctx.context.logger.warn(`[saml-idp] cleanup of expired ${what} failed`, e));
       const isPost = ctx.request?.method === "POST";
 
@@ -115,7 +115,7 @@ export const ssoEndpoint = (state: PluginState) =>
         const req = await consumeContinuation(ctx.context.internalAdapter, ctx.query.cid);
         if (!req) return fail(ctx, "PENDING_REQUEST_NOT_FOUND", "unknown or used continuation");
         if (req.requestId === undefined) return fail(ctx, "PENDING_REQUEST_NOT_FOUND", "continuation without a request ID");
-        const sp = registry.byId(req.spId);
+        const sp = await spById(ctx, state, req.spId);
         if (!sp || resolveAcsUrl(sp, req.acsUrl) !== req.acsUrl) return fail(ctx, "UNKNOWN_SERVICE_PROVIDER", "SP changed");
         return proceed(ctx, state, sp, req);
       }
@@ -133,7 +133,7 @@ export const ssoEndpoint = (state: PluginState) =>
         checkRelayState(raw.relayState, options.relayStateMaxBytes);
         const xml = await decodeAuthnRequest(raw);
         info = await parseAuthnRequest(xml, options.schemaValidator, { now, clockSkewSeconds: options.clockSkewSeconds, ssoUrl });
-        sp = registry.byEntityId(info.issuer);
+        sp = await state.directory.byEntityId(ctx.context.adapter as any, info.issuer, lookupLog(ctx));
         if (!sp) return fail(ctx, "UNKNOWN_SERVICE_PROVIDER", `issuer not registered (${info.issuer.length} chars)`);
         sp = await prepareSp(ctx, state, sp); // the SP's signing certificates may come from metadata
         checkRequestSignature(raw, sp, { allowInsecureSha1: options.signing.allowInsecureSha1 }, xml);

@@ -10,7 +10,8 @@ import { resolveOptions } from "./options";
 import { idpCache, SSO_PATH } from "./saml/idp";
 import { samlIdpSchema } from "./schema";
 import { SpMetadataCache } from "./saml/sp-metadata-refresh";
-import { createSpRegistry } from "./saml/sp-registry";
+import { SpDirectory } from "./saml/sp-directory";
+import { registryEndpoints } from "./endpoints/registry";
 import type { SamlIdpOptions } from "./types";
 
 export { SAML_IDP_ERROR_CODES } from "./errors";
@@ -22,9 +23,9 @@ export type * from "./types";
 
 export const samlIdp = (options: SamlIdpOptions) => {
   const resolved = resolveOptions(options);
-  const registry = createSpRegistry(resolved.serviceProviders);
+  const directory = new SpDirectory(resolved.serviceProviders, resolved);
   const getIdp = idpCache(resolved);
-  const state = { options: resolved, registry, metadata: new SpMetadataCache(resolved.schemaValidator) };
+  const state = { options: resolved, directory, metadata: new SpMetadataCache(resolved.schemaValidator) };
 
   return {
     id: "saml-idp",
@@ -44,11 +45,12 @@ export const samlIdp = (options: SamlIdpOptions) => {
       samlIdpSingleSignOn: ssoEndpoint(state),
       samlIdpResume: resumeEndpoint(state),
       samlIdpInitiatedSignOn: initEndpoint(state),
+      ...(resolved.registry?.canManage ? registryEndpoints(state) : {}),
     },
     // A fresh schema object per plugin: mergeSchema mutates its first argument, so a shared
     // module-level object would leak one instance's renames into every other (finding #10).
-    schema: mergeSchema(samlIdpSchema(), resolved.schema),
+    schema: mergeSchema(samlIdpSchema({ registry: resolved.registry !== undefined }), resolved.schema),
     $ERROR_CODES: SAML_IDP_ERROR_CODES,
-    options: { registry },
+    options: { directory },
   } satisfies BetterAuthPlugin;
 };

@@ -648,3 +648,47 @@ The verified document is the same string, parsed by the same xmldom, that the re
 
 The live test also found a **workerd incompatibility the stubbed tests couldn't**: workerd rejects `fetch(..., { redirect: "error" })` ("does not make sense at the edge"). The first attempt therefore failed closed. The refresh failed, no certificates were learned, and the signed request was refused with `UNSIGNED_SAML_REQUEST`. The fix is `redirect: "manual"`, with any non-200 response, including a 3xx, treated as a failure. A redirect test was added.
 
+## D-027: Database-backed SP registry and management API (2026-09-25)
+
+**What.** `registry: { enabled, canManage?, cacheSeconds?, authorize? }`.
+- It adds a `samlIdpServiceProvider` table with columns spId (unique), entityId (unique), config (JSON), enabled, and created/updated/updatedBy.
+- The table is only in the plugin schema when the registry is enabled, so D1 `validateSchema` hosts without it need no migration.
+- SPs are looked up in code first, then in the table.
+- With `canManage`, five endpoints manage stored SPs: list, get, create, update (full replacement, id immutable) and delete.
+
+**Stored SPs are data, not code.**
+- They use the option schema minus `nameId`/`authorize`, and `attributes` must be a map (D-024).
+- `authorize` for stored SPs comes from `registry.authorize`.
+- One shared `resolveServiceProvider()` validates code SPs and stored SPs. That refactor also made SP certificates parse at startup, which they didn't before, so a garbage `spCertificate` is now a configuration error.
+
+**Trust boundaries.**
+- **API access:**
+  - The API is mounted only when `canManage` exists, and it uses `sensitiveSessionMiddleware`, which reads the session and user from the database.
+  - Mutation proof: with the plain session middleware and Better Auth's cookie cache on, a **demoted admin kept access**. The authoritative read is what revokes it.
+  - Impersonated sessions are refused, `canManage` must return `true` (a throw denies), Better Auth's origin checks apply (verified with `disableOriginCheck: false`, because Better Auth disables origin checks under test), and every change is audit-logged with the user id.
+- **Rows edited directly in the database:**
+  - Every row is re-validated on each (cache-missing) load, and invalid JSON or config is ignored and logged.
+  - The lookup columns must equal the config's id and entityId, a disabled row is never used, and code SPs always win.
+  - The API refuses the id or entity ID of a code SP (409). UNIQUE columns decide create races, and a read only classifies the failure, as for R2.
+- **Load:** lookups are cached per isolate (default 60 s), misses too, capped at 2000 entries, so unknown issuers don't each cost a read. Other isolates see changes within `cacheSeconds`; that's tested both ways.
+- **Metadata:** with a registry, IdP metadata no longer claims `WantAuthnRequestsSigned`, because SPs added later might not sign. The metadata-refresh cache is keyed by SP *and* URL.
+
+**Evidence.**
+- 43 tests (both runtimes):
+  - lifecycle: create, then sign in at once with stored attributes; list and get; update, where the old ACS stops working; disable; delete; required signed requests;
+  - validation: five invalid-config cases with their issues;
+  - conflicts: duplicates, and code-SP conflicts;
+  - access: unmounted without `canManage`; 401 and 403; demotion, with and without the cookie cache; impersonation; origin; `canManage` throwing;
+  - isolates: two sharing one database, with 0 s and 60 s caches;
+  - a tampered row;
+  - the conditional schema.
+- **Mutation proof:** disabling each of these made tests fail:
+  - impersonation refusal: 1 test;
+  - the `canManage` decision: 3;
+  - code-SP conflict: 1;
+  - re-validating stored rows: 1;
+  - disabled rows: 1;
+  - authoritative session: 1, once the cookie-cache test was added (0 before, which is why it was added).
+
+**Verified live on Workers + D1 (2026-09-25).** Migration `0003_service_providers.sql` was applied to the example's D1 database, and the example was deployed with `registry.enabled`. The API is limited to emails in `SAML_REGISTRY_ADMINS` with verified addresses. A stored SP (`smoke-db`) was inserted as a D1 row, and `npx better-auth-saml-idp smoke --sp https://smoke-db.invalid/sp` passed **15/15** against production. The code-configured SP still passed 15/15 as well.
+

@@ -32,6 +32,8 @@ The first npm release (1.0.0) waits for `better-auth-cloudflare` 0.4, which Work
   - `@better-auth/sso`, node-saml and samlify.
   - Keycloak 26.4, SimpleSAMLphp 2.5 and a node-saml POST-binding SP in real Chromium over HTTPS.
   - Verified live with Cloudflare Access.
+- **Database-backed SP registry** with an admin-gated management API: add, change, disable and remove SPs without a redeploy.
+- **SP certificates are parsed at startup**, so a malformed `spCertificate` is a configuration error instead of a sign-in failure.
 - **SP metadata URL with refresh:** an SP's signing and encryption certificates are kept current from its metadata. Entity ID and ACS URLs stay pinned, and the metadata signature can be pinned too.
 - **Signed AuthnRequests over HTTP-POST:** enveloped XML signatures verified with signature-wrapping defences. The Redirect binding keeps its query signatures.
 - **Declarative attribute mapping per SP:** `attributes` can be a map (field, constant, split list, first/last name) instead of a function, so SPs can be configured in JSON.

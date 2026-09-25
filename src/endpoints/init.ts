@@ -6,7 +6,7 @@ import { confirmPage } from "../saml/post-form";
 import { sweepExpired } from "../storage/sweep";
 import type { ValidatedRequest } from "../storage/pending";
 import type { ResolvedServiceProvider } from "../types";
-import { fail, issueResponse, type PluginState } from "./issue";
+import { fail, issueResponse, type PluginState, spById } from "./issue";
 import { parkForLogin } from "./sso";
 
 export const INIT_PATH = "/saml2/idp/init";
@@ -51,10 +51,10 @@ export const initEndpoint = (state: PluginState) =>
       },
     },
     async (ctx) => {
-      const { options, registry } = state;
+      const { options } = state;
       await sweepExpired(ctx.context.adapter as any, (what, e) => ctx.context.logger.warn(`[saml-idp] cleanup of expired ${what} failed`, e));
       const spId = ctx.query?.sp;
-      const sp = spId === undefined ? undefined : registry.byId(spId);
+      const sp = spId === undefined ? undefined : await spById(ctx, state, spId);
       if (!sp) return fail(ctx, "UNKNOWN_SERVICE_PROVIDER", `init: unknown sp (${spId?.length ?? 0} chars)`);
       if (!sp.allowIdpInitiated) return fail(ctx, "IDP_INITIATED_NOT_ALLOWED", `SP ${sp.id}`);
 

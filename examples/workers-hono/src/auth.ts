@@ -18,6 +18,8 @@ export interface Env {
   SAML_IDP_ADDITIONAL_CERTS?: string;
   /** JSON: [{ "id": "...", "entityId": "...", "acsUrls": ["..."] }] */
   SAML_SERVICE_PROVIDERS: string;
+  /** Comma-separated emails allowed to manage stored SPs through the registry API (D-027). */
+  SAML_REGISTRY_ADMINS?: string;
   /**
    * DEVELOPMENT ONLY. "true" keeps verification links in memory and serves them at
    * /dev/mailbox instead of sending email. Never set this in production.
@@ -59,7 +61,8 @@ const DEFAULT_ATTRIBUTES = {
 let plugin: { key: string; value: ReturnType<typeof samlIdp> } | undefined;
 
 function samlPlugin(env: Env, origin: string) {
-  const key = `${origin}\n${env.SAML_SERVICE_PROVIDERS}\n${env.SAML_IDP_CERT}\n${env.SAML_IDP_ADDITIONAL_CERTS ?? ""}`;
+  const key = `${origin}\n${env.SAML_SERVICE_PROVIDERS}\n${env.SAML_IDP_CERT}\n${env.SAML_IDP_ADDITIONAL_CERTS ?? ""}\n${env.SAML_REGISTRY_ADMINS ?? ""}`;
+  const admins = new Set((env.SAML_REGISTRY_ADMINS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean));
   if (plugin?.key === key) return plugin.value;
   const sps = JSON.parse(env.SAML_SERVICE_PROVIDERS || "[]") as SpJson[];
   const value = samlIdp({
@@ -71,6 +74,12 @@ function samlPlugin(env: Env, origin: string) {
       additionalCertificates: pemBlocks(env.SAML_IDP_ADDITIONAL_CERTS),
     },
     serviceProviders: sps.map((sp) => ({ ...sp, attributes: sp.attributes ?? DEFAULT_ATTRIBUTES })),
+    // SPs can also be stored in D1 (migration 0003). The API is only mounted for listed admins,
+    // who must have a verified email.
+    registry: {
+      enabled: true,
+      canManage: admins.size ? ({ user }) => user.emailVerified === true && admins.has(user.email.toLowerCase()) : undefined,
+    },
   });
   plugin = { key, value };
   return value;

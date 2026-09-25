@@ -14,7 +14,7 @@ Our own column links to the tests that prove each entry. The roadmap derived fro
 ## Where we trail
 
 - **Breadth of flows.** No Single Logout yet.
-- **SP onboarding.** SPs are configured in code or imported from metadata; no database registry or UI yet.
+- **SP onboarding.** No bundled admin UI: hosts build one on the registry API.
 
 ## Feature matrix
 
@@ -68,7 +68,7 @@ Products: **better-auth-saml-idp** (This plugin, pre-release); **Shibboleth IdP*
 | Feature | better-auth-saml-idp | Shibboleth IdP | SimpleSAMLphp | Keycloak | Zitadel | authentik | Logto | Ory Polis | Microsoft Entra ID | Okta | Google Workspace | Auth0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Register an SP from its metadata XML or URL | ✅ Yes<br><sub>XML import (helper and CLI, also from a URL); certificates refreshed from the metadata URL, entity ID and ACS URLs pinned</sub> | ✅ Yes<br><sub>file, URL, MDQ</sub> | 🟡 Partial<br><sub>converter, refresh add-on</sub> | ✅ Yes<br><sub>XML import, URL for certificates</sub> | ✅ Yes<br><sub>the only way</sub> | 🟡 Partial<br><sub>file import</sub> | ❌ No | ❌ No | 🟡 Partial<br><sub>fills URLs, not certificates</sub> | ❌ No<br><sub>manual fields</sub> | ❌ No | ❌ No |
-| Admin UI or management API for SPs | ❌ No<br><sub>SPs are configured in code; DB registry on roadmap</sub> | ❌ No | ❌ No | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
+| Admin UI or management API for SPs | ✅ Yes<br><sub>management API over a database registry (admin-gated, audited); no bundled UI</sub> | ❌ No | ❌ No | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
 | Outbound SCIM provisioning | ❌ No<br><sub>not planned</sub> | ❌ No | ❌ No | 🟡 Partial<br><sub>preview</sub> | ❌ No<br><sub>inbound only</sub> | ✅ Yes | ❔ Not documented | ❌ No<br><sub>inbound only</sub> | ✅ Yes<br><sub>P1</sub> | ✅ Yes | 🟡 Partial<br><sub>catalog apps only</sub> | ❌ No |
 
 ### Platform

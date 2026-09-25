@@ -5,7 +5,7 @@ import { autoPostResponse, errorPage } from "../saml/post-form";
 import { logSafe, type SamlStatus } from "../saml/request";
 import { buildSignedErrorResponse, buildSignedResponse, newSamlId } from "../saml/response";
 import type { SpMetadataCache } from "../saml/sp-metadata-refresh";
-import type { SpRegistry } from "../saml/sp-registry";
+import type { SpDirectory } from "../saml/sp-directory";
 import { base64url, sha256b64url, type ValidatedRequest } from "../storage/pending";
 import { NAMEID_FORMAT, type ResolvedSamlIdpOptions, type ResolvedServiceProvider, type SamlIdpUser } from "../types";
 
@@ -20,8 +20,16 @@ function warnMissingField(ctx: GenericEndpointContext, sp: ResolvedServiceProvid
 
 export interface PluginState {
   options: ResolvedSamlIdpOptions;
-  registry: SpRegistry;
+  directory: SpDirectory;
   metadata: SpMetadataCache;
+}
+
+/** Log sink for SP lookups (a stored SP that no longer validates is logged, not thrown). */
+export const lookupLog = (ctx: GenericEndpointContext) => ({ error: (m: string) => ctx.context.logger.error(m) });
+
+/** Find an SP by id: code first, then the database registry. */
+export function spById(ctx: GenericEndpointContext, state: PluginState, id: string) {
+  return state.directory.byId(ctx.context.adapter as any, id, lookupLog(ctx));
 }
 
 /** The SP with certificates from its metadata URL merged in (D-026); unchanged without one. */

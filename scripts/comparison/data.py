@@ -43,7 +43,7 @@ FEATURES = [
  ("Identity and access", "Per-SP access control", row(("y","authorize() hook, deny = no assertion"),("y",""),("p","via authproc filters"),("p","via conditional flows"),("y","per project"),("y","policy bindings"),("u",""),("p","routing only"),("y","app assignment"),("y","app assignment"),("y","per OU or group"),("u","")), "test/integration/security.test.ts"),
  ("Identity and access", "MFA and step-up for SAML", row(("p","host's Better Auth 2FA; no step-up mapping yet"),("y",""),("p","via modules"),("y",""),("p","MFA, no step-up"),("p","ForceAuthn step-up"),("p","MFA, no step-up"),("n","delegated upstream"),("y","Conditional Access (P1)"),("y","policies"),("u",""),("p","")), ""),
  ("Operations", "Register an SP from its metadata XML or URL", row(("y","XML import (helper and CLI, also from a URL); certificates refreshed from the metadata URL, entity ID and ACS URLs pinned"),("y","file, URL, MDQ"),("p","converter, refresh add-on"),("y","XML import, URL for certificates"),("y","the only way"),("p","file import"),("n",""),("n",""),("p","fills URLs, not certificates"),("n","manual fields"),("n",""),("n","")), ""),
- ("Operations", "Admin UI or management API for SPs", row(("n","SPs are configured in code; DB registry on roadmap"),("n",""),("n",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y","")), ""),
+ ("Operations", "Admin UI or management API for SPs", row(("y","management API over a database registry (admin-gated, audited); no bundled UI"),("n",""),("n",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y","")), ""),
  ("Operations", "Outbound SCIM provisioning", row(("n","not planned"),("n",""),("n",""),("p","preview"),("n","inbound only"),("y",""),("u",""),("n","inbound only"),("y","P1"),("y",""),("p","catalog apps only"),("n","")), ""),
  ("Platform", "Runs on serverless / edge (Cloudflare Workers)", row(("y","verified on a live Worker"),("n","Java server"),("u",""),("n","Java server"),("u",""),("u",""),("u",""),("u",""),("na","SaaS"),("na","SaaS"),("na","SaaS"),("na","SaaS")), "DECISIONS.md D-016, test runs on workerd"),
  ("Platform", "Embeds in an existing app", row(("y","a Better Auth plugin"),("n",""),("n",""),("n",""),("p","Go library zitadel/saml"),("n",""),("n",""),("y","npm library (licence needed)"),("na","SaaS"),("na","SaaS"),("na","SaaS"),("na","SaaS")), ""),
@@ -66,7 +66,7 @@ ROADMAP = [
  ]),
  ("v1.2", "Operations at scale", "For hosts with many SPs or changing SPs.", [
    ("Single Logout", "SP-initiated, front-channel first. Entra, Okta, Keycloak and authentik support it; Shibboleth calls it best-effort."),
-   ("Database-backed SP registry and API", "Add and change SPs at runtime without a redeploy (spec stretch goal)."),
+   ("Database-backed SP registry and API (done)", "Add, change, disable and remove SPs at runtime without a redeploy; admin-gated, audited API."),
    ("SP metadata URL with refresh (done)", "SP certificate rotation picked up automatically; certificates only, optional signature pinning."),
    ("Signed AuthnRequests over HTTP-POST (done)", "Enveloped XML signatures with XSW defences, pinned to the SP's certificates; node-saml interop; each defence mutation-tested."),
  ]),
@@ -90,7 +90,7 @@ LEADS = [
 ]
 TRAILS = [
  ("Breadth of flows", "No Single Logout yet."),
- ("SP onboarding", "SPs are configured in code or imported from metadata; no database registry or UI yet."),
+ ("SP onboarding", "No bundled admin UI: hosts build one on the registry API."),
 ]
 
 HUBSPOT = [

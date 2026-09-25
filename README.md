@@ -73,6 +73,38 @@ const { serviceProvider, warnings } = await serviceProviderFromMetadata(cloudfla
 });
 ```
 
+**Managing SPs at runtime.** Turn on the database registry to add, change, disable and remove SPs without a redeploy:
+
+```ts
+samlIdp({
+  // ...
+  registry: {
+    enabled: true,                                  // adds the saml_idp_service_providers table
+    canManage: ({ user }) => user.role === "admin", // mounts the API; omit to manage rows yourself
+  },
+});
+```
+
+| Method | Path | |
+|---|---|---|
+| GET | `/saml2/idp/service-providers` | List SPs, both code and stored, with any validation issues |
+| GET | `/saml2/idp/service-providers/get?id=` | One stored SP |
+| POST | `/saml2/idp/service-providers/create` | `{ serviceProvider, enabled? }` |
+| POST | `/saml2/idp/service-providers/update` | `{ id, serviceProvider, enabled? }`: full replacement. The id can't change |
+| POST | `/saml2/idp/service-providers/delete` | `{ id }` |
+
+**How stored SPs behave:**
+- They're plain JSON, the same options as in code minus functions, so `attributes` must be a map. They're validated on every write *and* every read, so a row edited by hand into an invalid config is ignored and reported.
+- SPs defined in code always win.
+- Each isolate caches lookups for `cacheSeconds` (default 60), including misses, so other isolates see changes within that window.
+
+**Who can use the API:**
+- A signed-in user whose session is re-read from the database and that `canManage` approves. A demoted admin loses access immediately, even with Better Auth's cookie cache on.
+- Impersonated sessions are refused.
+- Better Auth's origin checks apply, and every change is logged with the acting user.
+
+The Drizzle table is in `examples/workers-hono/src/schema.ts`, and the migration is `0003_service_providers.sql`.
+
 **Keeping SP certificates current.** Give an SP `metadata: { url }` and its signing certificates, plus its encryption certificate when `encryption` is on, are refreshed from its metadata. The default refresh is daily. Only certificates are taken from it. The entity ID must match, and ACS URLs always come from your config, so a compromised metadata URL can't redirect assertions. Certificates you configure stay trusted, and if a fetch fails the last good copy is kept. Pin the metadata's signature with `metadata.signingCertificate` when the SP signs it.
 
 ```ts
@@ -213,7 +245,7 @@ What admins and SPs assume every IdP has.
 For hosts with many SPs or changing SPs.
 
 - **Single Logout.** SP-initiated, front-channel first. Entra, Okta, Keycloak and authentik support it; Shibboleth calls it best-effort.
-- **Database-backed SP registry and API.** Add and change SPs at runtime without a redeploy (spec stretch goal).
+- **Database-backed SP registry and API (done).** Add, change, disable and remove SPs at runtime without a redeploy; admin-gated, audited API.
 - **SP metadata URL with refresh (done).** SP certificate rotation picked up automatically; certificates only, optional signature pinning.
 - **Signed AuthnRequests over HTTP-POST (done).** Enveloped XML signatures with XSW defences, pinned to the SP's certificates; node-saml interop; each defence mutation-tested.
 

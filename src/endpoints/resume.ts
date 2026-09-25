@@ -2,7 +2,7 @@ import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
 import * as z from "zod";
 import { resolveAcsUrl } from "../saml/sp-registry";
 import { consumePending, sha256b64url } from "../storage/pending";
-import { fail, issueResponse, type PluginState } from "./issue";
+import { fail, issueResponse, type PluginState, spById } from "./issue";
 import { bindingValue, loginRedirectUrl, RESUME_PATH } from "./sso";
 
 export const resumeEndpoint = (state: PluginState) =>
@@ -35,7 +35,7 @@ export const resumeEndpoint = (state: PluginState) =>
       if (!binding || (await sha256b64url(binding)) !== pending.bindingHash)
         return fail(ctx, "PENDING_REQUEST_NOT_FOUND", "browser binding mismatch");
 
-      const sp = state.registry.byId(pending.spId);
+      const sp = await spById(ctx, state, pending.spId);
       if (!sp) return fail(ctx, "UNKNOWN_SERVICE_PROVIDER", "SP removed since the request was stored");
       // IdP-initiated (no request ID): the SP must still have opted in.
       if (pending.requestId === undefined && !sp.allowIdpInitiated)

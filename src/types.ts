@@ -203,6 +203,29 @@ export interface SamlIdpOptions {
       modelName?: string;
       fields?: Partial<Record<"key" | "spId" | "requestId" | "expiresAt", string>>;
     };
+    samlIdpServiceProvider?: {
+      modelName?: string;
+      fields?: Partial<Record<"spId" | "entityId" | "config" | "enabled" | "createdAt" | "updatedAt" | "updatedBy", string>>;
+    };
+  };
+  /**
+   * Database-backed SP registry (D-027): SPs stored in the `samlIdpServiceProvider` table, in
+   * addition to `serviceProviders`, managed at runtime without a redeploy. Stored SPs are plain
+   * JSON (no functions; `attributes` must be a map). SPs in code always win: the registry can't
+   * add an SP whose id or entity ID is already defined in code.
+   */
+  registry?: {
+    enabled: boolean;
+    /**
+     * Who may manage stored SPs through the HTTP API (`/saml2/idp/service-providers/*`). The API
+     * is only mounted when this is set; it requires a signed-in user and keeps Better Auth's
+     * origin checks. E.g. `({ user }) => user.role === "admin"`.
+     */
+    canManage?: (ctx: { user: SamlIdpUser; session: Session }) => boolean | Promise<boolean>;
+    /** How long an isolate caches a stored SP, and a miss. Default 60 s; 0 to 3600. */
+    cacheSeconds?: number;
+    /** `authorize` for stored SPs (functions can't be stored). Default: allow. */
+    authorize?: (ctx: AuthorizeContext) => boolean | Promise<boolean>;
   };
   /**
    * Sign the IdP metadata document (enveloped XML signature with the active signing key).
@@ -259,6 +282,7 @@ export interface ResolvedSamlIdpOptions {
   schemaValidator: SchemaValidator;
   schema: SamlIdpOptions["schema"];
   signMetadata: boolean;
+  registry: { canManage: NonNullable<SamlIdpOptions["registry"]>["canManage"]; cacheMs: number; authorize: ResolvedServiceProvider["authorize"] | undefined } | undefined;
   /** Non-fatal configuration warnings, logged once at startup. */
   warnings: string[];
 }

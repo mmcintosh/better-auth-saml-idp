@@ -80,8 +80,7 @@ const attributeSource = z.custom<AttributeSource>(() => true).superRefine((v, ct
 });
 const attributeMapSchema = z.record(z.string().min(1, "attribute names can't be empty").max(256), attributeSource);
 
-const serviceProviderSchema = z
-  .object({
+const serviceProviderShape = z.object({
     id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, "must be 1-64 characters of A-Z a-z 0-9 _ -"),
     entityId: z.string().min(1).max(1024),
     acsUrls: z.array(acsUrl).min(1, "must list at least one ACS URL"),
@@ -114,9 +113,14 @@ const serviceProviderSchema = z
       })
       .strict()
       .optional(),
-  })
-  .strict()
-  .superRefine((sp, ctx) => {
+});
+
+type SpRefinable = Pick<
+  z.infer<typeof serviceProviderShape>,
+  "requireSignedAuthnRequests" | "spCertificate" | "metadata" | "allowIdpInitiated" | "idpInitiatedRelayState" | "allowedRelayStates" | "encryption"
+>;
+
+function refineServiceProvider(sp: SpRefinable, ctx: z.RefinementCtx) {
     if (sp.requireSignedAuthnRequests && !sp.spCertificate && !sp.metadata)
       ctx.addIssue({ code: "custom", path: ["spCertificate"], message: "is required when requireSignedAuthnRequests is true (or set metadata.url)" });
     // RelayState settings only apply to IdP-initiated SSO; setting them without the opt-in is
@@ -131,7 +135,20 @@ const serviceProviderSchema = z
         message:
           "AES-CBC is vulnerable to padding-oracle attacks; use aes256-gcm, or set encryption.allowInsecureCbc: true for an SP that cannot do GCM",
       });
-  });
+}
+
+const serviceProviderSchema = serviceProviderShape.strict().superRefine(refineServiceProvider);
+
+/**
+ * An SP stored in the database registry (D-027): the same options minus functions, so it is
+ * plain JSON. `attributes` is a declarative map only.
+ */
+export const storedServiceProviderSchema = serviceProviderShape
+  .omit({ nameId: true, authorize: true })
+  .extend({ attributes: attributeMapSchema.optional() })
+  .strict()
+  .superRefine(refineServiceProvider);
+export type StoredServiceProviderConfig = z.infer<typeof storedServiceProviderSchema>;
 
 const optionsSchema = z
   .object({
@@ -188,10 +205,38 @@ const optionsSchema = z
           })
           .strict()
           .optional(),
+        samlIdpServiceProvider: z
+          .object({
+            modelName: z.string().min(1).optional(),
+            fields: z
+              .object({
+                spId: z.string().min(1),
+                entityId: z.string().min(1),
+                config: z.string().min(1),
+                enabled: z.string().min(1),
+                createdAt: z.string().min(1),
+                updatedAt: z.string().min(1),
+                updatedBy: z.string().min(1),
+              })
+              .partial()
+              .strict()
+              .optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),
     signMetadata: z.boolean().optional(),
+    registry: z
+      .object({
+        enabled: z.boolean(),
+        canManage: fn<NonNullable<NonNullable<SamlIdpOptions["registry"]>["canManage"]>>().optional(),
+        cacheSeconds: z.number().int().min(0).max(3600).optional(),
+        authorize: fn<ResolvedServiceProvider["authorize"]>().optional(),
+      })
+      .strict()
+      .optional(),
     schemaValidator: z
       .custom<ResolvedSamlIdpOptions["schemaValidator"]>(
         (v) => typeof v === "object" && v !== null && typeof (v as any).validate === "function",
@@ -288,6 +333,110 @@ export function checkEncryptionCertificate(
   return { publicKeyPem, certificateBase64: btoa(bin) };
 }
 
+type ParsedServiceProvider = z.infer<typeof serviceProviderSchema> | StoredServiceProviderConfig;
+
+interface SpDefaults {
+  signResponse: boolean | undefined;
+  signAssertion: boolean | undefined;
+  relayStateMaxBytes: number;
+  authorize?: ResolvedServiceProvider["authorize"];
+}
+
+/** Per-SP checks and defaults, shared by code SPs and database-registry SPs. */
+function resolveServiceProvider(sp: ParsedServiceProvider, path: string, d: SpDefaults, issues: string[], warnings: string[]): ResolvedServiceProvider {
+  const signResponse = sp.signResponse ?? d.signResponse ?? true;
+  const signAssertion = sp.signAssertion ?? d.signAssertion ?? true;
+  if (sp.metadata && sp.metadata.signingCertificate === undefined)
+    warnings.push(`${path}.metadata: the metadata's signature isn't pinned (signingCertificate); its certificates are trusted on TLS alone`);
+  // Only when the SP sets it itself; an inherited global both-off is reported once, by resolveOptions.
+  if (!signResponse && !signAssertion && (sp.signResponse !== undefined || sp.signAssertion !== undefined))
+    issues.push(`${path}: at least one of signResponse and signAssertion must be true`);
+
+  const relayValues: [string, string][] = [
+    ...(sp.idpInitiatedRelayState !== undefined ? [["idpInitiatedRelayState", sp.idpInitiatedRelayState] as [string, string]] : []),
+    ...(sp.allowedRelayStates ?? []).map((v, j): [string, string] => [`allowedRelayStates.${j}`, v]),
+  ];
+  for (const [p, v] of relayValues)
+    if (new TextEncoder().encode(v).byteLength > d.relayStateMaxBytes) issues.push(`${path}.${p}: exceeds relayStateMaxBytes (${d.relayStateMaxBytes})`);
+
+  // Parse every SP certificate now: a garbage PEM would otherwise only show up as failed
+  // signature checks at request time.
+  const spCerts: [string, string][] = [
+    ...[sp.spCertificate ?? []].flat().map((c, j): [string, string] => [`${path}.spCertificate${Array.isArray(sp.spCertificate) ? `.${j}` : ""}`, c]),
+    ...[sp.metadata?.signingCertificate ?? []].flat().map((c, j): [string, string] => [`${path}.metadata.signingCertificate.${j}`, c]),
+  ];
+  for (const [p, c] of spCerts) {
+    try {
+      const cert = new X509Certificate(c);
+      if (cert.publicKey.asymmetricKeyType !== "rsa") issues.push(`${p}: must be an RSA certificate, got ${cert.publicKey.asymmetricKeyType}`);
+      if (new Date(cert.validTo).getTime() < Date.now()) warnings.push(`${p}: EXPIRED on ${cert.validTo}`);
+    } catch (e) {
+      issues.push(`${p}: could not be parsed (${(e as Error).message})`);
+    }
+  }
+
+  let encryption: AssertionEncryption | undefined;
+  if (sp.encryption) {
+    const cert = checkEncryptionCertificate(`${path}.encryption.certificate`, sp.encryption.certificate, issues, warnings);
+    if (cert) {
+      const dataAlgorithm = sp.encryption.dataAlgorithm ?? "aes256-gcm";
+      if (dataAlgorithm === "aes256-cbc")
+        warnings.push(`${path}.encryption: AES-CBC is enabled (allowInsecureCbc). Only use this for SPs that cannot do AES-GCM.`);
+      encryption = { ...cert, dataAlgorithm, keyAlgorithm: sp.encryption.keyAlgorithm ?? "rsa-oaep", recipient: sp.entityId };
+    }
+  }
+
+  const attributes = sp.attributes;
+  return {
+    id: sp.id,
+    entityId: sp.entityId,
+    acsUrls: sp.acsUrls as [string, ...string[]],
+    nameIdFormat: sp.nameIdFormat ?? NAMEID_EMAIL,
+    nameId: "nameId" in sp ? sp.nameId : undefined,
+    attributes: typeof attributes === "function" ? attributes : compileAttributeMap(attributes ?? {}),
+    attributeMap: typeof attributes === "function" ? undefined : attributes,
+    metadata: sp.metadata
+      ? {
+          url: sp.metadata.url,
+          refreshSeconds: sp.metadata.refreshSeconds ?? 86400,
+          signingCertificates: sp.metadata.signingCertificate === undefined ? [] : [sp.metadata.signingCertificate].flat(),
+        }
+      : undefined,
+    requireSignedAuthnRequests: sp.requireSignedAuthnRequests ?? false,
+    spCertificates: sp.spCertificate === undefined ? [] : [sp.spCertificate].flat(),
+    allowIdpInitiated: sp.allowIdpInitiated ?? false,
+    idpInitiatedRelayState: sp.idpInitiatedRelayState,
+    allowedRelayStates: sp.allowedRelayStates ?? [],
+    authorize: ("authorize" in sp ? sp.authorize : undefined) ?? d.authorize ?? (() => true),
+    signResponse,
+    signAssertion,
+    ...(encryption ? { encryption } : {}),
+  };
+}
+
+/**
+ * Validate and resolve a database-registry SP against the plugin's resolved options. Returns
+ * the issues instead of throwing, so the API can report them.
+ */
+export function resolveStoredServiceProvider(
+  input: unknown,
+  options: ResolvedSamlIdpOptions,
+  authorize?: ResolvedServiceProvider["authorize"],
+): { serviceProvider?: ResolvedServiceProvider; config?: StoredServiceProviderConfig; issues: string[]; warnings: string[] } {
+  const parsed = storedServiceProviderSchema.safeParse(input);
+  if (!parsed.success) return { issues: formatIssues(parsed.error), warnings: [] };
+  const issues: string[] = [];
+  const warnings: string[] = [];
+  const serviceProvider = resolveServiceProvider(
+    parsed.data,
+    "serviceProvider",
+    { signResponse: options.signing.signResponse, signAssertion: options.signing.signAssertion, relayStateMaxBytes: options.relayStateMaxBytes, authorize },
+    issues,
+    warnings,
+  );
+  return issues.length ? { issues, warnings } : { serviceProvider, config: parsed.data, issues, warnings };
+}
+
 export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
   const parsed = optionsSchema.safeParse(input);
   if (!parsed.success) throw new SamlIdpConfigError(formatIssues(parsed.error));
@@ -309,16 +458,6 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
   const lifetime = o.assertionLifetimeSeconds ?? 300;
   if (lifetime > 300) warnings.push(`assertionLifetimeSeconds is ${lifetime}; the recommended maximum is 300`);
 
-  for (const [i, sp] of o.serviceProviders.entries()) {
-    const response = sp.signResponse ?? o.signing.signResponse ?? true;
-    const assertion = sp.signAssertion ?? o.signing.signAssertion ?? true;
-    if (sp.metadata && sp.metadata.signingCertificate === undefined)
-      warnings.push(`serviceProviders.${i}.metadata: the metadata's signature isn't pinned (signingCertificate); its certificates are trusted on TLS alone`);
-    // Only when the SP sets it itself; an inherited global both-off is reported once, above.
-    if (!response && !assertion && (sp.signResponse !== undefined || sp.signAssertion !== undefined))
-      issues.push(`serviceProviders.${i}: at least one of signResponse and signAssertion must be true`);
-  }
-
   const ids = new Set<string>();
   const entityIds = new Set<string>();
   for (const [i, sp] of o.serviceProviders.entries()) {
@@ -328,29 +467,15 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
     entityIds.add(sp.entityId);
   }
 
-  const relayMax = o.relayStateMaxBytes ?? RELAY_STATE_HARD_CAP;
-  for (const [i, sp] of o.serviceProviders.entries()) {
-    const values: [string, string][] = [
-      ...(sp.idpInitiatedRelayState !== undefined ? [["idpInitiatedRelayState", sp.idpInitiatedRelayState] as [string, string]] : []),
-      ...(sp.allowedRelayStates ?? []).map((v, j): [string, string] => [`allowedRelayStates.${j}`, v]),
-    ];
-    for (const [path, v] of values)
-      if (new TextEncoder().encode(v).byteLength > relayMax)
-        issues.push(`serviceProviders.${i}.${path}: exceeds relayStateMaxBytes (${relayMax})`);
-  }
+  const spDefaults: SpDefaults = {
+    signResponse: o.signing.signResponse,
+    signAssertion: o.signing.signAssertion,
+    relayStateMaxBytes: o.relayStateMaxBytes ?? RELAY_STATE_HARD_CAP,
+  };
+  const serviceProviders = o.serviceProviders.map((sp, i) => resolveServiceProvider(sp, `serviceProviders.${i}`, spDefaults, issues, warnings));
 
-  const encryption = new Map<number, AssertionEncryption>();
-  for (const [i, sp] of o.serviceProviders.entries()) {
-    if (!sp.encryption) continue;
-    const cert = checkEncryptionCertificate(`serviceProviders.${i}.encryption.certificate`, sp.encryption.certificate, issues, warnings);
-    if (!cert) continue;
-    const dataAlgorithm = sp.encryption.dataAlgorithm ?? "aes256-gcm";
-    if (dataAlgorithm === "aes256-cbc")
-      warnings.push(`serviceProviders.${i}.encryption: AES-CBC is enabled (allowInsecureCbc). Only use this for SPs that cannot do AES-GCM.`);
-    encryption.set(i, { ...cert, dataAlgorithm, keyAlgorithm: sp.encryption.keyAlgorithm ?? "rsa-oaep", recipient: sp.entityId });
-  }
-
-  if (o.serviceProviders.length === 0) warnings.push("serviceProviders is empty: every AuthnRequest will be rejected");
+  if (o.serviceProviders.length === 0 && !o.registry?.enabled)
+    warnings.push("serviceProviders is empty: every AuthnRequest will be rejected");
 
   const keyCheck = checkKeyMaterial(o as SamlIdpOptions, warnings);
   issues.push(...keyCheck.issues);
@@ -381,36 +506,13 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
       allowImpersonatedSessions: o.accountPolicy?.allowImpersonatedSessions ?? false,
       allowAnonymousUsers: o.accountPolicy?.allowAnonymousUsers ?? false,
     },
-    serviceProviders: o.serviceProviders.map(
-      (sp, i): ResolvedServiceProvider => ({
-        id: sp.id,
-        entityId: sp.entityId,
-        acsUrls: sp.acsUrls as [string, ...string[]],
-        nameIdFormat: sp.nameIdFormat ?? NAMEID_EMAIL,
-        nameId: sp.nameId,
-        attributes: typeof sp.attributes === "function" ? sp.attributes : compileAttributeMap(sp.attributes ?? {}),
-        attributeMap: typeof sp.attributes === "function" ? undefined : sp.attributes,
-        metadata: sp.metadata
-          ? {
-              url: sp.metadata.url,
-              refreshSeconds: sp.metadata.refreshSeconds ?? 86400,
-              signingCertificates: sp.metadata.signingCertificate === undefined ? [] : [sp.metadata.signingCertificate].flat(),
-            }
-          : undefined,
-        requireSignedAuthnRequests: sp.requireSignedAuthnRequests ?? false,
-        spCertificates: sp.spCertificate === undefined ? [] : Array.isArray(sp.spCertificate) ? sp.spCertificate : [sp.spCertificate],
-        allowIdpInitiated: sp.allowIdpInitiated ?? false,
-        idpInitiatedRelayState: sp.idpInitiatedRelayState,
-        allowedRelayStates: sp.allowedRelayStates ?? [],
-        authorize: sp.authorize ?? (() => true),
-        signResponse: sp.signResponse ?? o.signing.signResponse ?? true,
-        signAssertion: sp.signAssertion ?? o.signing.signAssertion ?? true,
-        ...(encryption.has(i) ? { encryption: encryption.get(i) } : {}),
-      }),
-    ),
+    serviceProviders,
     schemaValidator: o.schemaValidator ?? defaultSchemaValidator(),
     schema: o.schema,
     signMetadata: o.signMetadata ?? false,
+    registry: o.registry?.enabled
+      ? { canManage: o.registry.canManage, cacheMs: (o.registry.cacheSeconds ?? 60) * 1000, authorize: o.registry.authorize }
+      : undefined,
     warnings,
   };
 }
