@@ -52,10 +52,10 @@ FEATURES = [
 
 ROADMAP = [
  ("v1.0", "First npm release", "Ship what is built, safely.", [
-   ("Release engineering", "dist build with type declarations, lint, npm pack review, provenance, changelog, README quickstart from a clean project."),
+   ("Release engineering (done)", "dist build with type declarations, Biome lint, gitleaks, publint and Are the Types Wrong, clean-project install on Node and Workers, changelog; npm provenance at publish."),
    ("better-auth-cloudflare 0.4", "Replace the vendored build once 0.4 is on npm (the README requires it for Workers users)."),
    ("Key rotation guide (done)", "docs/key-rotation.md: add next certificate, switch, retire. Rehearsed live with Cloudflare Access with zero downtime."),
-   ("Second adversarial review", "Review the new code paths from the first round: POST re-entry, error Responses, account policy, NameID."),
+   ("Second adversarial review", "Everything since the first round: POST re-entry, error Responses, account policy, NameID, encryption, IdP-initiated SSO, POST signatures, metadata refresh, the registry and the CLI."),
  ]),
  ("v1.1", "Close the expected-feature gaps", "What admins and SPs assume every IdP has.", [
    ("IdP-initiated SSO (done)", "Opt-in per SP, off by default; RelayState only from a per-SP allow-list. Supported by 8 of the 11 products compared (partially by Ory Polis), including all four commercial IdPs."),

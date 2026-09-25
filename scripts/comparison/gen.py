@@ -21,7 +21,7 @@ for g, *_ in FEATURES:
 md = [f"# Comparison with other SAML identity providers\n",
  f"How `better-auth-saml-idp` compares with eleven SAML 2.0 identity providers, checked against each product's official documentation (and, for the open-source ones, their source code) on **{CHECKED}**. "
  "**Not documented** means the research found no statement either way; it is not the same as *no*. SaaS products are *n/a* for self-hosting rows.\n",
- "Our own column links to the tests that prove each entry. The roadmap derived from this comparison is in the [README](../README.md#roadmap).\n",
+ "Our own column links to the tests that prove each entry. The roadmap derived from this comparison is in the [README](../README.md#-roadmap).\n",
  "## Where we lead\n"] + [f"- **{t}.** {d}" for t, d in LEADS] + ["\n## Where we trail\n"] + [f"- **{t}.** {d}" for t, d in TRAILS] + ["\n## Feature matrix\n"]
 md.append("Products: " + "; ".join(f"**{p[1]}** ({p[2]}, {p[3]})" for p in PRODUCTS) + ".\n")
 for g in groups:
@@ -49,10 +49,16 @@ md.append(f"\nResearch method: three parallel reviews of vendor documentation (a
 open(os.path.join(ROOT, "docs/comparison.md"), "w").write("\n".join(md) + "\n")
 
 # ---------------- README roadmap ----------------
-rm = ["## Roadmap\n", f"Derived from a feature comparison with eleven other SAML identity providers ([docs/comparison.md](docs/comparison.md), checked {CHECKED}).\n"]
+rm = ["## 🧭 Roadmap\n", f"Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml-idp/comparison/) with eleven other SAML identity providers (checked {CHECKED}).\n"]
 for ver, title, sub, items in ROADMAP:
-    rm.append(f"### {ver}: {title}\n\n{sub}\n")
-    rm += [f"- **{t}.** {d}" for t, d in items]
+    rm.append(f"**{ver}: {title}**\n")
+    for t, d in items:
+        done = "(done)" in t
+        name = t.replace(" (done)", "")
+        if ver == "Not planned":
+            rm.append(f"- 🚫 **{name}**: {d}")
+        else:
+            rm.append(f"- [{'x' if done else ' '}] **{name}**: {d}")
     rm.append("")
 readme_path = os.path.join(ROOT, "README.md")
 readme = open(readme_path).read()

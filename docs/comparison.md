@@ -2,7 +2,7 @@
 
 How `better-auth-saml-idp` compares with eleven SAML 2.0 identity providers, checked against each product's official documentation (and, for the open-source ones, their source code) on **2026-09-25**. **Not documented** means the research found no statement either way; it is not the same as *no*. SaaS products are *n/a* for self-hosting rows.
 
-Our own column links to the tests that prove each entry. The roadmap derived from this comparison is in the [README](../README.md#roadmap).
+Our own column links to the tests that prove each entry. The roadmap derived from this comparison is in the [README](../README.md#-roadmap).
 
 ## Where we lead
 
