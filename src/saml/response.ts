@@ -86,11 +86,25 @@ export function buildResponseXml(options: ResolvedSamlIdpOptions, input: BuildRe
   return { xml, responseId, assertionId };
 }
 
-function sign(
-  xml: string,
-  target: "Assertion" | "Response",
-  signing: { keyObject: KeyObject; certificate: string; signatureAlgorithm: SignatureAlgorithm; digestAlgorithm: DigestAlgorithm },
-): string {
+type Signing = { keyObject: KeyObject; certificate: string; signatureAlgorithm: SignatureAlgorithm; digestAlgorithm: DigestAlgorithm };
+
+/**
+ * Enveloped XML signature (exclusive c14n) over the element at `ref`, inserted relative to the
+ * element at `at`. The single signing path for Responses, Assertions and metadata.
+ */
+export function signElement(xml: string, ref: string, at: { reference: string; action: "after" | "prepend" }, signing: Signing): string {
+  const sig = new SignedXml({
+    privateKey: signing.keyObject,
+    publicCert: signing.certificate,
+    signatureAlgorithm: SIGNATURE_ALGORITHM_URI[signing.signatureAlgorithm] as any,
+    canonicalizationAlgorithm: EXC_C14N,
+  });
+  sig.addReference({ xpath: ref, transforms: [ENVELOPED, EXC_C14N], digestAlgorithm: DIGEST_URI[signing.digestAlgorithm] });
+  sig.computeSignature(xml, { prefix: "ds", location: at });
+  return sig.getSignedXml();
+}
+
+function sign(xml: string, target: "Assertion" | "Response", signing: Signing): string {
   const sig = new SignedXml({
     privateKey: signing.keyObject,
     publicCert: signing.certificate,
@@ -113,12 +127,19 @@ function sign(
   return sig.getSignedXml();
 }
 
-/** Build and sign per `options.signing`; returns the XML and its base64 form for the POST binding. */
-export function buildSignedResponse(options: ResolvedSamlIdpOptions, input: BuildResponseInput) {
+/**
+ * Build and sign; returns the XML and its base64 form for the POST binding. `what` is the SP's
+ * effective signing choice (per-SP override, else global); defaults to the global setting.
+ */
+export function buildSignedResponse(
+  options: ResolvedSamlIdpOptions,
+  input: BuildResponseInput,
+  what: { response: boolean; assertion: boolean } = { response: options.signing.signResponse, assertion: options.signing.signAssertion },
+) {
   const built = buildResponseXml(options, input);
   let xml = built.xml;
-  if (options.signing.signAssertion) xml = sign(xml, "Assertion", options.signing);
-  if (options.signing.signResponse) xml = sign(xml, "Response", options.signing);
+  if (what.assertion) xml = sign(xml, "Assertion", options.signing);
+  if (what.response) xml = sign(xml, "Response", options.signing);
   return { ...built, xml, base64: toBase64(xml) };
 }
 

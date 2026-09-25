@@ -56,6 +56,17 @@ export const createAuth = (env: Env, cf: IncomingRequestCfProperties) =>
 
 **Defaults to know about.** Only users with a **verified email** receive assertions, and admin-impersonation sessions and anonymous users are refused (`accountPolicy`). The NameID follows each SP's `nameIdFormat`: the email for `emailAddress`, an opaque per-SP ID for `persistent`, and a one-time ID for `transient`. Requests the IdP can't satisfy (IsPassive without a session, an unsatisfiable RequestedAuthnContext, a Subject mismatch) get a signed SAML error Response.
 
+**Registering an SP from its metadata.** `serviceProviderFromMetadata(xml, { id, ...overrides })` turns an SP's metadata into a `serviceProviders` entry: entity ID, HTTP-POST ACS URLs (default first), NameID format, and signing certificates. If the SP sets `AuthnRequestsSigned`, it also sets `requireSignedAuthnRequests`. The document is XSD-validated first. Its own signature is **not** checked, so fetch it over a channel you trust, review the result and pin it in your code. Values you pass override the metadata.
+
+```ts
+const { serviceProvider, warnings } = await serviceProviderFromMetadata(cloudflareMetadataXml, {
+  id: "cf-access",
+  attributes: (user) => ({ email: user.email }),
+});
+```
+
+**Signing options.** Response and Assertion are both signed by default. Each SP can override `signResponse` / `signAssertion`, but at least one must stay on. Set `signMetadata: true` to sign the metadata document for SPs and federations that verify it.
+
 Add the plugin's table to your Drizzle schema. Field maps use Drizzle **property keys**, not column names:
 
 ```ts
@@ -118,9 +129,9 @@ What admins and SPs assume every IdP has.
 
 - **IdP-initiated SSO (opt-in per SP).** Supported by 8 of the 11 products compared (partially by Ory Polis), including all four commercial IdPs. Off by default, as the spec intended.
 - **Encrypted assertions.** AES-256-GCM with RSA-OAEP. Shibboleth encrypts by default; Keycloak, authentik, Logto, Entra and Okta offer it per SP.
-- **Register SPs from metadata XML.** A helper that turns an SP's metadata into a serviceProviders entry, including certificates and ACS URLs.
-- **Per-SP signing choice.** Move signResponse and signAssertion to each SP, as Shibboleth, Keycloak and authentik do.
-- **Signed IdP metadata.** Optional, for SPs and federations that verify metadata signatures.
+- **Register SPs from metadata XML (done).** serviceProviderFromMetadata(): a helper that turns an SP's metadata into a serviceProviders entry, including certificates and ACS URLs.
+- **Per-SP signing choice (done).** Move signResponse and signAssertion to each SP, as Shibboleth, Keycloak and authentik do.
+- **Signed IdP metadata (done).** Optional (signMetadata), for SPs and federations that verify metadata signatures.
 
 ### v1.2: Operations at scale
 

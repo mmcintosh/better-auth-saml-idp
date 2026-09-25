@@ -208,7 +208,7 @@ export async function readAutoPost(res: Response): Promise<PostedForm> {
 }
 
 /** The strict test SP: message AND assertion signatures required. */
-export async function strictSp(auth: { handler(r: Request): Promise<Response> }) {
+export async function strictSp(auth: { handler(r: Request): Promise<Response> }, want = { message: true, assertion: true }) {
   // A samlify SP app must install samlify's (process-global) schema validator itself; the IdP
   // plugin no longer touches that global.
   samlify.setSchemaValidator({
@@ -222,8 +222,8 @@ export async function strictSp(auth: { handler(r: Request): Promise<Response> })
   const idp = samlify.IdentityProvider({ metadata });
   const sp = samlify.ServiceProvider({
     entityID: SP_ENTITY_ID,
-    wantAssertionsSigned: true,
-    wantMessageSigned: true,
+    wantAssertionsSigned: want.assertion,
+    wantMessageSigned: want.message,
     authnRequestsSigned: false,
     assertionConsumerService: [{ Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST", Location: SP_ACS }],
     clockDrifts: [-60_000, 60_000],

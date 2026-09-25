@@ -156,7 +156,7 @@ export async function issueResponse(
     authnInstant: new Date(session.session.createdAt),
     sessionIndex,
     now,
-  });
+  }, { response: sp.signResponse, assertion: sp.signAssertion });
   ctx.context.logger.info(`[saml-idp] issued assertion ${signed.assertionId} for SP ${sp.id} (user ${user.id})`);
   return autoPostResponse(request.acsUrl, signed.base64, request.relayState);
 }

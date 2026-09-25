@@ -29,12 +29,12 @@ FEATURES = [
  ("Flows", "Single Logout", row(("n","roadmap v1.2"),("y","docs call it best-effort"),("p","front-channel only"),("y","front and back channel"),("p","responds, ends nothing"),("y","front and back channel"),("n",""),("n",""),("y","Redirect only"),("y","back-channel is Early Access"),("u",""),("p","no multi-app logout")), ""),
  ("Bindings", "AuthnRequest over Redirect and POST", row(("y","node-saml's DEFLATEd POST accepted too"),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("u",""),("u",""),("u","")), "test/integration/sso-flow.test.ts"),
  ("Bindings", "Artifact binding", row(("n","not planned"),("p","responses only"),("p","responses, needs memcache"),("y",""),("n",""),("n",""),("n",""),("n",""),("n","responses always POST"),("u",""),("u",""),("u","")), ""),
- ("Signing and encryption", "Response / Assertion signing choice", row(("p","both signed by default; set globally, not per SP"),("y","per SP"),("y","per SP"),("y","per client"),("n","always both"),("y","per SP"),("n","response only"),("n","always both"),("y",""),("y",""),("p","one checkbox"),("p","one or the other")), "test/integration/security.test.ts"),
+ ("Signing and encryption", "Response / Assertion signing choice", row(("y","per SP, with a global default; both signed by default"),("y","per SP"),("y","per SP"),("y","per client"),("n","always both"),("y","per SP"),("n","response only"),("n","always both"),("y",""),("y",""),("p","one checkbox"),("p","one or the other")), "test/integration/security.test.ts"),
  ("Signing and encryption", "Encrypted assertions", row(("n","roadmap v1.1"),("y","on by default"),("y","per SP"),("y","AES-256-GCM default"),("n",""),("y",""),("y",""),("n",""),("y","needs P1"),("y",""),("u",""),("y","via Actions")), ""),
  ("Signing and encryption", "Verifies and can require signed AuthnRequests", row(("p","HTTP-Redirect only, per SP; verified live with Cloudflare Access; multiple SP certs"),("y",""),("y",""),("y",""),("p","instance-wide switch"),("y",""),("y",""),("n","checks the key embedded in the request"),("y",""),("y",""),("u",""),("p","can verify; requiring not documented")), "test/integration/security.test.ts, review-findings.test.ts #2"),
  ("Signing and encryption", "SHA-256 default, SHA-1 only by opt-in", row(("y","opt-in logs a warning"),("y",""),("y",""),("y",""),("p","accepts SHA-1 inbound"),("y",""),("p","fixed SHA-256"),("y","fixed SHA-256"),("y",""),("y",""),("u",""),("n","SHA-1 is the default")), "test/unit/options.test.ts"),
  ("Signing and encryption", "Signing key rotation", row(("p","extra certs published; zero-downtime procedure verified live"),("p","manual"),("y","two-key rollover"),("y","active and passive keys"),("y","automatic"),("p","manual"),("p","one active at a time"),("p","single key"),("y","expiry emails"),("y",""),("y","two certificates"),("p","tenant-wide key")), ""),
- ("Signing and encryption", "Signed IdP metadata", row(("n","roadmap v1.1"),("p","left to federations"),("y","optional"),("u",""),("y",""),("y",""),("u",""),("u",""),("u",""),("u",""),("u",""),("u","")), ""),
+ ("Signing and encryption", "Signed IdP metadata", row(("y","optional (signMetadata)"),("p","left to federations"),("y","optional"),("u",""),("y",""),("y",""),("u",""),("u",""),("u",""),("u",""),("u",""),("u","")), ""),
  ("Replay and protocol fidelity", "Rejects replayed AuthnRequest IDs", row(("y","DB unique key; concurrency and cross-instance tested"),("y","replay cache"),("u",""),("u",""),("p","stores ID, no rejection found"),("u",""),("p","stores ID, no rejection found"),("u",""),("u",""),("u",""),("u",""),("u","")), "test/integration/security.test.ts (R2)"),
  ("Replay and protocol fidelity", "ForceAuthn, IsPassive, RequestedAuthnContext", row(("y","ForceAuthn verified live with Cloudflare Access; RequestedAuthnContext exact match"),("y",""),("p",""),("y","step-up via LoA"),("n",""),("p","ForceAuthn only"),("p","ForceAuthn only"),("n",""),("y","RequestedAuthnContext exact only"),("p","ForceAuthn setting"),("u",""),("p","no IsPassive")), "test/integration/review-findings.test.ts #12"),
  ("Replay and protocol fidelity", "SAML error status Responses", row(("y","NoPassive, NoAuthnContext, UnknownPrincipal, InvalidNameIDPolicy"),("y",""),("y",""),("y",""),("y",""),("n","SSO errors are HTML pages"),("n",""),("n",""),("y",""),("u",""),("p","mostly error pages"),("u","")), "test/integration/review-findings.test.ts"),
@@ -42,7 +42,7 @@ FEATURES = [
  ("Identity and access", "Attribute mapping", row(("p","per-SP function in code; no declarative map yet"),("y","declarative + scripts"),("y",""),("y","mappers + scripts"),("p","fixed set + Actions"),("y","Python mappings"),("y","declarative"),("p",""),("y",""),("y",""),("y",""),("y","")), "test/integration/sso-flow.test.ts"),
  ("Identity and access", "Per-SP access control", row(("y","authorize() hook, deny = no assertion"),("y",""),("p","via authproc filters"),("p","via conditional flows"),("y","per project"),("y","policy bindings"),("u",""),("p","routing only"),("y","app assignment"),("y","app assignment"),("y","per OU or group"),("u","")), "test/integration/security.test.ts"),
  ("Identity and access", "MFA and step-up for SAML", row(("p","host's Better Auth 2FA; no step-up mapping yet"),("y",""),("p","via modules"),("y",""),("p","MFA, no step-up"),("p","ForceAuthn step-up"),("p","MFA, no step-up"),("n","delegated upstream"),("y","Conditional Access (P1)"),("y","policies"),("u",""),("p","")), ""),
- ("Operations", "Register an SP from its metadata XML or URL", row(("n","roadmap v1.1 (XML), v1.2 (URL refresh)"),("y","file, URL, MDQ"),("p","converter, refresh add-on"),("y","XML import, URL for certificates"),("y","the only way"),("p","file import"),("n",""),("n",""),("p","fills URLs, not certificates"),("n","manual fields"),("n",""),("n","")), ""),
+ ("Operations", "Register an SP from its metadata XML or URL", row(("p","XML import helper; URL refresh on roadmap v1.2"),("y","file, URL, MDQ"),("p","converter, refresh add-on"),("y","XML import, URL for certificates"),("y","the only way"),("p","file import"),("n",""),("n",""),("p","fills URLs, not certificates"),("n","manual fields"),("n",""),("n","")), ""),
  ("Operations", "Admin UI or management API for SPs", row(("n","SPs are configured in code; DB registry on roadmap"),("n",""),("n",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y","")), ""),
  ("Operations", "Outbound SCIM provisioning", row(("n","not planned"),("n",""),("n",""),("p","preview"),("n","inbound only"),("y",""),("u",""),("n","inbound only"),("y","P1"),("y",""),("p","catalog apps only"),("n","")), ""),
  ("Platform", "Runs on serverless / edge (Cloudflare Workers)", row(("y","verified on a live Worker"),("n","Java server"),("u",""),("n","Java server"),("u",""),("u",""),("u",""),("u",""),("na","SaaS"),("na","SaaS"),("na","SaaS"),("na","SaaS")), "DECISIONS.md D-016, test runs on workerd"),
@@ -60,9 +60,9 @@ ROADMAP = [
  ("v1.1", "Close the expected-feature gaps", "What admins and SPs assume every IdP has.", [
    ("IdP-initiated SSO (opt-in per SP)", "Supported by 8 of the 11 products compared (partially by Ory Polis), including all four commercial IdPs. Off by default, as the spec intended."),
    ("Encrypted assertions", "AES-256-GCM with RSA-OAEP. Shibboleth encrypts by default; Keycloak, authentik, Logto, Entra and Okta offer it per SP."),
-   ("Register SPs from metadata XML", "A helper that turns an SP's metadata into a serviceProviders entry, including certificates and ACS URLs."),
-   ("Per-SP signing choice", "Move signResponse and signAssertion to each SP, as Shibboleth, Keycloak and authentik do."),
-   ("Signed IdP metadata", "Optional, for SPs and federations that verify metadata signatures."),
+   ("Register SPs from metadata XML (done)", "serviceProviderFromMetadata(): a helper that turns an SP's metadata into a serviceProviders entry, including certificates and ACS URLs."),
+   ("Per-SP signing choice (done)", "Move signResponse and signAssertion to each SP, as Shibboleth, Keycloak and authentik do."),
+   ("Signed IdP metadata (done)", "Optional (signMetadata), for SPs and federations that verify metadata signatures."),
  ]),
  ("v1.2", "Operations at scale", "For hosts with many SPs or changing SPs.", [
    ("Single Logout", "SP-initiated, front-channel first. Entra, Okta, Keycloak and authentik support it; Shibboleth calls it best-effort."),
@@ -91,7 +91,7 @@ LEADS = [
 TRAILS = [
  ("Breadth of flows", "No IdP-initiated SSO or Single Logout yet."),
  ("Encryption", "No encrypted assertions yet; several SPs and federations expect the option."),
- ("SP onboarding", "SPs are configured in code; no metadata import, registry or UI yet."),
+ ("SP onboarding", "SPs are configured in code or imported from metadata XML; no registry, URL refresh or UI yet."),
 ]
 
 HUBSPOT = [

@@ -100,6 +100,30 @@ describe("resolveOptions: signing algorithms", () => {
   });
 });
 
+describe("resolveOptions: per-SP signing and signed metadata", () => {
+  const sp = (over: Record<string, unknown>) => ({ id: "s", entityId: `https://sp.test/${String(over.id ?? "s")}`, acsUrls: ["https://sp.test/acs"], ...over });
+
+  it("per-SP overrides fall back to the global setting", () => {
+    const r = resolveOptions(
+      baseOptions({
+        signing: { ...baseOptions().signing, signResponse: false },
+        serviceProviders: [sp({ id: "a" }), sp({ id: "b", signResponse: true, signAssertion: false })] as any,
+      }),
+    );
+    expect(r.serviceProviders.map((s) => [s.signResponse, s.signAssertion])).toEqual([
+      [false, true],
+      [true, false],
+    ]);
+    expect(r.signMetadata).toBe(false);
+  });
+
+  it("an SP can't turn both signatures off", () => {
+    expect(issuesFor(baseOptions({ serviceProviders: [sp({ signResponse: false, signAssertion: false })] as any }))).toEqual([
+      "serviceProviders.0: at least one of signResponse and signAssertion must be true",
+    ]);
+  });
+});
+
 describe("resolveOptions: key material", () => {
   it("rejects a certificate that does not match the private key", () => {
     expect(issuesFor(baseOptions({ signing: { privateKey: keys.idp.privateKey, certificate: keys.sp.certificate } }))).toEqual([

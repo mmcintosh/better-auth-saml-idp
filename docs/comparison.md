@@ -15,7 +15,7 @@ Our own column links to the tests that prove each entry. The roadmap derived fro
 
 - **Breadth of flows.** No IdP-initiated SSO or Single Logout yet.
 - **Encryption.** No encrypted assertions yet; several SPs and federations expect the option.
-- **SP onboarding.** SPs are configured in code; no metadata import, registry or UI yet.
+- **SP onboarding.** SPs are configured in code or imported from metadata XML; no registry, URL refresh or UI yet.
 
 ## Feature matrix
 
@@ -40,12 +40,12 @@ Products: **better-auth-saml-idp** (This plugin, pre-release); **Shibboleth IdP*
 
 | Feature | better-auth-saml-idp | Shibboleth IdP | SimpleSAMLphp | Keycloak | Zitadel | authentik | Logto | Ory Polis | Microsoft Entra ID | Okta | Google Workspace | Auth0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Response / Assertion signing choice | 🟡 Partial<br><sub>both signed by default; set globally, not per SP</sub> | ✅ Yes<br><sub>per SP</sub> | ✅ Yes<br><sub>per SP</sub> | ✅ Yes<br><sub>per client</sub> | ❌ No<br><sub>always both</sub> | ✅ Yes<br><sub>per SP</sub> | ❌ No<br><sub>response only</sub> | ❌ No<br><sub>always both</sub> | ✅ Yes | ✅ Yes | 🟡 Partial<br><sub>one checkbox</sub> | 🟡 Partial<br><sub>one or the other</sub> |
+| Response / Assertion signing choice | ✅ Yes<br><sub>per SP, with a global default; both signed by default</sub> | ✅ Yes<br><sub>per SP</sub> | ✅ Yes<br><sub>per SP</sub> | ✅ Yes<br><sub>per client</sub> | ❌ No<br><sub>always both</sub> | ✅ Yes<br><sub>per SP</sub> | ❌ No<br><sub>response only</sub> | ❌ No<br><sub>always both</sub> | ✅ Yes | ✅ Yes | 🟡 Partial<br><sub>one checkbox</sub> | 🟡 Partial<br><sub>one or the other</sub> |
 | Encrypted assertions | ❌ No<br><sub>roadmap v1.1</sub> | ✅ Yes<br><sub>on by default</sub> | ✅ Yes<br><sub>per SP</sub> | ✅ Yes<br><sub>AES-256-GCM default</sub> | ❌ No | ✅ Yes | ✅ Yes | ❌ No | ✅ Yes<br><sub>needs P1</sub> | ✅ Yes | ❔ Not documented | ✅ Yes<br><sub>via Actions</sub> |
 | Verifies and can require signed AuthnRequests | 🟡 Partial<br><sub>HTTP-Redirect only, per SP; verified live with Cloudflare Access; multiple SP certs</sub> | ✅ Yes | ✅ Yes | ✅ Yes | 🟡 Partial<br><sub>instance-wide switch</sub> | ✅ Yes | ✅ Yes | ❌ No<br><sub>checks the key embedded in the request</sub> | ✅ Yes | ✅ Yes | ❔ Not documented | 🟡 Partial<br><sub>can verify; requiring not documented</sub> |
 | SHA-256 default, SHA-1 only by opt-in | ✅ Yes<br><sub>opt-in logs a warning</sub> | ✅ Yes | ✅ Yes | ✅ Yes | 🟡 Partial<br><sub>accepts SHA-1 inbound</sub> | ✅ Yes | 🟡 Partial<br><sub>fixed SHA-256</sub> | ✅ Yes<br><sub>fixed SHA-256</sub> | ✅ Yes | ✅ Yes | ❔ Not documented | ❌ No<br><sub>SHA-1 is the default</sub> |
 | Signing key rotation | 🟡 Partial<br><sub>extra certs published; zero-downtime procedure verified live</sub> | 🟡 Partial<br><sub>manual</sub> | ✅ Yes<br><sub>two-key rollover</sub> | ✅ Yes<br><sub>active and passive keys</sub> | ✅ Yes<br><sub>automatic</sub> | 🟡 Partial<br><sub>manual</sub> | 🟡 Partial<br><sub>one active at a time</sub> | 🟡 Partial<br><sub>single key</sub> | ✅ Yes<br><sub>expiry emails</sub> | ✅ Yes | ✅ Yes<br><sub>two certificates</sub> | 🟡 Partial<br><sub>tenant-wide key</sub> |
-| Signed IdP metadata | ❌ No<br><sub>roadmap v1.1</sub> | 🟡 Partial<br><sub>left to federations</sub> | ✅ Yes<br><sub>optional</sub> | ❔ Not documented | ✅ Yes | ✅ Yes | ❔ Not documented | ❔ Not documented | ❔ Not documented | ❔ Not documented | ❔ Not documented | ❔ Not documented |
+| Signed IdP metadata | ✅ Yes<br><sub>optional (signMetadata)</sub> | 🟡 Partial<br><sub>left to federations</sub> | ✅ Yes<br><sub>optional</sub> | ❔ Not documented | ✅ Yes | ✅ Yes | ❔ Not documented | ❔ Not documented | ❔ Not documented | ❔ Not documented | ❔ Not documented | ❔ Not documented |
 
 ### Replay and protocol fidelity
 
@@ -68,7 +68,7 @@ Products: **better-auth-saml-idp** (This plugin, pre-release); **Shibboleth IdP*
 
 | Feature | better-auth-saml-idp | Shibboleth IdP | SimpleSAMLphp | Keycloak | Zitadel | authentik | Logto | Ory Polis | Microsoft Entra ID | Okta | Google Workspace | Auth0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Register an SP from its metadata XML or URL | ❌ No<br><sub>roadmap v1.1 (XML), v1.2 (URL refresh)</sub> | ✅ Yes<br><sub>file, URL, MDQ</sub> | 🟡 Partial<br><sub>converter, refresh add-on</sub> | ✅ Yes<br><sub>XML import, URL for certificates</sub> | ✅ Yes<br><sub>the only way</sub> | 🟡 Partial<br><sub>file import</sub> | ❌ No | ❌ No | 🟡 Partial<br><sub>fills URLs, not certificates</sub> | ❌ No<br><sub>manual fields</sub> | ❌ No | ❌ No |
+| Register an SP from its metadata XML or URL | 🟡 Partial<br><sub>XML import helper; URL refresh on roadmap v1.2</sub> | ✅ Yes<br><sub>file, URL, MDQ</sub> | 🟡 Partial<br><sub>converter, refresh add-on</sub> | ✅ Yes<br><sub>XML import, URL for certificates</sub> | ✅ Yes<br><sub>the only way</sub> | 🟡 Partial<br><sub>file import</sub> | ❌ No | ❌ No | 🟡 Partial<br><sub>fills URLs, not certificates</sub> | ❌ No<br><sub>manual fields</sub> | ❌ No | ❌ No |
 | Admin UI or management API for SPs | ❌ No<br><sub>SPs are configured in code; DB registry on roadmap</sub> | ❌ No | ❌ No | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
 | Outbound SCIM provisioning | ❌ No<br><sub>not planned</sub> | ❌ No | ❌ No | 🟡 Partial<br><sub>preview</sub> | ❌ No<br><sub>inbound only</sub> | ✅ Yes | ❔ Not documented | ❌ No<br><sub>inbound only</sub> | ✅ Yes<br><sub>P1</sub> | ✅ Yes | 🟡 Partial<br><sub>catalog apps only</sub> | ❌ No |
 

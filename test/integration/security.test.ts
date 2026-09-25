@@ -1,5 +1,6 @@
 // SPEC §7 security requirements + ADDENDUM-01 R1/R2/R3, on the R5 host
 // (workerd: withCloudflare + Drizzle/D1; node: node:sqlite).
+import { SAML } from "@node-saml/node-saml";
 import { inject, describe, expect, it } from "vitest";
 import { SP_ACS, SP_ENTITY_ID } from "../support/config";
 import { AUTH_BASE, createHost, createHostDatabase, type HostOptions } from "../support/host";
@@ -332,6 +333,34 @@ describe("§7 algorithms, validity, signatures", () => {
     expect(xml.match(/<ds:SignatureMethod Algorithm="http:\/\/www\.w3\.org\/2001\/04\/xmldsig-more#rsa-sha256"\/>/g)).toHaveLength(2);
     expect(xml.match(/<ds:DigestMethod Algorithm="http:\/\/www\.w3\.org\/2001\/04\/xmlenc#sha256"\/>/g)).toHaveLength(2);
     expect(xml).not.toMatch(/sha1/i);
+  });
+
+  it.each([
+    ["assertion only", { signResponse: false }, { message: false, assertion: true }, 1],
+    ["response only", { signAssertion: false }, { message: true, assertion: false }, 1],
+  ])("per-SP signing: %s, accepted by an SP that requires exactly that", async (_, over, want, signatures) => {
+    const { auth, browser } = await host({ saml: { serviceProviders: spConfig(over) } });
+    await browser.signUp();
+    const form = await readAutoPost(await browser.fetch(await redirectUrl(authnRequestXml().xml)));
+    expect(form.xml.match(/<ds:Signature /g)).toHaveLength(signatures);
+    const assertion = /<saml:Assertion [\s\S]*<\/saml:Assertion>/.exec(form.xml)![0];
+    expect(assertion.includes("<ds:Signature ")).toBe(want.assertion);
+    await expect((await strictSp(auth, want)).verify(b64(form.xml))).resolves.toBeDefined();
+    // ...and an SP that wants the missing signature refuses it. (samlify doesn't enforce its
+    // want* settings when parsing a Response, so this uses node-saml, which does.)
+    const nodeSaml = (w: typeof want) =>
+      new SAML({
+        issuer: SP_ENTITY_ID,
+        callbackUrl: SP_ACS,
+        audience: SP_ENTITY_ID,
+        idpCert: keys.idp.certificate,
+        entryPoint: SSO_URL,
+        wantAssertionsSigned: w.assertion,
+        wantAuthnResponseSigned: w.message,
+        acceptedClockSkewMs: 60_000,
+      }).validatePostResponseAsync({ SAMLResponse: b64(form.xml) });
+    await expect(nodeSaml(want)).resolves.toBeDefined();
+    await expect(nodeSaml({ message: true, assertion: true })).rejects.toThrow();
   });
 
   it("assertion validity is at most 5 minutes by default", async () => {

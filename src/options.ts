@@ -64,6 +64,8 @@ const serviceProviderSchema = z
     spCertificate: z.union([pem("CERTIFICATE"), z.array(pem("CERTIFICATE")).min(1)]).optional(),
     allowIdpInitiated: z.boolean().optional(),
     authorize: fn<ResolvedServiceProvider["authorize"]>().optional(),
+    signResponse: z.boolean().optional(),
+    signAssertion: z.boolean().optional(),
   })
   .strict()
   .superRefine((sp, ctx) => {
@@ -130,6 +132,7 @@ const optionsSchema = z
       })
       .strict()
       .optional(),
+    signMetadata: z.boolean().optional(),
     schemaValidator: z
       .custom<ResolvedSamlIdpOptions["schemaValidator"]>(
         (v) => typeof v === "object" && v !== null && typeof (v as any).validate === "function",
@@ -206,6 +209,14 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
   const lifetime = o.assertionLifetimeSeconds ?? 300;
   if (lifetime > 300) warnings.push(`assertionLifetimeSeconds is ${lifetime}; the recommended maximum is 300`);
 
+  for (const [i, sp] of o.serviceProviders.entries()) {
+    const response = sp.signResponse ?? o.signing.signResponse ?? true;
+    const assertion = sp.signAssertion ?? o.signing.signAssertion ?? true;
+    // Only when the SP sets it itself; an inherited global both-off is reported once, above.
+    if (!response && !assertion && (sp.signResponse !== undefined || sp.signAssertion !== undefined))
+      issues.push(`serviceProviders.${i}: at least one of signResponse and signAssertion must be true`);
+  }
+
   const ids = new Set<string>();
   const entityIds = new Set<string>();
   for (const [i, sp] of o.serviceProviders.entries()) {
@@ -258,10 +269,13 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
         spCertificates: sp.spCertificate === undefined ? [] : Array.isArray(sp.spCertificate) ? sp.spCertificate : [sp.spCertificate],
         allowIdpInitiated: false,
         authorize: sp.authorize ?? (() => true),
+        signResponse: sp.signResponse ?? o.signing.signResponse ?? true,
+        signAssertion: sp.signAssertion ?? o.signing.signAssertion ?? true,
       }),
     ),
     schemaValidator: o.schemaValidator ?? defaultSchemaValidator(),
     schema: o.schema,
+    signMetadata: o.signMetadata ?? false,
     warnings,
   };
 }

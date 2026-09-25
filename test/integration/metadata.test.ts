@@ -1,4 +1,5 @@
 import * as samlify from "samlify";
+import { SignedXml } from "xml-crypto";
 import { describe, expect, inject, it } from "vitest";
 import { libxml2Validator } from "../../src/saml/validator";
 import { AUTH_BASE, createTestAuth } from "../support/auth";
@@ -77,5 +78,34 @@ describe("GET /saml2/idp/metadata", { timeout: 60_000 }, () => {
       .replace(/<ds:X509Certificate>[^<]+<\/ds:X509Certificate>/g, "<ds:X509Certificate>[redacted]</ds:X509Certificate>")
       .replace(/></g, ">\n<");
     expect(shape).toMatchSnapshot();
+  });
+
+  it("signMetadata: an enveloped signature over the EntityDescriptor that verifies and stays schema-valid", async () => {
+    const { xml } = await fetchMetadata({ signMetadata: true });
+    expect(await libxml2Validator().validate(xml, "metadata")).toEqual({ valid: true });
+    const id = /<(?:md:)?EntityDescriptor [^>]*\bID="([^"]+)"/.exec(xml)?.[1];
+    expect(id).toMatch(/^_/);
+    const sig = /<ds:Signature[\s\S]*?<\/ds:Signature>/.exec(xml)![0];
+    expect(sig).toContain(`URI="#${id}"`);
+    const v = new SignedXml({ publicCert: keys.idp.certificate });
+    v.loadSignature(sig);
+    expect(v.checkSignature(xml)).toBe(true);
+    // Tampering breaks it.
+    const t = new SignedXml({ publicCert: keys.idp.certificate });
+    t.loadSignature(sig);
+    let tamperedOk: boolean;
+    try {
+      tamperedOk = t.checkSignature(xml.replace("/saml2/idp/sso", "/evil/sso"));
+    } catch {
+      tamperedOk = false;
+    }
+    expect(tamperedOk).toBe(false);
+    // Still consumable by an SP library.
+    expect(samlify.IdentityProvider({ metadata: xml }).entityMeta.getEntityID()).toBe(IDP_ENTITY_ID);
+  });
+
+  it("metadata is unsigned by default", async () => {
+    const { xml } = await fetchMetadata();
+    expect(xml).not.toContain("<ds:Signature");
   });
 });

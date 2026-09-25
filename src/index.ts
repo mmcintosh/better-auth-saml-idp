@@ -14,6 +14,8 @@ import type { SamlIdpOptions } from "./types";
 export { SAML_IDP_ERROR_CODES } from "./errors";
 export { SamlIdpConfigError } from "./options";
 export { libxml2Validator } from "./saml/validator";
+export { serviceProviderFromMetadata, SpMetadataError } from "./saml/sp-metadata";
+export type { SpFromMetadataOptions, SpFromMetadataResult } from "./saml/sp-metadata";
 export type * from "./types";
 
 export const samlIdp = (options: SamlIdpOptions) => {
@@ -36,7 +38,7 @@ export const samlIdp = (options: SamlIdpOptions) => {
       return { context: { skipOriginCheck: [...(Array.isArray(existing) ? existing : []), SSO_PATH] } };
     },
     endpoints: {
-      getSamlIdpMetadata: metadataEndpoint(getIdp),
+      getSamlIdpMetadata: metadataEndpoint(getIdp, resolved),
       samlIdpSingleSignOn: ssoEndpoint(state),
       samlIdpResume: resumeEndpoint(state),
     },

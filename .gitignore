@@ -12,3 +12,4 @@ playwright-report/
 wrangler.deploy.jsonc
 docs/comparison/.artifact.html
 __pycache__/
+.claude/worktrees/

@@ -57,6 +57,10 @@ export interface ServiceProviderConfig {
   allowIdpInitiated?: boolean;
   /** Decide whether this user may use this SP. Denial issues no assertion. */
   authorize?: (ctx: AuthorizeContext) => boolean | Promise<boolean>;
+  /** Override the global `signing.signResponse` for this SP. */
+  signResponse?: boolean;
+  /** Override the global `signing.signAssertion` for this SP. At least one must stay on. */
+  signAssertion?: boolean;
 }
 
 export interface SigningConfig {
@@ -130,6 +134,11 @@ export interface SamlIdpOptions {
       fields?: Partial<Record<"key" | "spId" | "requestId" | "expiresAt", string>>;
     };
   };
+  /**
+   * Sign the IdP metadata document (enveloped XML signature with the active signing key).
+   * Default false. Useful for SPs and federations that verify metadata signatures.
+   */
+  signMetadata?: boolean;
   /** Validator run on every inbound SAML message. Default: `libxml2Validator()`. */
   schemaValidator?: SchemaValidator;
 }
@@ -148,6 +157,9 @@ export interface ResolvedServiceProvider {
   spCertificates: string[];
   allowIdpInitiated: boolean;
   authorize: (ctx: AuthorizeContext) => boolean | Promise<boolean>;
+  /** Effective signing for this SP (per-SP override, else the global setting). */
+  signResponse: boolean;
+  signAssertion: boolean;
 }
 
 export interface ResolvedSamlIdpOptions {
@@ -168,6 +180,7 @@ export interface ResolvedSamlIdpOptions {
   serviceProviders: ResolvedServiceProvider[];
   schemaValidator: SchemaValidator;
   schema: SamlIdpOptions["schema"];
+  signMetadata: boolean;
   /** Non-fatal configuration warnings, logged once at startup. */
   warnings: string[];
 }
