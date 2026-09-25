@@ -38,7 +38,8 @@ const descendants = (el: any, ns: string, name: string): any[] => Array.from(el.
 
 function toPem(b64: string): string {
   const body = b64.replace(/\s+/g, "");
-  return `-----BEGIN CERTIFICATE-----\n${body.match(/.{1,64}/g)!.join("\n")}\n-----END CERTIFICATE-----\n`;
+  if (!body) throw new SpMetadataError("empty X509Certificate");
+  return `-----BEGIN CERTIFICATE-----\n${(body.match(/.{1,64}/g) ?? []).join("\n")}\n-----END CERTIFICATE-----\n`;
 }
 
 /**

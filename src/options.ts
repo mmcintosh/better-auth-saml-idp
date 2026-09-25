@@ -109,6 +109,7 @@ const optionsSchema = z
       .string()
       // Browsers treat "\" like "/" in URLs ("/\\evil.example" → "//evil.example"), so reject it
       // along with control characters and whitespace.
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: rejecting control characters is the point
       .refine((v) => !/[\\\s\u0000-\u001f\u007f]/.test(v), { message: "must not contain backslashes, whitespace or control characters" })
       .refine((v) => (v.startsWith("/") && !v.startsWith("//")) || /^https?:\/\//.test(v), {
         message: "must be a path starting with / or an absolute http(s) URL",

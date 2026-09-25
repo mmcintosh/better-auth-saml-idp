@@ -11,7 +11,7 @@ test("Keycloak broker: a new user signs in through our IdP", async ({ page }) =>
   const redirect = `${KC}/realms/e2e/account/`;
   const auth = new URL(`${KC}/realms/e2e/protocol/openid-connect/auth`);
   const verifier = randomBytes(32).toString("base64url");
-  Object.entries({
+  for (const [k, v] of Object.entries({
     client_id: "account-console",
     redirect_uri: redirect,
     response_type: "code",
@@ -21,7 +21,7 @@ test("Keycloak broker: a new user signs in through our IdP", async ({ page }) =>
     nonce: randomBytes(8).toString("hex"),
     code_challenge: createHash("sha256").update(verifier).digest("base64url"),
     code_challenge_method: "S256",
-  }).forEach(([k, v]) => auth.searchParams.set(k, v));
+  })) auth.searchParams.set(k, v);
 
   await page.goto(auth.href);
   await idpSignUpAndVerify(page, email);

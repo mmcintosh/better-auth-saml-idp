@@ -24,7 +24,10 @@ export default async function globalSetup() {
   process.once("SIGTERM", onSignal);
   try {
     const idp = await startIdp();
-    stops.push(() => (stopProcessGroup(idp.pid), stopListener(8787)));
+    stops.push(() => {
+      stopProcessGroup(idp.pid);
+      return stopListener(8787);
+    });
     writeSimpleSamlphpMetadata(idp.cert);
     writeFileSync(join(GENERATED, "state.json"), JSON.stringify({ cert: idp.cert }));
 

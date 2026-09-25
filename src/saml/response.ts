@@ -13,8 +13,10 @@ const DIGEST_URI: Record<DigestAlgorithm, string> = {
 const EXC_C14N = "http://www.w3.org/2001/10/xml-exc-c14n#";
 const ENVELOPED = "http://www.w3.org/2000/09/xmldsig#enveloped-signature";
 
+const XML_ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" };
+
 export function escapeXml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]!);
+  return s.replace(/[&<>"']/g, (c) => XML_ESCAPES[c] ?? c);
 }
 
 /** SAML IDs must be NCNames: start with a letter or underscore. */

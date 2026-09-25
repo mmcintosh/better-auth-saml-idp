@@ -158,7 +158,7 @@ describe("encryptAssertionInResponse", () => {
   it("replaces the assertion and declares xmlns:saml on the encrypted element for standalone parsing", () => {
     const out = encryptAssertionInResponse(response(assertion), resolvedEncryption());
     expect(out).not.toContain("<saml:Assertion");
-    expect(out).toMatch(/^<samlp:Response [^>]+><saml:Issuer>i<\/saml:Issuer><saml:EncryptedAssertion><xenc:EncryptedData [^]*<\/xenc:EncryptedData><\/saml:EncryptedAssertion><\/samlp:Response>$/);
+    expect(out).toMatch(/^<samlp:Response [^>]+><saml:Issuer>i<\/saml:Issuer><saml:EncryptedAssertion><xenc:EncryptedData [\s\S]*<\/xenc:EncryptedData><\/saml:EncryptedAssertion><\/samlp:Response>$/);
     expect(decryptWithNode(out, keys.sp.privateKey)).toBe(
       `<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_a" Version="2.0"><saml:Issuer>i</saml:Issuer></saml:Assertion>`,
     );

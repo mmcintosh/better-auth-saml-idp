@@ -69,5 +69,6 @@ let shared: SchemaValidator | undefined;
  * every request.
  */
 export function defaultSchemaValidator(): SchemaValidator {
-  return (shared ??= libxml2Validator());
+  shared ??= libxml2Validator();
+  return shared;
 }

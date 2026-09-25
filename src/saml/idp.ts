@@ -56,7 +56,10 @@ export function idpCache(options: ResolvedSamlIdpOptions) {
       cache.delete(baseURL); // refresh LRU position
     } else {
       idp = createIdp(options, baseURL);
-      if (cache.size >= MAX_CACHED_BASE_URLS) cache.delete(cache.keys().next().value!);
+      if (cache.size >= MAX_CACHED_BASE_URLS) {
+        const oldest = cache.keys().next();
+        if (!oldest.done) cache.delete(oldest.value);
+      }
     }
     cache.set(baseURL, idp);
     return idp;

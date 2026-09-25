@@ -54,6 +54,8 @@ export function loginRedirectUrl(ctx: GenericEndpointContext, state: PluginState
  * resume link can't be completed in another browser. Only ever read or created on same-site
  * GETs: the SP's cross-site POST carries no SameSite=Lax cookies.
  */
+export async function bindingValue(ctx: GenericEndpointContext, create: true): Promise<string>;
+export async function bindingValue(ctx: GenericEndpointContext, create: boolean): Promise<string | null>;
 export async function bindingValue(ctx: GenericEndpointContext, create: boolean): Promise<string | null> {
   const cookie = ctx.context.createAuthCookie(BINDING_COOKIE);
   const existing = await ctx.getSignedCookie(cookie.name, ctx.context.secret);
@@ -78,7 +80,7 @@ async function proceed(ctx: GenericEndpointContext, state: PluginState, sp: Reso
  * the login page; `/resume?rid=` picks it up afterwards (R1). Shared with IdP-initiated SSO.
  */
 export async function parkForLogin(ctx: GenericEndpointContext, state: PluginState, req: ValidatedRequest): Promise<never> {
-  const binding = (await bindingValue(ctx, true))!;
+  const binding = await bindingValue(ctx, true);
   const rid = await storePending(
     ctx.context.internalAdapter,
     { ...req, bindingHash: await sha256b64url(binding) },
@@ -123,7 +125,7 @@ export const ssoEndpoint = (state: PluginState) =>
       let raw: RawAuthnRequest;
       let sp: ResolvedServiceProvider | undefined;
       let req: ValidatedRequest;
-      let info;
+      let info: Awaited<ReturnType<typeof parseAuthnRequest>>;
       try {
         raw = isPost
           ? { binding: "post", samlRequest: ctx.body?.SAMLRequest ?? "", relayState: ctx.body?.RelayState }

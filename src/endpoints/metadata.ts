@@ -41,7 +41,10 @@ export const metadataEndpoint = (getIdp: (baseURL: string) => Idp, options: Reso
     async (ctx) => {
       const idp = getIdp(ctx.context.baseURL);
       let xml = metadataXml.get(idp);
-      if (xml === undefined) metadataXml.set(idp, (xml = renderMetadata(idp, options)));
+      if (xml === undefined) {
+        xml = renderMetadata(idp, options);
+        metadataXml.set(idp, xml);
+      }
       return new Response(xml, {
         headers: {
           "Content-Type": "application/samlmetadata+xml; charset=utf-8",

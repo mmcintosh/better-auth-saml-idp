@@ -84,8 +84,12 @@ export function createWasmValidator(
   async function instantiate(): Promise<Instance> {
     const mod = await getModule();
     let mem: WebAssembly.Memory | undefined;
-    const u8 = () => new Uint8Array(mem!.buffer);
-    const dv = () => new DataView(mem!.buffer);
+    const memory = () => {
+      if (!mem) throw new Error("xsd.wasm: memory accessed before instantiation");
+      return mem;
+    };
+    const u8 = () => new Uint8Array(memory().buffer);
+    const dv = () => new DataView(memory().buffer);
     const imports = {
       env: {
         emscripten_notify_memory_growth: (_index: number) => {},

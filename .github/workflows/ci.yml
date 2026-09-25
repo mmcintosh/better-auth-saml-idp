@@ -18,10 +18,19 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: scripts/use-better-auth.sh ${{ matrix.better-auth }}
       - run: pnpm typecheck
+      - run: pnpm lint          # Biome: recommended + security rules
       - run: pnpm -C examples/workers-hono typecheck
       - run: pnpm test          # node + workerd (D1/Drizzle, validateSchema on), incl. SP interop
       - run: pnpm test:wasm     # validator suite, node + workerd
       - run: pnpm pack:check    # dist build, publint, Are the Types Wrong
+
+  # Secret scan over the full git history (.gitleaks.toml).
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - run: docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.28.0 git /repo --no-banner --redact -c /repo/.gitleaks.toml
 
   # Real Chromium over HTTPS (Playwright): Keycloak 26.4, SimpleSAMLphp 2.5 and a node-saml POST-binding
   # SP with a cross-site post-ACS redirect, against the example IdP on workerd.

@@ -26,6 +26,7 @@ const invalid = (detail: string) => new SamlRequestError("INVALID_SAML_REQUEST",
 
 /** Attacker-controlled text in debug logs: bounded length, no control characters. */
 export function logSafe(s: string, max = 120): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping control characters is the point
   const clean = s.replace(/[\u0000-\u001f\u007f]/g, "?");
   return clean.length > max ? `${clean.slice(0, max)}…` : clean;
 }
@@ -91,7 +92,9 @@ export function parseRedirectQuery(rawQuery: string): RawAuthnRequest {
     if (!found.Signature || !found.SigAlg) throw invalid("Signature and SigAlg must be sent together");
     // A name that needed decoding cannot have been signed as "SAMLRequest"/"RelayState"/…:
     // rebuild the octets only from segments whose raw name is the canonical one.
-    const octets = [found.SAMLRequest, found.RelayState, found.SigAlg].filter(Boolean).map((p) => p!.raw).join("&");
+    const octets = [found.SAMLRequest, found.RelayState, found.SigAlg]
+      .flatMap((p) => (p ? [p.raw] : []))
+      .join("&");
     out.signed = { octets, sigAlg: found.SigAlg.value, signature: found.Signature.value };
     const rawNames = rawQuery.split("&").map((p) => p.split("=")[0]);
     for (const name of ["SAMLRequest", "RelayState", "SigAlg"] as const)
@@ -227,13 +230,14 @@ export async function parseAuthnRequest(
   const schema = await validator.validate(xml, "protocol");
   if (!schema.valid) throw invalid(`schema: ${logSafe(schema.errors.slice(0, 2).join("; "), 300)}`);
 
-  let doc;
+  let doc: ReturnType<typeof parseXmlStrict>;
   try {
     doc = parseXmlStrict(xml);
   } catch (e) {
     throw invalid(`not well-formed: ${logSafe((e as Error).message)}`);
   }
-  const root = doc.documentElement!;
+  const root = doc.documentElement;
+  if (!root) throw invalid("no root element");
   if (root.namespaceURI !== NS_PROTOCOL || root.localName !== "AuthnRequest") throw invalid("root element is not samlp:AuthnRequest");
   if ((root.getAttribute("Version") ?? "").trim() !== "2.0") throw invalid("Version must be 2.0");
 

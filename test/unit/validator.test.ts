@@ -71,7 +71,10 @@ describe("libxml2Validator", { timeout: 60_000 }, () => {
     const before = proc?.listenerCount?.("uncaughtException") ?? 0;
     const write = proc?.stdout?.write;
     let writes = 0;
-    if (write) proc.stdout.write = (...a: unknown[]) => (writes++, write.apply(proc.stdout, a));
+    if (write) proc.stdout.write = (...a: unknown[]) => {
+        writes++;
+        return write.apply(proc.stdout, a);
+      };
     try {
       for (let i = 0; i < 5; i++) await validator.validate(authnRequest(), "protocol");
     } finally {

@@ -548,7 +548,10 @@ describe("§7 authorize()", () => {
   it("receives the fresh user, the session and the SP", async () => {
     let seen: any;
     const { browser } = await host({
-      saml: { serviceProviders: spConfig({ authorize: async (c: any) => ((seen = c), true) }) },
+      saml: { serviceProviders: spConfig({ authorize: async (c: any) => {
+          seen = c;
+          return true;
+        }, }) },
     });
     const user = await browser.signUp();
     await browser.fetch(await redirectUrl(authnRequestXml().xml));

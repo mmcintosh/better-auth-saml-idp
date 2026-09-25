@@ -141,7 +141,12 @@ export function startTestSp(cert) {
 
   return new Promise((resolve) => {
     spServer.listen(9100, "127.0.0.1", () =>
-      appServer.listen(9101, "127.0.0.1", () => resolve({ close: () => (spServer.close(), appServer.close()) })),
+      appServer.listen(9101, "127.0.0.1", () => resolve({
+          close: () => {
+            spServer.close();
+            appServer.close();
+          },
+        })),
     );
   });
 }

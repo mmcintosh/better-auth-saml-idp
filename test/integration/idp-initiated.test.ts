@@ -213,7 +213,10 @@ describe("IdP-initiated SSO: policy still applies", () => {
 
   it("authorize() denial → ACCESS_DENIED, no Response; it sees the SP", async () => {
     let seen: any;
-    const { browser } = await host({ authorize: async (c: any) => ((seen = c), false) });
+    const { browser } = await host({ authorize: async (c: any) => {
+        seen = c;
+        return false;
+      }, });
     await browser.signUp();
     const res = await browser.fetch(init());
     expect(res.status).toBe(403);

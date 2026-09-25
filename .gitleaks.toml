@@ -1,0 +1,8 @@
+# Secret scan over the full git history (CI job "secrets"). Test keys are generated per run and
+# never committed; the only allow-listed value is the fixed Better Auth test secret below.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test-only placeholders"
+regexes = ['''test-secret-that-is-at-least-32-characters-long''']
