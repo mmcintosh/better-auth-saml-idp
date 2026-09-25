@@ -37,6 +37,9 @@ export const resumeEndpoint = (state: PluginState) =>
 
       const sp = state.registry.byId(pending.spId);
       if (!sp) return fail(ctx, "UNKNOWN_SERVICE_PROVIDER", "SP removed since the request was stored");
+      // IdP-initiated (no request ID): the SP must still have opted in.
+      if (pending.requestId === undefined && !sp.allowIdpInitiated)
+        return fail(ctx, "IDP_INITIATED_NOT_ALLOWED", `SP ${sp.id}: opt-in removed since the request was stored`);
       // Configuration may have changed while the user was signing in: re-check the allow-list.
       if (resolveAcsUrl(sp, pending.acsUrl) !== pending.acsUrl) return fail(ctx, "ACS_URL_NOT_ALLOWED", `SP ${sp.id}`);
 

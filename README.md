@@ -1,6 +1,6 @@
 # better-auth-saml-idp
 
-A [Better Auth](https://www.better-auth.com) plugin that turns your Better Auth server into a **SAML 2.0 Identity Provider**. It signs users in to SAML service providers such as HubSpot with SP-initiated SSO. It runs on **Cloudflare Workers** and **Node 20+**, with no Java and no native binaries.
+A [Better Auth](https://www.better-auth.com) plugin that turns your Better Auth server into a **SAML 2.0 Identity Provider**. It signs users in to SAML service providers such as HubSpot with SP-initiated SSO, and, opt-in per SP, IdP-initiated SSO. It runs on **Cloudflare Workers** and **Node 20+**, with no Java and no native binaries.
 
 > **Unofficial community plugin.** This project isn't affiliated with or endorsed by Better Auth.
 
@@ -105,8 +105,26 @@ All endpoints are relative to your Better Auth base path, e.g. `/api/auth`.
 | GET | `/saml2/idp/metadata` | IdP metadata, to give to the SP |
 | GET, POST | `/saml2/idp/sso` | Receives AuthnRequests (HTTP-Redirect and HTTP-POST bindings) |
 | GET | `/saml2/idp/resume?rid=` | Where the login page returns the user (`callbackURL`) |
+| GET | `/saml2/idp/init?sp=<id>[&RelayState=]` | IdP-initiated SSO: an unsolicited Response to the SP's first ACS URL. Only for SPs with `allowIdpInitiated: true` |
 
 The login page gets `?callbackURL=<absolute resume URL>`. After a successful sign-in, send the browser there.
+
+### IdP-initiated SSO (opt-in per SP)
+
+Off by default. Turn it on per SP to put "launch this app" links in your own UI:
+
+```ts
+{
+  id: "hubspot",
+  entityId: "…",
+  acsUrls: ["…"],
+  allowIdpInitiated: true,
+  idpInitiatedRelayState: "https://app.hubspot.com/", // optional: where the SP should land the user
+  allowedRelayStates: ["https://app.hubspot.com/reports"], // optional: caller RelayStates accepted, exact match
+}
+```
+
+Link to `/api/auth/saml2/idp/init?sp=hubspot`. Without a session the user signs in first and continues through `resume`. The Response has no `InResponseTo`, so the SP must accept unsolicited Responses. A caller's `RelayState` is used only if it's on `allowedRelayStates`; anything else is ignored and `idpInitiatedRelayState` is sent instead, so launcher links can't become open redirects at the SP. Read the IdP-initiated section of [docs/security.md](docs/security.md#idp-initiated-sso) before you enable it.
 
 ## Tested against
 
@@ -135,7 +153,7 @@ Ship what is built, safely.
 
 What admins and SPs assume every IdP has.
 
-- **IdP-initiated SSO (opt-in per SP).** Supported by 8 of the 11 products compared (partially by Ory Polis), including all four commercial IdPs. Off by default, as the spec intended.
+- **IdP-initiated SSO (done).** Opt-in per SP, off by default; RelayState only from a per-SP allow-list. Supported by 8 of the 11 products compared (partially by Ory Polis), including all four commercial IdPs.
 - **Encrypted assertions.** AES-256-GCM with RSA-OAEP. Shibboleth encrypts by default; Keycloak, authentik, Logto, Entra and Okta offer it per SP.
 - **Register SPs from metadata XML (done).** serviceProviderFromMetadata(): a helper that turns an SP's metadata into a serviceProviders entry, including certificates and ACS URLs.
 - **Per-SP signing choice (done).** Move signResponse and signAssertion to each SP, as Shibboleth, Keycloak and authentik do.

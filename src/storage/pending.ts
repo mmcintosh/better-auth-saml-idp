@@ -13,7 +13,11 @@ const RID_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 /** Everything later steps need from a validated AuthnRequest. */
 export interface ValidatedRequest {
   spId: string;
-  requestId: string;
+  /**
+   * The AuthnRequest ID. Undefined for IdP-initiated SSO (`/saml2/idp/init`): the Response is
+   * unsolicited and carries no InResponseTo.
+   */
+  requestId: string | undefined;
   acsUrl: string;
   relayState: string | undefined;
   forceAuthn: boolean;
@@ -33,6 +37,9 @@ type InternalAdapter = {
   createVerificationValue(data: { identifier: string; value: string; expiresAt: Date }): Promise<unknown>;
   consumeVerificationValue(identifier: string): Promise<{ value: string; expiresAt: Date } | null>;
 };
+
+/** A stored request ID is a string, or absent for an IdP-initiated request (JSON drops undefined). */
+const validRequestId = (id: unknown) => id === undefined || typeof id === "string";
 
 export function base64url(bytes: Uint8Array): string {
   let bin = "";
@@ -70,7 +77,7 @@ export async function consumeContinuation(adapter: InternalAdapter, cid: string)
   if (!row) return null;
   try {
     const v = JSON.parse(row.value) as ValidatedRequest;
-    return typeof v?.spId === "string" && typeof v.requestId === "string" && typeof v.acsUrl === "string" ? v : null;
+    return typeof v?.spId === "string" && validRequestId(v.requestId) && typeof v.acsUrl === "string" ? v : null;
   } catch {
     return null;
   }
@@ -93,7 +100,7 @@ export async function consumePending(adapter: InternalAdapter, rid: string): Pro
   if (!row) return null; // consumeVerificationValue already treats expired rows as consumed
   try {
     const v = JSON.parse(row.value) as PendingRequest;
-    return typeof v?.spId === "string" && typeof v.requestId === "string" && typeof v.acsUrl === "string" ? v : null;
+    return typeof v?.spId === "string" && validRequestId(v.requestId) && typeof v.acsUrl === "string" ? v : null;
   } catch {
     return null;
   }

@@ -25,7 +25,7 @@ export const NAMEID_FORMAT = {
 } as const;
 
 export interface ServiceProviderConfig {
-  /** Stable identifier used in logs and in `/saml2/idp/init?sp=` (stretch goal). */
+  /** Stable identifier used in logs and in `/saml2/idp/init?sp=<id>` (IdP-initiated SSO). */
   id: string;
   /** The SP's entity ID; matched exactly against the AuthnRequest `<Issuer>`. */
   entityId: string;
@@ -53,8 +53,24 @@ export interface ServiceProviderConfig {
    * rotation (e.g. Cloudflare Access publishes two); a signature from any of them is accepted.
    */
   spCertificate?: string | string[];
-  /** IdP-initiated SSO. Not implemented in v1; must be false. */
+  /**
+   * Allow IdP-initiated (unsolicited) SSO to this SP via `GET /saml2/idp/init?sp=<id>`.
+   * Default false. The Response carries no `InResponseTo`, so the SP must accept unsolicited
+   * Responses and track assertion IDs itself (docs/security.md).
+   */
   allowIdpInitiated?: boolean;
+  /**
+   * RelayState sent with IdP-initiated Responses when the caller supplies none, or one that is
+   * not in `allowedRelayStates` (commonly the SP-side landing URL). Requires `allowIdpInitiated`.
+   */
+  idpInitiatedRelayState?: string;
+  /**
+   * Caller-supplied `RelayState` values accepted on `/saml2/idp/init`, matched exactly. Any
+   * other value is ignored (the default above is used): an IdP-initiated RelayState is usually
+   * a redirect target at the SP, so accepting arbitrary values would make the IdP an
+   * open-redirect launcher for the SP. Requires `allowIdpInitiated`.
+   */
+  allowedRelayStates?: string[];
   /** Decide whether this user may use this SP. Denial issues no assertion. */
   authorize?: (ctx: AuthorizeContext) => boolean | Promise<boolean>;
   /** Override the global `signing.signResponse` for this SP. */
@@ -156,6 +172,8 @@ export interface ResolvedServiceProvider {
   /** Normalised to a list; empty when none configured. */
   spCertificates: string[];
   allowIdpInitiated: boolean;
+  idpInitiatedRelayState: string | undefined;
+  allowedRelayStates: string[];
   authorize: (ctx: AuthorizeContext) => boolean | Promise<boolean>;
   /** Effective signing for this SP (per-SP override, else the global setting). */
   signResponse: boolean;

@@ -70,6 +70,14 @@ async function proceed(ctx: GenericEndpointContext, state: PluginState, sp: Reso
   if (session && !req.forceAuthn) return issueResponse(ctx, state, sp, session as any, req);
   if (req.isPassive)
     return samlError(ctx, state, req, { code: "Responder", subCode: "NoPassive", message: "The user is not signed in at the identity provider" });
+  return parkForLogin(ctx, state, req);
+}
+
+/**
+ * Store the request as a single-use pending value bound to this browser, and send the user to
+ * the login page; `/resume?rid=` picks it up afterwards (R1). Shared with IdP-initiated SSO.
+ */
+export async function parkForLogin(ctx: GenericEndpointContext, state: PluginState, req: ValidatedRequest): Promise<never> {
   const binding = (await bindingValue(ctx, true))!;
   const rid = await storePending(
     ctx.context.internalAdapter,
@@ -104,6 +112,7 @@ export const ssoEndpoint = (state: PluginState) =>
       if (!isPost && ctx.query?.cid !== undefined) {
         const req = await consumeContinuation(ctx.context.internalAdapter, ctx.query.cid);
         if (!req) return fail(ctx, "PENDING_REQUEST_NOT_FOUND", "unknown or used continuation");
+        if (req.requestId === undefined) return fail(ctx, "PENDING_REQUEST_NOT_FOUND", "continuation without a request ID");
         const sp = registry.byId(req.spId);
         if (!sp || resolveAcsUrl(sp, req.acsUrl) !== req.acsUrl) return fail(ctx, "UNKNOWN_SERVICE_PROVIDER", "SP changed");
         return proceed(ctx, state, sp, req);
@@ -144,7 +153,7 @@ export const ssoEndpoint = (state: PluginState) =>
 
       // R2: first sight of (SP, request ID) wins; every later sighting is a replay.
       const expiresAt = new Date(now.getTime() + (REQUEST_MAX_AGE_SECONDS + 2 * options.clockSkewSeconds) * 1000);
-      if (!(await recordRequestId(ctx.context.adapter as any, sp.id, req.requestId, expiresAt)))
+      if (!(await recordRequestId(ctx.context.adapter as any, sp.id, info.id, expiresAt)))
         return fail(ctx, "DUPLICATE_REQUEST_ID", `SP ${sp.id}`);
 
       // The SP and ACS URL are trusted from here on: unsatisfiable requests get a SAML status.

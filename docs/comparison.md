@@ -13,7 +13,7 @@ Our own column links to the tests that prove each entry. The roadmap derived fro
 
 ## Where we trail
 
-- **Breadth of flows.** No IdP-initiated SSO or Single Logout yet.
+- **Breadth of flows.** No Single Logout yet.
 - **Encryption.** No encrypted assertions yet; several SPs and federations expect the option.
 - **SP onboarding.** SPs are configured in code or imported from metadata XML; no registry, URL refresh or UI yet.
 
@@ -26,7 +26,7 @@ Products: **better-auth-saml-idp** (This plugin, pre-release); **Shibboleth IdP*
 | Feature | better-auth-saml-idp | Shibboleth IdP | SimpleSAMLphp | Keycloak | Zitadel | authentik | Logto | Ory Polis | Microsoft Entra ID | Okta | Google Workspace | Auth0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | SP-initiated SSO | ✅ Yes<br><sub>HTTP-Redirect and HTTP-POST in, POST out</sub> | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes<br><sub>brokered to an upstream IdP</sub> | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
-| IdP-initiated SSO | ❌ No<br><sub>roadmap v1.1</sub> | ✅ Yes | ✅ Yes | ✅ Yes<br><sub>per client</sub> | ❌ No | ✅ Yes | ❌ No | 🟡 Partial<br><sub>OIDC-initiated only</sub> | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
+| IdP-initiated SSO | ✅ Yes<br><sub>opt-in per SP; RelayState allow-list</sub> | ✅ Yes | ✅ Yes | ✅ Yes<br><sub>per client</sub> | ❌ No | ✅ Yes | ❌ No | 🟡 Partial<br><sub>OIDC-initiated only</sub> | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
 | Single Logout | ❌ No<br><sub>roadmap v1.2</sub> | ✅ Yes<br><sub>docs call it best-effort</sub> | 🟡 Partial<br><sub>front-channel only</sub> | ✅ Yes<br><sub>front and back channel</sub> | 🟡 Partial<br><sub>responds, ends nothing</sub> | ✅ Yes<br><sub>front and back channel</sub> | ❌ No | ❌ No | ✅ Yes<br><sub>Redirect only</sub> | ✅ Yes<br><sub>back-channel is Early Access</sub> | ❔ Not documented | 🟡 Partial<br><sub>no multi-app logout</sub> |
 
 ### Bindings
@@ -83,6 +83,7 @@ Products: **better-auth-saml-idp** (This plugin, pre-release); **Shibboleth IdP*
 ## Our evidence
 
 - **SP-initiated SSO:** test/integration/sso-flow.test.ts, e2e/browser
+- **IdP-initiated SSO:** test/integration/idp-initiated.test.ts, test/interop/idp-initiated-interop.test.ts
 - **AuthnRequest over Redirect and POST:** `test/integration/sso-flow.test.ts`
 - **Response / Assertion signing choice:** `test/integration/security.test.ts`
 - **Verifies and can require signed AuthnRequests:** test/integration/security.test.ts, review-findings.test.ts #2
