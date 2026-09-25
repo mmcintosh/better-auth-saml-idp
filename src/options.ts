@@ -239,7 +239,7 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
     assertionLifetimeSeconds: lifetime,
     clockSkewSeconds: o.clockSkewSeconds ?? 60,
     pendingRequestTtlSeconds: o.pendingRequestTtlSeconds ?? 600,
-    relayStateMaxBytes: o.relayStateMaxBytes ?? 80,
+    relayStateMaxBytes: o.relayStateMaxBytes ?? RELAY_STATE_HARD_CAP,
     authnContextClassRef: o.authnContextClassRef ?? AUTHN_CONTEXT_UNSPECIFIED,
     accountPolicy: {
       requireEmailVerified: o.accountPolicy?.requireEmailVerified ?? true,

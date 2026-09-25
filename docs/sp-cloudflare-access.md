@@ -27,7 +27,7 @@ Cloudflare uses a single URL as both its SP entity ID and its ACS URL. `<team>` 
 Put this in `SAML_SERVICE_PROVIDERS`, then redeploy. The plugin's default NameID format is `emailAddress`, which is what Cloudflare requires.
 
 > [!IMPORTANT]
-> **Cloudflare Access sends a RelayState longer than the SAML spec's 80 bytes.** With the default `relayStateMaxBytes` (80), the IdP answers `RELAY_STATE_TOO_LONG`. Set `relayStateMaxBytes: 1024`, as `examples/workers-hono` does. This was verified against a real Zero Trust team on 2026-09-25.
+> **Cloudflare Access sends a RelayState longer than the SAML spec's 80 bytes.** The plugin's default `relayStateMaxBytes` is 1024 for this reason. Don't lower it to the strict 80 if you use Cloudflare Access, or the IdP answers `RELAY_STATE_TOO_LONG`. This was verified against a real Zero Trust team on 2026-09-25.
 
 ## 3. Add the IdP in Zero Trust
 

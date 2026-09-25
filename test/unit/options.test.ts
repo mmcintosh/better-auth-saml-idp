@@ -36,7 +36,7 @@ describe("resolveOptions: defaults", () => {
     expect(r.assertionLifetimeSeconds).toBe(300);
     expect(r.clockSkewSeconds).toBe(60);
     expect(r.pendingRequestTtlSeconds).toBe(600);
-    expect(r.relayStateMaxBytes).toBe(80);
+    expect(r.relayStateMaxBytes).toBe(1024); // Cloudflare Access exceeds the spec's 80 (D-016)
     expect(r.warnings).toEqual([]);
     expect(typeof r.schemaValidator.validate).toBe("function");
     expect(r.accountPolicy).toEqual({ requireEmailVerified: true, allowImpersonatedSessions: false, allowAnonymousUsers: false });

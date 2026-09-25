@@ -91,7 +91,58 @@ The login page gets `?callbackURL=<absolute resume URL>`. After a successful sig
 
 ## Tested against
 
+How it compares with eleven other SAML identity providers, feature by feature and with sources: [docs/comparison.md](docs/comparison.md).
+
+
 `@better-auth/sso`, `@node-saml/node-saml` and samlify run in CI. In a **real Chromium over HTTPS** (Playwright, `pnpm e2e`, also in CI), where every party is a separate site so SameSite and CSP behave as in production, three SPs are tested: Keycloak 26.4 and SimpleSAMLphp 2.5 in Docker, and a `node-saml` SP that uses the POST binding and redirects cross-site after its ACS. SAMLtool validates the Response. Guides for Cloudflare Access, AWS IAM Identity Center and HubSpot are included. See [docs/testing-with-sps.md](docs/testing-with-sps.md) and the [Workers example](examples/workers-hono/README.md).
+
+## Roadmap
+
+Derived from a feature comparison with eleven other SAML identity providers ([docs/comparison.md](docs/comparison.md), checked 2026-09-25).
+
+### v1.0: First npm release
+
+Ship what is built, safely.
+
+- **Release engineering.** dist build with type declarations, lint, npm pack review, provenance, changelog, README quickstart from a clean project.
+- **better-auth-cloudflare 0.4.** Replace the vendored build once 0.4 is on npm (the README requires it for Workers users).
+- **Key rotation guide.** Document the add-next-certificate, switch, retire sequence using additionalCertificates. Every commercial IdP supports rollover.
+- **Second adversarial review.** Review the new code paths from the first round: POST re-entry, error Responses, account policy, NameID.
+
+### v1.1: Close the expected-feature gaps
+
+What admins and SPs assume every IdP has.
+
+- **IdP-initiated SSO (opt-in per SP).** Supported by 8 of the 11 products compared (partially by Ory Polis), including all four commercial IdPs. Off by default, as the spec intended.
+- **Encrypted assertions.** AES-256-GCM with RSA-OAEP. Shibboleth encrypts by default; Keycloak, authentik, Logto, Entra and Okta offer it per SP.
+- **Register SPs from metadata XML.** A helper that turns an SP's metadata into a serviceProviders entry, including certificates and ACS URLs.
+- **Per-SP signing choice.** Move signResponse and signAssertion to each SP, as Shibboleth, Keycloak and authentik do.
+- **Signed IdP metadata.** Optional, for SPs and federations that verify metadata signatures.
+
+### v1.2: Operations at scale
+
+For hosts with many SPs or changing SPs.
+
+- **Single Logout.** SP-initiated, front-channel first. Entra, Okta, Keycloak and authentik support it; Shibboleth calls it best-effort.
+- **Database-backed SP registry and API.** Add and change SPs at runtime without a redeploy (spec stretch goal).
+- **SP metadata URL with refresh.** Pick up SP certificate rotation automatically.
+- **Signed AuthnRequests over HTTP-POST.** XML-signature verification with XSW defences, pinned to the SP's certificate.
+
+### Later: Considered
+
+Valuable, but needs design first or depends on the host.
+
+- **Step-up authentication.** Map RequestedAuthnContext to the host's Better Auth 2FA state, as Keycloak does with levels of authentication.
+- **Declarative attribute mapping.** Spec open question 5; functions already cover it in code.
+- **Upstreaming.** Propose integration with @better-auth/sso on better-auth #6254 once v1 is stable.
+
+### Not planned: Out of scope
+
+Deliberately left out.
+
+- **Artifact binding.** None of the four modern open-source IdPs supports it; no target SP needs it.
+- **Outbound SCIM.** Provisioning is a separate concern from SSO; a separate plugin if ever.
+- **Admin UI.** Better Auth hosts build their own UI on the registry API.
 
 ## Security
 

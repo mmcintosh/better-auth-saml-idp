@@ -35,9 +35,6 @@ function samlPlugin(env: Env, origin: string) {
   const value = samlIdp({
     entityId: `${origin}/api/auth/saml2/idp`,
     loginPage: "/sign-in",
-    // The SAML Bindings spec caps RelayState at 80 bytes, but real SPs send more:
-    // Cloudflare Access's RelayState exceeds 80 bytes. 1024 is the plugin's hard cap.
-    relayStateMaxBytes: 1024,
     signing: { privateKey: env.SAML_IDP_PRIVATE_KEY, certificate: env.SAML_IDP_CERT },
     serviceProviders: sps.map((sp) => ({
       ...sp,

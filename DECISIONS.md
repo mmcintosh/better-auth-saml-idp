@@ -341,6 +341,6 @@ Smaller verified items, also fixed:
 `{"email":"mmcintosh@infowall.ai","name":"Mark McIntosh","givenName":"Mark","surName":"McIntosh","saml_attributes":{"email":"mmcintosh@infowall.ai"}}`.
 The IdP logs show the matching sequence: SSO → sign-in → resume, with the assertion auto-posted to Cloudflare.
 
-**Real-world finding: Cloudflare Access sends a RelayState longer than 80 bytes.** The first attempt failed with `RELAY_STATE_TOO_LONG`. The plugin's default follows SAML Bindings §3.4.3 ("MUST NOT exceed 80 bytes"), and none of the IdPs in the comparison research is documented as enforcing that limit. The example now sets `relayStateMaxBytes: 1024`, the plugin's hard cap, and that made the login work. **Open decision for the owner:** raise the plugin default to 1024 and keep 80 as a strict opt-in.
+**Real-world finding: Cloudflare Access sends a RelayState longer than 80 bytes.** The first attempt failed with `RELAY_STATE_TOO_LONG`. The plugin's default follows SAML Bindings §3.4.3 ("MUST NOT exceed 80 bytes"), and none of the IdPs in the comparison research is documented as enforcing that limit. The example now sets `relayStateMaxBytes: 1024`, the plugin's hard cap, and that made the login work. **Decided (owner, 2026-09-25):** the plugin default is now **1024**, with `relayStateMaxBytes: 80` as the strict-spec opt-in. The example no longer needs to set it.
 
 **Not a plugin issue:** the first password attempts failed with "Invalid password". The password typed didn't match the one set at sign-up. The account was deleted and re-created.

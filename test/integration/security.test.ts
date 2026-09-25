@@ -280,15 +280,28 @@ describe("R3 fresh user check before signing", () => {
 });
 
 describe("§7 RelayState", () => {
-  it("over 80 bytes → 400", async () => {
+  it("over the cap → 400 (default 1024 bytes)", async () => {
     const { browser } = await host();
+    const res = await browser.fetch(await redirectUrl(authnRequestXml().xml, { relayState: "x".repeat(1025) }));
+    expect(res.status).toBe(400);
+    expect(await pageCode(res)).toBe("RELAY_STATE_TOO_LONG");
+  });
+
+  it("a Cloudflare-Access-sized RelayState (> 80 bytes) is accepted by default", async () => {
+    const { browser } = await host();
+    await browser.signUp();
+    expect((await browser.fetch(await redirectUrl(authnRequestXml().xml, { relayState: "r".repeat(200) }))).status).toBe(200);
+  });
+
+  it("strict spec mode: relayStateMaxBytes 80 rejects 81 bytes", async () => {
+    const { browser } = await host({ saml: { relayStateMaxBytes: 80 } });
     const res = await browser.fetch(await redirectUrl(authnRequestXml().xml, { relayState: "x".repeat(81) }));
     expect(res.status).toBe(400);
     expect(await pageCode(res)).toBe("RELAY_STATE_TOO_LONG");
   });
 
   it("counts bytes, not characters", async () => {
-    const { browser } = await host();
+    const { browser } = await host({ saml: { relayStateMaxBytes: 80 } });
     const res = await browser.fetch(await redirectUrl(authnRequestXml().xml, { relayState: "é".repeat(41) }));
     expect(res.status).toBe(400);
   });
