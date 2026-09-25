@@ -210,6 +210,23 @@ describe("SP-initiated Single Logout", () => {
   });
 });
 
+describe("Single Logout: participant recording fails closed", () => {
+  it("if the IdP can't record that an SP got an assertion, it doesn't issue one (a later logout would miss it)", async () => {
+    const { auth, browser } = await host();
+    const ctx = (await auth.$context) as any;
+    const create = ctx.adapter.create.bind(ctx.adapter);
+    ctx.adapter.create = async (a: { model: string }) => {
+      if (a.model === "samlIdpSessionParticipant") throw new Error("database unavailable");
+      return create(a);
+    };
+    const url = `${SSO_URL}?SAMLRequest=${encodeURIComponent(Buffer.from((await import("node:zlib")).deflateRawSync(authnRequestXml({ issuer: A.entityId, acsUrl: A.acs }).xml)).toString("base64"))}`;
+    const res = await browser.fetch(url);
+    expect(res.status).toBe(500);
+    expect(await code(res)).toBe("INTERNAL_ERROR");
+    expect(await res.text()).not.toContain("SAMLResponse");
+  });
+});
+
 describe("IdP-initiated logout", () => {
   it("logs out of every SP, then returns to a same-origin path", async () => {
     const { browser } = await host();

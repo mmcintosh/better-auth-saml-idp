@@ -192,11 +192,14 @@ export async function issueResponse(
     `[saml-idp] issued ${signed.encrypted ? "encrypted " : ""}assertion ${signed.assertionId} for SP ${sp.id} (user ${user.id})`,
   );
   if (state.options.singleLogout) {
-    // Logout must reach this SP later (D-028). Best effort: a failure here costs this SP's
-    // logout propagation, not the sign-in.
-    await recordParticipant(ctx.context.adapter as any, session.session.id, { spId: sp.id, nameId, nameIdFormat: sp.nameIdFormat, sessionIndex }, new Date(session.session.expiresAt)).catch((e) =>
-      ctx.context.logger.error(`[saml-idp] could not record SP ${sp.id} as a logout participant`, e),
-    );
+    // Logout must be able to reach this SP later (D-028). If it can't be recorded, don't issue:
+    // a later logout would skip this SP and still report Success (review 3, R3-2).
+    try {
+      await recordParticipant(ctx.context.adapter as any, session.session.id, { spId: sp.id, nameId, nameIdFormat: sp.nameIdFormat, sessionIndex }, new Date(session.session.expiresAt));
+    } catch (e) {
+      ctx.context.logger.error(`[saml-idp] could not record SP ${sp.id} as a logout participant; not issuing`, e);
+      return fail(ctx, "INTERNAL_ERROR", "logout participant not recorded");
+    }
   }
   return autoPostResponse(request.acsUrl, signed.base64, request.relayState);
 }

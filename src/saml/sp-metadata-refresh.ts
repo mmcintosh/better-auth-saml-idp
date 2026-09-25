@@ -171,6 +171,9 @@ export class SpMetadataCache {
     const pre = precheckXml(xml, MAX_BYTES);
     if (pre.length) throw new Error(pre.join("; "));
 
+    // Schema first, then the signature: never hand an unvalidated document to the verifier.
+    const schema = await this.validator.validate(xml, "metadata");
+    if (!schema.valid) throw new Error(`metadata is not schema-valid: ${schema.errors.slice(0, 2).join("; ")}`);
     const doc = parseXmlStrict(xml);
     const root = doc.documentElement as any;
     if (md.signingCertificates.length) {

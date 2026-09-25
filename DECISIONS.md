@@ -581,7 +581,7 @@ The Redirect binding still verifies the query octets. An embedded signature on a
 5. No XML comments anywhere in a signed request. Exclusive c14n drops comments, so `sp<!---->.evil` would keep a valid signature. We read text with `textContent`, which isn't vulnerable, but refusing comments closes that class of bug outright.
 6. Verification uses the SP's configured certificates only (`getCertFromKeyInfo: () => null`). A certificate in the message's `KeyInfo` is never trusted.
 
-The verified document is the same string, parsed by the same xmldom, that the request pipeline reads. So what's verified is what's processed.
+The verified document is the same string that the request pipeline reads. It's **not** read by the same xmldom version (corrected in D-030): xml-crypto 6 brings its own xmldom 0.8 and the plugin uses 0.9. The one known way they read a document differently, duplicate expanded attribute names, is refused by `parseXmlStrict` and by the XSD before any signature is checked.
 
 **Evidence.**
 - 14 integration tests (both runtimes):
@@ -782,4 +782,35 @@ The live test also found a **workerd incompatibility the stubbed tests couldn't*
 - Prototype pollution through attribute maps.
 - XML injection.
 - Stored SPs being more powerful than code SPs.
+
+## D-030: Second adversarial review, part 2 (external, different model, 2026-09-25)
+
+**How it was run.** A different model reviewed all of `src/` in its own worktree, from the pre-fix code and without seeing part 1's findings, and wrote a failing proof-of-concept test for each finding. It found **six of part 1's nine issues independently**:
+- R3-1: metadata body not capped when there's no Content-Length;
+- R3-2: a participant-read failure reported as Success;
+- R3-3: participants expiring before a refreshed session;
+- R3-4: SLO RelayState size not enforced;
+- R3-5: ResponseLocation used for requests;
+- R3-6: `keygen --force` file mode.
+
+All six were already fixed by D-029, and their proof-of-concept tests pass against the fixed code. Two of the tests needed adjusting, and neither adjustment weakens what they check:
+- **Metadata body limit:** the reader stops just past 1 MiB, but the stream pre-fetches one chunk ahead, so the slack is now two 64 KiB chunks instead of one.
+- **Participant expiry:** the test swept with a cutoff 61 s in the future to get past the throttle, which would also delete correctly extended rows. It now resets the throttle and sweeps at the real "now". It also reads the new `{ participants, truncated }` shape.
+
+**New in part 2**
+- **R3-2, second half (Medium): recording a participant could fail silently at issuance**, so a later logout skipped that SP and still reported Success.
+  - Fix: fail closed. With `singleLogout` enabled, an assertion the IdP couldn't record isn't issued (`INTERNAL_ERROR`). Tested by making the participant insert fail.
+- **R3-7 (Info): two xmldom versions.** xml-crypto 6 verifies with its own xmldom 0.8, and the plugin reads with 0.9. D-025's "same xmldom" claim was wrong and is corrected.
+  - The reviewer fuzzed about 60 constructs. The only divergence found: two attributes with the same expanded name (`p:x` and `q:x`, with p and q bound to one URI). xmldom 0.9 silently drops one, contradicting the "strict parse" comment, while 0.8 keeps both. It isn't exploitable, because the digest breaks and the XSD rejects it on protocol paths, but it made the strict parse dishonest.
+  - Fix: `parseXmlStrict` now runs a Namespaces-in-XML §6.3 check first. A scanner tracks namespace declarations through the element stack and rejects duplicate expanded names, so the claim holds on every path, including the CLI and metadata.
+  - The scanner's regex was timed on adversarial inputs: 200 KB of unterminated tags takes under 10 ms, and a 1 MiB document takes about 320 ms in total, mostly xmldom.
+  - Metadata refresh now runs the XSD check **before** the metadata signature check, like every other path.
+  - Pinning xmldom to one version in this repository would prove nothing for consumers, whose install gives xml-crypto its own copy. So the test documents the two versions and asserts the mitigation instead.
+
+**Rejected by the reviewer after trying:** everything listed under D-029, plus:
+- POST continuation and resume-link binding;
+- R3 re-reads, bans and `authorize()` throwing;
+- encryption order and key freshness;
+- CLI `decode` never reporting a forged, wrapped or duplicate-ID message as valid;
+- login and logout CSRF limited to user-activated navigation (documented residual risk).
 
