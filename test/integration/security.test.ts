@@ -448,6 +448,23 @@ describe("§7 signed AuthnRequests", () => {
     expect(res.status).toBe(200);
   });
 
+  it("accepts a signature from any of several SP certificates (SP key rotation)", async () => {
+    const { browser } = await host({
+      saml: { serviceProviders: spConfig({ requireSignedAuthnRequests: true, spCertificate: [keys.idpNext.certificate, keys.sp.certificate] }) },
+    });
+    await browser.signUp();
+    expect((await browser.fetch(await redirectUrl(authnRequestXml().xml, { sign: true }))).status).toBe(200);
+  });
+
+  it("rejects a signature from a key that is not configured", async () => {
+    const { browser } = await host({
+      saml: { serviceProviders: spConfig({ requireSignedAuthnRequests: true, spCertificate: [keys.idpNext.certificate] }) },
+    });
+    const res = await browser.fetch(await redirectUrl(authnRequestXml().xml, { sign: true }));
+    expect(res.status).toBe(400);
+    expect(await pageCode(res)).toBe("UNSIGNED_SAML_REQUEST");
+  });
+
   it("rejects an unsigned request", async () => {
     const { browser } = await signedHost();
     const res = await browser.fetch(await redirectUrl(authnRequestXml().xml));

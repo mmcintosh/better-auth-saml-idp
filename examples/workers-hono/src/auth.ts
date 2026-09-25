@@ -22,7 +22,10 @@ export interface Env {
 /** DEV_MAILBOX: the latest verification link per email address (per isolate). */
 export const devMailbox = new Map<string, string>();
 
-type SpJson = Pick<ServiceProviderConfig, "id" | "entityId" | "acsUrls" | "nameIdFormat">;
+type SpJson = Pick<
+  ServiceProviderConfig,
+  "id" | "entityId" | "acsUrls" | "nameIdFormat" | "requireSignedAuthnRequests" | "spCertificate"
+>;
 
 // Built once per isolate. Better Auth itself is created per request (to pass that request's
 // `cf` geolocation), but the SAML plugin holds the parsed keys and the compiled XSDs.

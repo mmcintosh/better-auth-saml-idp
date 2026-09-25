@@ -375,3 +375,14 @@ Conclusions:
 On this machine Node needs `--network-family-autoselection-attempt-timeout=3000`: there's no IPv6 route, and IPv4 connects to Cloudflare sometimes take longer than Node's 250 ms happy-eyeballs attempt. The npm script sets it.
 
 **SAMLtool on a production Response:** a throwaway account (created, verified in D1, then deleted) got an assertion for the Cloudflare Access SP. The assertion was captured and never posted. SAMLtool returned **"The SAML Response is valid."** with the production certificate, and "Response signature validation failed. Assertion signature validation failed." with a wrong one.
+
+## D-018: Signed AuthnRequests and ForceAuthn, verified live with Cloudflare Access (2026-09-25)
+
+- **Signed AuthnRequests.** The owner turned on "Sign SAML authentication request" in Zero Trust.
+  - Cloudflare publishes **two** signing certificates at `/cdn-cgi/access/certs` (a rotation pair). The plugin accepted only one `spCertificate`, so `spCertificate` now also takes an **array**, and a signature from any listed certificate is accepted. Tests cover both an accepted signature from a second certificate and a rejected signature from an unconfigured key.
+  - The SP was set to `requireSignedAuthnRequests: true` with both certificates.
+  - An unsigned probe then got `400 UNSIGNED_SAML_REQUEST` in production, so the requirement was active.
+  - Zero Trust **Test** then **succeeded**. The logs show Cloudflare uses the HTTP-Redirect binding signature (`SAMLRequest, RelayState, SigAlg, Signature`) with `rsa-sha256`, which is exactly what `parseRedirectQuery` and `checkRequestSignature` verify.
+- **ForceAuthn.** With "Require reauthentication" on (and signing still on), a Test from a browser **already signed in** to the IdP was sent to `/sign-in` again, then sign-in, then resume, and succeeded. That is the SSO → `/sign-in` → sign-in → `/resume` sequence in the logs at 9:09 (resume issues the assertion because the new session postdates the request).
+- The example's `SAML_SERVICE_PROVIDERS` now passes `requireSignedAuthnRequests` and `spCertificate` through.
+- Zero Trust state left as tested: signing **on**, reauthentication **on**, encryption and SCIM **off**.

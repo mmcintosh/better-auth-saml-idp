@@ -61,7 +61,7 @@ const serviceProviderSchema = z
     nameId: fn<(user: SamlIdpUser) => string>().optional(),
     attributes: fn<(user: SamlIdpUser) => Record<string, string | string[]>>().optional(),
     requireSignedAuthnRequests: z.boolean().optional(),
-    spCertificate: pem("CERTIFICATE").optional(),
+    spCertificate: z.union([pem("CERTIFICATE"), z.array(pem("CERTIFICATE")).min(1)]).optional(),
     allowIdpInitiated: z.boolean().optional(),
     authorize: fn<ResolvedServiceProvider["authorize"]>().optional(),
   })
@@ -255,7 +255,7 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
         nameId: sp.nameId,
         attributes: sp.attributes ?? (() => ({})),
         requireSignedAuthnRequests: sp.requireSignedAuthnRequests ?? false,
-        spCertificate: sp.spCertificate,
+        spCertificates: sp.spCertificate === undefined ? [] : Array.isArray(sp.spCertificate) ? sp.spCertificate : [sp.spCertificate],
         allowIdpInitiated: false,
         authorize: sp.authorize ?? (() => true),
       }),

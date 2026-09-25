@@ -48,8 +48,11 @@ export interface ServiceProviderConfig {
   attributes?: (user: SamlIdpUser) => Record<string, SamlAttributeValue>;
   /** Reject unsigned AuthnRequests from this SP. Requires `spCertificate`. */
   requireSignedAuthnRequests?: boolean;
-  /** PEM X.509 certificate the SP signs AuthnRequests with. */
-  spCertificate?: string;
+  /**
+   * PEM X.509 certificate(s) the SP signs AuthnRequests with. Pass several during the SP's key
+   * rotation (e.g. Cloudflare Access publishes two); a signature from any of them is accepted.
+   */
+  spCertificate?: string | string[];
   /** IdP-initiated SSO. Not implemented in v1; must be false. */
   allowIdpInitiated?: boolean;
   /** Decide whether this user may use this SP. Denial issues no assertion. */
@@ -141,7 +144,8 @@ export interface ResolvedServiceProvider {
   nameId: ((user: SamlIdpUser) => string) | undefined;
   attributes: (user: SamlIdpUser) => Record<string, SamlAttributeValue>;
   requireSignedAuthnRequests: boolean;
-  spCertificate: string | undefined;
+  /** Normalised to a list; empty when none configured. */
+  spCertificates: string[];
   allowIdpInitiated: boolean;
   authorize: (ctx: AuthorizeContext) => boolean | Promise<boolean>;
 }

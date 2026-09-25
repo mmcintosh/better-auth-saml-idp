@@ -361,19 +361,28 @@ export function checkRequestSignature(raw: RawAuthnRequest, sp: ResolvedServiceP
     if (sp.requireSignedAuthnRequests) throw new SamlRequestError("UNSIGNED_SAML_REQUEST", "missing Signature");
     return false;
   }
-  if (!sp.spCertificate) {
+  if (sp.spCertificates.length === 0) {
     if (sp.requireSignedAuthnRequests) throw new SamlRequestError("UNSIGNED_SAML_REQUEST", "no SP certificate configured");
     return false;
   }
   const alg = REDIRECT_SIG_ALGS[raw.signed.sigAlg];
   if (!alg) throw invalid("unsupported SigAlg");
   if (alg.sha1 && !opts.allowInsecureSha1) throw invalid("SHA-1 signatures are not accepted");
-  let ok = false;
+  // Any configured certificate may have signed (SPs rotate keys; Cloudflare Access publishes two).
+  const octets = new TextEncoder().encode(raw.signed.octets);
+  let signature: Uint8Array;
   try {
-    ok = cryptoVerify(alg.hash, new TextEncoder().encode(raw.signed.octets), createPublicKey(sp.spCertificate), base64ToBytes(raw.signed.signature));
+    signature = base64ToBytes(raw.signed.signature);
   } catch {
-    ok = false;
+    throw new SamlRequestError("UNSIGNED_SAML_REQUEST", "AuthnRequest signature is not valid base64");
   }
+  const ok = sp.spCertificates.some((cert) => {
+    try {
+      return cryptoVerify(alg.hash, octets, createPublicKey(cert), signature);
+    } catch {
+      return false;
+    }
+  });
   if (!ok) throw new SamlRequestError("UNSIGNED_SAML_REQUEST", "AuthnRequest signature is invalid");
   return true;
 }
