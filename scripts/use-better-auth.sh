@@ -10,3 +10,5 @@ case "$want" in
 esac
 echo "better-auth $want -> $v"
 pnpm add -D "better-auth@$v" "@better-auth/core@$v" "@better-auth/drizzle-adapter@$v" "@better-auth/sso@$v"
+# The example app must use the same version, or two copies of Better Auth's types collide.
+pnpm -C examples/workers-hono add "better-auth@$v"
