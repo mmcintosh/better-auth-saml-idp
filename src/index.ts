@@ -18,6 +18,7 @@ import { extendParticipants } from "./storage/participants";
 import type { SamlIdpOptions } from "./types";
 
 export { SAML_IDP_ERROR_CODES } from "./errors";
+export { NAMEID_FORMAT } from "./types";
 export { SamlIdpConfigError } from "./options";
 export { libxml2Validator } from "./saml/validator";
 export { serviceProviderFromMetadata, SpMetadataError } from "./saml/sp-metadata";
