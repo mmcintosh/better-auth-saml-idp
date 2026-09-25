@@ -25,6 +25,10 @@ export interface HostOptions {
   database?: HostDatabase;
   /** better-auth-cloudflare options (geolocation tracking forces DB-stored sessions). */
   cloudflare?: { geolocationTracking?: boolean };
+  /** More Better Auth plugins (e.g. organization); Node only unless the D1 schema has their tables. */
+  plugins?: unknown[];
+  /** Options for the admin plugin (roles / access control). */
+  adminOptions?: Record<string, unknown>;
 }
 
 export type HostDatabase = { kind: "d1"; db: unknown } | { kind: "sqlite"; db: unknown };
@@ -81,7 +85,7 @@ export function hostOptions(database: HostDatabase, options: HostOptions = {}) {
         rateLimit: { enabled: true, storage: "database" },
         advanced: { database: { validateSchema: true } },
         ...options.auth,
-        plugins: [admin(), samlIdp(baseOptions(options.saml))],
+        plugins: [admin(options.adminOptions as any), ...((options.plugins ?? []) as any[]), samlIdp(baseOptions(options.saml))],
       },
     ),
   };

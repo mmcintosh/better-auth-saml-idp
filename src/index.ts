@@ -21,6 +21,7 @@ export { SAML_IDP_ERROR_CODES } from "./errors";
 export { SamlIdpConfigError } from "./options";
 export { libxml2Validator } from "./saml/validator";
 export { serviceProviderFromMetadata, SpMetadataError } from "./saml/sp-metadata";
+export { samlIdpStatements, type SamlServiceProviderAction } from "./access";
 export type { SpFromMetadataOptions, SpFromMetadataResult } from "./saml/sp-metadata";
 export type * from "./types";
 
@@ -71,7 +72,7 @@ export const samlIdp = (options: SamlIdpOptions) => {
       samlIdpSingleSignOn: ssoEndpoint(state),
       samlIdpResume: resumeEndpoint(state),
       samlIdpInitiatedSignOn: initEndpoint(state),
-      ...(resolved.registry?.canManage ? registryEndpoints(state) : {}),
+      ...(resolved.registry?.canManage || resolved.registry?.permissions ? registryEndpoints(state) : {}),
       ...(resolved.singleLogout ? { samlIdpSingleLogout: sloEndpoint(state), samlIdpLogout: logoutEndpoint(state) } : {}),
     },
     // A fresh schema object per plugin: mergeSchema mutates its first argument, so a shared

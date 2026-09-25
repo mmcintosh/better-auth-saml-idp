@@ -6,9 +6,10 @@ import { logSafe, type SamlStatus } from "../saml/request";
 import { buildSignedErrorResponse, buildSignedResponse, newSamlId } from "../saml/response";
 import type { SpMetadataCache } from "../saml/sp-metadata-refresh";
 import type { SpDirectory } from "../saml/sp-directory";
+import { hasOrganizationPlugin, loadMemberships, matchOrganization } from "../organizations";
 import { recordParticipant, sessionIndexOf } from "../storage/participants";
 import { base64url, type ValidatedRequest } from "../storage/pending";
-import { NAMEID_FORMAT, type ResolvedSamlIdpOptions, type ResolvedServiceProvider, type SamlIdpUser } from "../types";
+import { NAMEID_FORMAT, type OrganizationMembership, type ResolvedSamlIdpOptions, type ResolvedServiceProvider, type SamlIdpUser } from "../types";
 
 /** A mapped field the user object lacks: warn once per SP and field (typo, or a field not in the schema). */
 const warnedMissing = new Set<string>();
@@ -146,9 +147,25 @@ export async function issueResponse(
   if ("code" in principal) return fail(ctx, principal.code, principal.detail);
   const user = principal.user;
 
+  // Organization plugin (D-031): memberships for the SP's organization rule, attributes and
+  // authorize(). An SP that requires an organization fails closed without the plugin.
+  const orgPlugin = hasOrganizationPlugin(ctx.context.options.plugins as { id: string }[] | undefined);
+  if (sp.organization && !orgPlugin) return fail(ctx, "ACCESS_DENIED", `SP ${sp.id} requires an organization, but the organization plugin isn't installed`);
+  let organizations: OrganizationMembership[] = [];
+  if (orgPlugin) {
+    try {
+      organizations = await loadMemberships(ctx.context.adapter as any, user.id);
+    } catch (e) {
+      ctx.context.logger.error(`[saml-idp] could not load organization memberships for SP ${sp.id}`, e);
+      return fail(ctx, "INTERNAL_ERROR");
+    }
+  }
+  const organization = sp.organization ? matchOrganization(organizations, sp.organization) : undefined;
+  if (sp.organization && !organization) return fail(ctx, "ACCESS_DENIED", `user ${user.id} is not a member of SP ${sp.id}'s organization (with an allowed role)`);
+
   let allowed = false;
   try {
-    allowed = await sp.authorize({ user, session: session.session as any, serviceProvider: sp });
+    allowed = await sp.authorize({ user, session: session.session as any, serviceProvider: sp, organizations });
   } catch (e) {
     ctx.context.logger.error(`[saml-idp] authorize() threw for SP ${sp.id}`, e);
     allowed = false;
@@ -159,7 +176,7 @@ export async function issueResponse(
   let attributes: ReturnType<ResolvedServiceProvider["attributes"]>;
   try {
     nameId = sp.nameId ? sp.nameId(user) : defaultNameId(ctx, sp, user);
-    attributes = sp.attributes(user, (field) => warnMissingField(ctx, sp, field));
+    attributes = sp.attributes(user, { organizations, organization }, (field) => warnMissingField(ctx, sp, field));
   } catch (e) {
     ctx.context.logger.error(`[saml-idp] nameId()/attributes() threw for SP ${sp.id}`, e);
     return fail(ctx, "INTERNAL_ERROR");

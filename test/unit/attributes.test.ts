@@ -48,7 +48,7 @@ describe("compileAttributeMap", () => {
   it("leaves out null, empty, object-valued and missing fields, reporting the missing ones", () => {
     const missing: string[] = [];
     const f = compileAttributeMap({ image: "image", profile: "profile", nope: "doesNotExist", last: { field: "email", part: "last" } });
-    expect(f(user, (field) => missing.push(field))).toEqual({});
+    expect(f(user, { organizations: [], organization: undefined }, (field) => missing.push(field))).toEqual({});
     expect(missing).toEqual(["doesNotExist"]);
   });
 
@@ -61,7 +61,7 @@ describe("compileAttributeMap", () => {
   it("doesn't read inherited properties", () => {
     const f = compileAttributeMap({ p: "constructor", q: "toString" });
     const missing: string[] = [];
-    expect(f(user, (x) => missing.push(x))).toEqual({});
+    expect(f(user, { organizations: [], organization: undefined }, (x) => missing.push(x))).toEqual({});
     expect(missing).toEqual(["constructor", "toString"]);
   });
 });

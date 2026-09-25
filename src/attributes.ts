@@ -1,7 +1,7 @@
 // Declarative attribute mapping: `attributes: { email: "email", groups: { field: "role", split: "," } }`.
 // Compiled once at startup into the same `(user) => Record<string, string | string[]>` a host
 // function provides, so issuing code has one path.
-import type { AttributeMap, AttributeSource, SamlAttributeValue, SamlIdpUser } from "./types";
+import type { AttributeContext, AttributeMap, AttributeSource, SamlAttributeValue, SamlIdpUser } from "./types";
 
 /** Called with a field name the user object doesn't have (typo, or an unconfigured additional field). */
 export type MissingFieldHandler = (field: string) => void;
@@ -21,9 +21,23 @@ function nonEmpty(values: string[]): SamlAttributeValue | undefined {
   return kept.length === 1 ? (kept[0] as string) : kept;
 }
 
-function resolveSource(source: AttributeSource, user: SamlIdpUser, onMissing?: MissingFieldHandler): SamlAttributeValue | undefined {
-  if (typeof source === "string") return resolveSource({ field: source }, user, onMissing);
+function resolveSource(source: AttributeSource, user: SamlIdpUser, context: AttributeContext, onMissing?: MissingFieldHandler): SamlAttributeValue | undefined {
+  if (typeof source === "string") return resolveSource({ field: source }, user, context, onMissing);
   if ("value" in source) return Array.isArray(source.value) ? [...source.value] : source.value;
+  if ("organization" in source) {
+    const orgs = context.organizations;
+    switch (source.organization) {
+      case "slugs":
+        return nonEmpty(orgs.map((o) => o.slug));
+      case "names":
+        return nonEmpty(orgs.map((o) => o.name));
+      case "ids":
+        return nonEmpty(orgs.map((o) => o.id));
+      case "roles":
+        // In the SP's organization when it has one; otherwise qualified by organization.
+        return context.organization ? nonEmpty(context.organization.roles) : nonEmpty(orgs.flatMap((o) => o.roles.map((r) => `${o.slug}:${r}`)));
+    }
+  }
   if (!Object.hasOwn(user, source.field)) {
     onMissing?.(source.field);
     return undefined;
@@ -39,12 +53,17 @@ function resolveSource(source: AttributeSource, user: SamlIdpUser, onMissing?: M
   return nonEmpty(values);
 }
 
+const NO_ORGS: AttributeContext = { organizations: [], organization: undefined };
+
+/** Does this map read organization data (so issuance must load memberships)? */
+export const usesOrganizations = (map: AttributeMap | undefined) => Object.values(map ?? {}).some((s) => typeof s === "object" && "organization" in s);
+
 export function compileAttributeMap(map: AttributeMap) {
   const entries = Object.entries(map);
-  return (user: SamlIdpUser, onMissing?: MissingFieldHandler): Record<string, SamlAttributeValue> => {
+  return (user: SamlIdpUser, context: AttributeContext = NO_ORGS, onMissing?: MissingFieldHandler): Record<string, SamlAttributeValue> => {
     const out: Record<string, SamlAttributeValue> = {};
     for (const [name, source] of entries) {
-      const v = resolveSource(source, user, onMissing);
+      const v = resolveSource(source, user, context, onMissing);
       if (v !== undefined) out[name] = v;
     }
     return out;

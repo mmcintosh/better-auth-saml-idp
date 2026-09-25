@@ -64,9 +64,14 @@ const attributeSource = z.custom<AttributeSource>(() => true).superRefine((v, ct
     if (!FIELD_NAME.test(v)) issue(FIELD_MESSAGE);
     return;
   }
-  if (!v || typeof v !== "object" || Array.isArray(v)) return issue('must be a field name, { field, split?, part? } or { value }');
+  if (!v || typeof v !== "object" || Array.isArray(v)) return issue('must be a field name, { field, split?, part? }, { value } or { organization }');
   const o = v as Record<string, unknown>;
   const keys = Object.keys(o);
+  if ("organization" in o) {
+    if (keys.length !== 1) issue("{ organization } takes no other keys");
+    if (!["slugs", "names", "ids", "roles"].includes(o.organization as string)) issue('must be "slugs", "names", "ids" or "roles"', ["organization"]);
+    return;
+  }
   if ("value" in o) {
     if (keys.length !== 1) issue("{ value } takes no other keys");
     const ok = typeof o.value === "string" || (Array.isArray(o.value) && o.value.length > 0 && o.value.every((x) => typeof x === "string"));
@@ -94,6 +99,11 @@ const serviceProviderShape = z.object({
     allowedRelayStates: z.array(z.string().min(1)).optional(),
     authorize: fn<ResolvedServiceProvider["authorize"]>().optional(),
     signResponse: z.boolean().optional(),
+    organization: z
+      .object({ slug: z.string().min(1).max(256).optional(), id: z.string().min(1).max(256).optional(), roles: z.array(z.string().min(1).max(128)).min(1).optional() })
+      .strict()
+      .refine((o) => (o.slug === undefined) !== (o.id === undefined), { message: "give exactly one of slug and id" })
+      .optional(),
     singleLogoutService: z.object({ url: acsUrl, binding: z.enum(["redirect", "post"]).optional(), responseUrl: acsUrl.optional() }).strict().optional(),
     metadata: z
       .object({
@@ -253,6 +263,7 @@ const optionsSchema = z
       .object({
         enabled: z.boolean(),
         canManage: fn<NonNullable<NonNullable<SamlIdpOptions["registry"]>["canManage"]>>().optional(),
+        permissions: z.boolean().optional(),
         cacheSeconds: z.number().int().min(0).max(3600).optional(),
         authorize: fn<ResolvedServiceProvider["authorize"]>().optional(),
       })
@@ -424,6 +435,7 @@ function resolveServiceProvider(sp: ParsedServiceProvider, path: string, d: SpDe
         }
       : undefined,
     requireSignedAuthnRequests: sp.requireSignedAuthnRequests ?? false,
+    organization: sp.organization,
     singleLogoutService: sp.singleLogoutService
       ? {
           url: sp.singleLogoutService.url,
@@ -540,7 +552,7 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
     signMetadata: o.signMetadata ?? false,
     singleLogout: o.singleLogout?.enabled ?? false,
     registry: o.registry?.enabled
-      ? { canManage: o.registry.canManage, cacheMs: (o.registry.cacheSeconds ?? 60) * 1000, authorize: o.registry.authorize }
+      ? { canManage: o.registry.canManage, permissions: o.registry.permissions ?? false, cacheMs: (o.registry.cacheSeconds ?? 60) * 1000, authorize: o.registry.authorize }
       : undefined,
     warnings,
   };

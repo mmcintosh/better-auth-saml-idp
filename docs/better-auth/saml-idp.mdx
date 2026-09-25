@@ -1,0 +1,163 @@
+---
+sidebarTitle: "SAML IdP"
+title: SAML Identity Provider
+description: Make your Better Auth server a SAML 2.0 Identity Provider for apps that only speak SAML.
+---
+
+`SAML` `IdP` `SSO` `SLO`
+
+Some applications only support SAML: Zoom, HubSpot, AWS IAM Identity Center, Cloudflare Access and many enterprise tools. This community plugin makes Better Auth their **Identity Provider**, so your users sign in to them with their Better Auth account. It is the counterpart of `@better-auth/sso`, which makes Better Auth a SAML *service provider*.
+
+It runs on Cloudflare Workers (D1, with `better-auth-cloudflare`) and Node. It includes SP- and IdP-initiated SSO, Single Logout, encrypted assertions, signed requests over both bindings, a runtime SP registry, and a CLI.
+
+<Callout>
+  Community plugin: [github.com/mmcintosh/better-auth-saml-idp](https://github.com/mmcintosh/better-auth-saml-idp). Security design and evidence: [DECISIONS.md](https://github.com/mmcintosh/better-auth-saml-idp/blob/main/DECISIONS.md).
+</Callout>
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Install the plugin
+
+    ```package-install
+    better-auth-saml-idp
+    ```
+  </Step>
+
+  <Step>
+    ### Create a signing key
+
+    ```bash
+    npx better-auth-saml-idp keygen --cert-out idp.crt --key-out idp.key
+    ```
+
+    Keep `idp.key` secret (for example `wrangler secret put SAML_IDP_PRIVATE_KEY < idp.key`), then delete the file.
+  </Step>
+
+  <Step>
+    ### Add the plugin to the server
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { samlIdp } from "better-auth-saml-idp" // [!code highlight]
+
+    export const auth = betterAuth({
+        plugins: [
+            samlIdp({ // [!code highlight]
+                entityId: "https://auth.example.com/api/auth/saml2/idp", // [!code highlight]
+                baseURL: "https://auth.example.com/api/auth", // [!code highlight]
+                loginPage: "/sign-in", // [!code highlight]
+                signing: { privateKey: process.env.SAML_IDP_PRIVATE_KEY!, certificate: process.env.SAML_IDP_CERT! }, // [!code highlight]
+                serviceProviders: [ // [!code highlight]
+                    { id: "hubspot", entityId: "<from HubSpot>", acsUrls: ["<from HubSpot>"], attributes: { email: "email" } }, // [!code highlight]
+                ], // [!code highlight]
+            }), // [!code highlight]
+        ],
+    })
+    ```
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```package-install
+        npx auth migrate
+        ```
+      </Tab>
+      <Tab value="generate">
+        ```package-install
+        npx auth generate
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step>
+    ### Add the client plugin (optional)
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    import { samlIdpClient } from "better-auth-saml-idp/client" // [!code highlight]
+
+    export const authClient = createAuthClient({
+        plugins: [samlIdpClient()] // [!code highlight]
+    })
+    ```
+  </Step>
+</Steps>
+
+## Usage
+
+### Sign-in flow
+
+Give the service provider your metadata URL, `https://auth.example.com/api/auth/saml2/idp/metadata`. When the SP sends a user to the IdP without a session, they're redirected to `loginPage?callbackURL=…`. After they sign in, send the browser to `callbackURL`, and the IdP posts a signed assertion to the SP.
+
+Only users with a **verified email** get assertions. Impersonated and anonymous sessions are refused, and the user and session are re-read from the database right before signing.
+
+### Attributes
+
+```ts
+attributes: {
+    email: "email",
+    firstName: { field: "name", part: "first" },
+    groups: { organization: "slugs" },   // organization plugin
+    role: "role",                        // admin plugin field
+}
+```
+
+### Organizations
+
+With the [organization plugin](/docs/plugins/organization), limit an SP to members of one organization, and optionally to some roles. You can also send organization data as attributes:
+
+```ts
+{ id: "zoom", entityId: "…", acsUrls: ["…"],
+  organization: { slug: "acme", roles: ["admin", "member"] },
+  attributes: { email: "email", roles: { organization: "roles" } } }
+```
+
+`authorize({ user, organizations, serviceProvider })` receives the user's memberships for custom rules.
+
+### Managing SPs at runtime
+
+```ts
+import { createAccessControl } from "better-auth/plugins/access"
+import { adminAc, defaultStatements, userAc } from "better-auth/plugins/admin/access"
+import { samlIdpStatements } from "better-auth-saml-idp"
+
+const ac = createAccessControl({ ...defaultStatements, ...samlIdpStatements })
+const roles = {
+    admin: ac.newRole({ ...adminAc.statements, samlServiceProvider: ["list", "read", "create", "update", "delete"] }),
+    user: ac.newRole({ ...userAc.statements }),
+}
+
+// admin({ ac, roles }), and:
+samlIdp({ /* … */, registry: { enabled: true, permissions: true } })
+```
+
+```ts
+await authClient.saml2.idp.serviceProviders.create({ serviceProvider: { id: "zoom", entityId: "…", acsUrls: ["…"] } })
+```
+
+### Single Logout
+
+```ts
+samlIdp({ /* … */, singleLogout: { enabled: true } })
+// per SP: singleLogoutService: { url: "https://app.example.com/saml/slo" }
+
+authClient.samlIdp.signOutEverywhere({ returnTo: "/" })
+```
+
+## Schema
+
+| Table | When | Purpose |
+|---|---|---|
+| `samlIdpSeenRequest` | always | Replay protection: a UNIQUE key per (SP, AuthnRequest ID) |
+| `samlIdpServiceProvider` | `registry.enabled` | SPs stored at runtime (JSON config, validated on every write and read) |
+| `samlIdpSessionParticipant` | `singleLogout.enabled` | Which SPs received an assertion in which session |
+
+## Options
+
+See the [configuration reference](https://github.com/mmcintosh/better-auth-saml-idp#-configuration-options). Run `npx better-auth-saml-idp check-config` to validate your options, and `npx better-auth-saml-idp smoke <url> --sp <entity ID>` to test a deployment.

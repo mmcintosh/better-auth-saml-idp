@@ -823,3 +823,27 @@ All six were already fixed by D-029, and their proof-of-concept tests pass again
   - pin fingerprints in the metadata cache key: 1.
 - The explicit "no SP certificate available" refusal in SLO is belt-and-braces: `verifyMessageSignature` with no certificates already rejects the message, so it fails closed either way.
 
+## D-031: Deeper Better Auth integration (2026-09-25)
+
+The goal is for the plugin to feel native to Better Auth, using its own plugins' data and access model instead of inventing parallel ones.
+
+- **Organization plugin.**
+  - An SP can set `organization: { slug | id, roles? }`: only members get in, and with `roles`, only members holding one of them. Multi-role members (`"member,admin"`) are handled.
+  - The rule is evaluated before `authorize()`, and it **fails closed** when the organization plugin isn't installed.
+  - Attribute sources `{ organization: "slugs" | "names" | "ids" | "roles" }`. Roles are scoped to the SP's organization when it has one, and are `slug:role` otherwise.
+  - `authorize()` and attribute functions receive the user's memberships.
+  - It's JSON, so it works for registry SPs too.
+  - Memberships are read through the adapter by the plugin's model keys (`member`, `organization`), so renamed tables work. They're loaded only when the plugin is installed.
+  - The tests run on Node only: the organization plugin needs tables and a session column that the workerd D1 test schema doesn't carry, and the logic is the same adapter calls on both runtimes.
+- **Admin plugin access control.**
+  - `registry.permissions: true` checks a `samlServiceProvider` resource for each action (list, read, create, update, delete) against the host's own admin-plugin roles and `adminUserIds`.
+  - `samlIdpStatements` is exported for `createAccessControl`.
+  - The admin plugin's default roles grant nothing on this resource, so hosts must opt roles in explicitly.
+  - With `canManage` too, both must allow.
+  - The admin plugin's `hasPermission` isn't a public export, so its roughly six lines of logic are mirrored in `src/access.ts` and read the plugin's resolved options at runtime.
+- **Client plugin.**
+  - Registry calls are typed from the server plugin (`authClient.saml2.idp.serviceProviders.*`, checked by `expectTypeOf` under `tsc`).
+  - `logoutUrl` / `signOutEverywhere` / `launchUrl` / `launch` build the navigation URLs from the client's `baseURL` and `basePath`.
+- **Better Auth CLI.** `npx auth generate` (the CLI moved from `@better-auth/cli` to the `auth` package) was checked from a packed tarball in a clean project. It emits all three plugin tables with their UNIQUE constraints and indexes, for whatever is enabled.
+- **Docs.** `docs/better-auth/saml-idp.mdx` follows Better Auth's plugin-page format (Steps, `package-install`, migrate/generate tabs). `docs/better-auth/community-plugin-entry.ts` is the proposed entry for their Community Plugins list, which currently has no SAML plugin. It hasn't been submitted.
+

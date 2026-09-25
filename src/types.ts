@@ -11,10 +11,29 @@ export type SamlIdpUser = User & Record<string, unknown>;
 
 export type SamlAttributeValue = string | string[];
 
+/** A user's membership in a Better Auth organization (organization plugin; D-031). */
+export interface OrganizationMembership {
+  id: string;
+  slug: string;
+  name: string;
+  /** The member's roles in this organization (Better Auth stores them comma-separated). */
+  roles: string[];
+}
+
+/** Extra context for attribute functions and maps. */
+export interface AttributeContext {
+  /** The user's organization memberships; empty without the organization plugin. */
+  organizations: OrganizationMembership[];
+  /** The membership matching the SP's `organization` rule, when it has one. */
+  organization: OrganizationMembership | undefined;
+}
+
 export interface AuthorizeContext {
   user: SamlIdpUser;
   session: Session;
   serviceProvider: ResolvedServiceProvider;
+  /** The user's organization memberships (organization plugin); empty without it. */
+  organizations: OrganizationMembership[];
 }
 
 export const NAMEID_FORMAT = {
@@ -32,7 +51,15 @@ export const NAMEID_FORMAT = {
  * - `{ value }`: a constant.
  * Missing, null and empty values are left out; dates become ISO 8601; arrays are multi-valued.
  */
-export type AttributeSource = string | { field: string; split?: string; part?: "first" | "last" } | { value: string | string[] };
+export type AttributeSource =
+  | string
+  | { field: string; split?: string; part?: "first" | "last" }
+  | { value: string | string[] }
+  /**
+   * From the organization plugin: the user's organizations (slugs, names or ids), or their roles:
+   * in the SP's `organization` when it has one, else "slug:role" across all organizations.
+   */
+  | { organization: "slugs" | "names" | "ids" | "roles" };
 export type AttributeMap = Record<string, AttributeSource>;
 
 export interface ServiceProviderConfig {
@@ -60,7 +87,12 @@ export interface ServiceProviderConfig {
    * attribute name to source (usable from JSON configuration), e.g.
    * `{ email: "email", groups: { field: "role", split: "," }, firstName: { field: "name", part: "first" } }`.
    */
-  attributes?: ((user: SamlIdpUser) => Record<string, SamlAttributeValue>) | AttributeMap;
+  attributes?: ((user: SamlIdpUser, context: AttributeContext) => Record<string, SamlAttributeValue>) | AttributeMap;
+  /**
+   * Only members of this Better Auth organization (organization plugin) may use this SP, and, with
+   * `roles`, only members holding one of them. Give `slug` or `id`. Evaluated before `authorize`.
+   */
+  organization?: { slug?: string; id?: string; roles?: string[] };
   /** Reject unsigned AuthnRequests from this SP. Requires `spCertificate`. */
   requireSignedAuthnRequests?: boolean;
   /**
@@ -237,6 +269,12 @@ export interface SamlIdpOptions {
      * origin checks. E.g. `({ user }) => user.role === "admin"`.
      */
     canManage?: (ctx: { user: SamlIdpUser; session: Session }) => boolean | Promise<boolean>;
+    /**
+     * Use Better Auth's admin-plugin access control: each API action (list, read, create, update,
+     * delete on `samlServiceProvider`) must be granted to one of the user's roles; see
+     * `samlIdpStatements`. With `canManage` too, both must allow. Mounts the API.
+     */
+    permissions?: boolean;
     /** How long an isolate caches a stored SP, and a miss. Default 60 s; 0 to 3600. */
     cacheSeconds?: number;
     /** `authorize` for stored SPs (functions can't be stored). Default: allow. */
@@ -259,7 +297,8 @@ export interface ResolvedServiceProvider {
   nameIdFormat: string;
   /** Host-supplied NameID function; undefined means "use the format's default". */
   nameId: ((user: SamlIdpUser) => string) | undefined;
-  attributes: (user: SamlIdpUser, onMissingField?: (field: string) => void) => Record<string, SamlAttributeValue>;
+  attributes: (user: SamlIdpUser, context: AttributeContext, onMissingField?: (field: string) => void) => Record<string, SamlAttributeValue>;
+  organization: { slug?: string; id?: string; roles?: string[] } | undefined;
   singleLogoutService: { url: string; binding: "redirect" | "post"; responseUrl?: string } | undefined;
   /** Metadata refresh (D-026); certificates are normalised to a list. */
   metadata: { url: string; refreshSeconds: number; signingCertificates: string[] } | undefined;
@@ -299,7 +338,7 @@ export interface ResolvedSamlIdpOptions {
   schema: SamlIdpOptions["schema"];
   signMetadata: boolean;
   singleLogout: boolean;
-  registry: { canManage: NonNullable<SamlIdpOptions["registry"]>["canManage"]; cacheMs: number; authorize: ResolvedServiceProvider["authorize"] | undefined } | undefined;
+  registry: { canManage: NonNullable<SamlIdpOptions["registry"]>["canManage"]; permissions: boolean; cacheMs: number; authorize: ResolvedServiceProvider["authorize"] | undefined } | undefined;
   /** Non-fatal configuration warnings, logged once at startup. */
   warnings: string[];
 }

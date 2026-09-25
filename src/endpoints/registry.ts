@@ -6,6 +6,7 @@ import type { GenericEndpointContext } from "better-auth";
 import { APIError, createAuthEndpoint, sensitiveSessionMiddleware } from "better-auth/api";
 import * as z from "zod";
 import { SAML_IDP_ERROR_CODES } from "../errors";
+import { adminAllows, type SamlServiceProviderAction } from "../access";
 import { resolveStoredServiceProvider } from "../options";
 import { isEnabled, SP_MODEL, type StoredSpRow } from "../saml/sp-directory";
 import type { PluginState } from "./issue";
@@ -25,19 +26,23 @@ const adapterOf = (ctx: GenericEndpointContext) => ctx.context.adapter as unknow
 const fail = (status: "FORBIDDEN" | "BAD_REQUEST" | "CONFLICT" | "NOT_FOUND", code: keyof typeof SAML_IDP_ERROR_CODES, extra: Record<string, unknown> = {}) =>
   APIError.fromStatus(status, { ...SAML_IDP_ERROR_CODES[code], ...extra });
 
-async function manager(ctx: GenericEndpointContext, state: PluginState) {
+async function manager(ctx: GenericEndpointContext, state: PluginState, action: SamlServiceProviderAction) {
   const s = (ctx.context as { session?: { user: any; session: any } }).session;
-  const canManage = state.options.registry?.canManage;
-  if (!s || !canManage) throw fail("FORBIDDEN", "REGISTRY_NOT_ALLOWED");
+  const reg = state.options.registry;
+  if (!s || !reg || (!reg.canManage && !reg.permissions)) throw fail("FORBIDDEN", "REGISTRY_NOT_ALLOWED");
   // An admin acting as another user must not manage SPs under that identity.
   if (s.session.impersonatedBy) throw fail("FORBIDDEN", "REGISTRY_NOT_ALLOWED");
-  let ok = false;
-  try {
-    ok = (await canManage({ user: s.user, session: s.session })) === true;
-  } catch (e) {
-    ctx.context.logger.error("[saml-idp] registry.canManage threw", e);
+  // Both checks, when both are configured, must allow.
+  if (reg.permissions && !adminAllows(ctx.context.options.plugins as any, s.user, action)) throw fail("FORBIDDEN", "REGISTRY_NOT_ALLOWED");
+  if (reg.canManage) {
+    let ok = false;
+    try {
+      ok = (await reg.canManage({ user: s.user, session: s.session })) === true;
+    } catch (e) {
+      ctx.context.logger.error("[saml-idp] registry.canManage threw", e);
+    }
+    if (!ok) throw fail("FORBIDDEN", "REGISTRY_NOT_ALLOWED");
   }
-  if (!ok) throw fail("FORBIDDEN", "REGISTRY_NOT_ALLOWED");
   return s.user as { id: string };
 }
 
@@ -87,7 +92,7 @@ export function registryEndpoints(state: PluginState) {
       "/saml2/idp/service-providers",
       { method: "GET", use: [sensitiveSessionMiddleware], metadata: { openapi: { operationId: "samlIdpListServiceProviders" } } },
       async (ctx) => {
-        await manager(ctx, state);
+        await manager(ctx, state, "list");
         const rows = (await adapterOf(ctx).findMany({ model: SP_MODEL, limit: MAX_LIST, sortBy: { field: "spId", direction: "asc" } })) as StoredSpRow[];
         return ctx.json({
           serviceProviders: [
@@ -102,7 +107,7 @@ export function registryEndpoints(state: PluginState) {
       "/saml2/idp/service-providers/get",
       { method: "GET", use: [sensitiveSessionMiddleware], query: z.object({ id: idSchema }) },
       async (ctx) => {
-        await manager(ctx, state);
+        await manager(ctx, state, "read");
         const row = await findRow(ctx, ctx.query.id);
         if (!row) throw fail("NOT_FOUND", "SERVICE_PROVIDER_NOT_FOUND");
         return ctx.json({ serviceProvider: view(row, state) });
@@ -113,7 +118,7 @@ export function registryEndpoints(state: PluginState) {
       "/saml2/idp/service-providers/create",
       { method: "POST", use: [sensitiveSessionMiddleware], body: z.object({ serviceProvider: spBody, enabled: z.boolean().optional() }) },
       async (ctx) => {
-        const user = await manager(ctx, state);
+        const user = await manager(ctx, state, "create");
         const { config, warnings } = validate(state, ctx.body.serviceProvider);
         const now = new Date();
         const data = { spId: config.id, entityId: config.entityId, config: JSON.stringify(config), enabled: ctx.body.enabled ?? true, createdAt: now, updatedAt: now, updatedBy: user.id };
@@ -137,7 +142,7 @@ export function registryEndpoints(state: PluginState) {
       "/saml2/idp/service-providers/update",
       { method: "POST", use: [sensitiveSessionMiddleware], body: z.object({ id: idSchema, serviceProvider: spBody, enabled: z.boolean().optional() }) },
       async (ctx) => {
-        const user = await manager(ctx, state);
+        const user = await manager(ctx, state, "update");
         const row = await findRow(ctx, ctx.body.id);
         if (!row) throw fail("NOT_FOUND", "SERVICE_PROVIDER_NOT_FOUND");
         if (ctx.body.serviceProvider.id !== ctx.body.id)
@@ -168,7 +173,7 @@ export function registryEndpoints(state: PluginState) {
       "/saml2/idp/service-providers/delete",
       { method: "POST", use: [sensitiveSessionMiddleware], body: z.object({ id: idSchema }) },
       async (ctx) => {
-        const user = await manager(ctx, state);
+        const user = await manager(ctx, state, "delete");
         const row = await findRow(ctx, ctx.body.id);
         if (!row) throw fail("NOT_FOUND", "SERVICE_PROVIDER_NOT_FOUND");
         await adapterOf(ctx).delete({ model: SP_MODEL, where: [{ field: "id", value: row.id }] });
