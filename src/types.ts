@@ -77,6 +77,28 @@ export interface ServiceProviderConfig {
   signResponse?: boolean;
   /** Override the global `signing.signAssertion` for this SP. At least one must stay on. */
   signAssertion?: boolean;
+  /**
+   * Encrypt the assertion to this SP (`<saml:EncryptedAssertion>`, XML Encryption 1.1).
+   * The assertion is signed first, then encrypted, then the Response is signed
+   * ("sign-then-encrypt"); with encryption on, the assertion is always signed when
+   * `signResponse` is false. Omit to send plaintext assertions.
+   */
+  encryption?: ServiceProviderEncryptionConfig;
+}
+
+export interface ServiceProviderEncryptionConfig {
+  /** The SP's PEM X.509 encryption certificate (RSA ≥ 2048 bits). */
+  certificate: string;
+  /** Content encryption. Default `aes256-gcm`. `aes256-cbc` also needs `allowInsecureCbc: true`. */
+  dataAlgorithm?: "aes256-gcm" | "aes128-gcm" | "aes256-cbc";
+  /**
+   * Key transport. Default `rsa-oaep` (`xmlenc#rsa-oaep-mgf1p`, SHA-1/MGF1-SHA1, the most widely
+   * supported). `rsa-oaep-sha256` is `xmlenc11#rsa-oaep` with SHA-256 and MGF1-SHA256.
+   * RSA PKCS#1 v1.5 is not available.
+   */
+  keyAlgorithm?: "rsa-oaep" | "rsa-oaep-sha256";
+  /** Explicit opt-in to AES-CBC for SPs without GCM (padding-oracle history). Logs a warning. */
+  allowInsecureCbc?: boolean;
 }
 
 export interface SigningConfig {
@@ -178,6 +200,8 @@ export interface ResolvedServiceProvider {
   /** Effective signing for this SP (per-SP override, else the global setting). */
   signResponse: boolean;
   signAssertion: boolean;
+  /** Present when assertions to this SP are encrypted; the certificate is parsed at startup. */
+  encryption?: import("./saml/encrypt").AssertionEncryption;
 }
 
 export interface ResolvedSamlIdpOptions {

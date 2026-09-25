@@ -30,7 +30,7 @@ FEATURES = [
  ("Bindings", "AuthnRequest over Redirect and POST", row(("y","node-saml's DEFLATEd POST accepted too"),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("u",""),("u",""),("u","")), "test/integration/sso-flow.test.ts"),
  ("Bindings", "Artifact binding", row(("n","not planned"),("p","responses only"),("p","responses, needs memcache"),("y",""),("n",""),("n",""),("n",""),("n",""),("n","responses always POST"),("u",""),("u",""),("u","")), ""),
  ("Signing and encryption", "Response / Assertion signing choice", row(("y","per SP, with a global default; both signed by default"),("y","per SP"),("y","per SP"),("y","per client"),("n","always both"),("y","per SP"),("n","response only"),("n","always both"),("y",""),("y",""),("p","one checkbox"),("p","one or the other")), "test/integration/security.test.ts"),
- ("Signing and encryption", "Encrypted assertions", row(("n","roadmap v1.1"),("y","on by default"),("y","per SP"),("y","AES-256-GCM default"),("n",""),("y",""),("y",""),("n",""),("y","needs P1"),("y",""),("u",""),("y","via Actions")), ""),
+ ("Signing and encryption", "Encrypted assertions", row(("y","AES-256-GCM + RSA-OAEP, per SP; verified with node-saml and samlify"),("y","on by default"),("y","per SP"),("y","AES-256-GCM default"),("n",""),("y",""),("y",""),("n",""),("y","needs P1"),("y",""),("u",""),("y","via Actions")), "test/interop/encryption-interop.test.ts, test/unit/encrypt.test.ts"),
  ("Signing and encryption", "Verifies and can require signed AuthnRequests", row(("p","HTTP-Redirect only, per SP; verified live with Cloudflare Access; multiple SP certs"),("y",""),("y",""),("y",""),("p","instance-wide switch"),("y",""),("y",""),("n","checks the key embedded in the request"),("y",""),("y",""),("u",""),("p","can verify; requiring not documented")), "test/integration/security.test.ts, review-findings.test.ts #2"),
  ("Signing and encryption", "SHA-256 default, SHA-1 only by opt-in", row(("y","opt-in logs a warning"),("y",""),("y",""),("y",""),("p","accepts SHA-1 inbound"),("y",""),("p","fixed SHA-256"),("y","fixed SHA-256"),("y",""),("y",""),("u",""),("n","SHA-1 is the default")), "test/unit/options.test.ts"),
  ("Signing and encryption", "Signing key rotation", row(("p","extra certs published; zero-downtime procedure verified live"),("p","manual"),("y","two-key rollover"),("y","active and passive keys"),("y","automatic"),("p","manual"),("p","one active at a time"),("p","single key"),("y","expiry emails"),("y",""),("y","two certificates"),("p","tenant-wide key")), ""),
@@ -59,7 +59,7 @@ ROADMAP = [
  ]),
  ("v1.1", "Close the expected-feature gaps", "What admins and SPs assume every IdP has.", [
    ("IdP-initiated SSO (done)", "Opt-in per SP, off by default; RelayState only from a per-SP allow-list. Supported by 8 of the 11 products compared (partially by Ory Polis), including all four commercial IdPs."),
-   ("Encrypted assertions", "AES-256-GCM with RSA-OAEP. Shibboleth encrypts by default; Keycloak, authentik, Logto, Entra and Okta offer it per SP."),
+   ("Encrypted assertions (done)", "AES-256-GCM with RSA-OAEP, per SP, sign-then-encrypt. Decrypted and validated by node-saml and samlify. Shibboleth encrypts by default; Keycloak, authentik, Logto, Entra and Okta offer it per SP."),
    ("Register SPs from metadata XML (done)", "serviceProviderFromMetadata(): a helper that turns an SP's metadata into a serviceProviders entry, including certificates and ACS URLs."),
    ("Per-SP signing choice (done)", "Move signResponse and signAssertion to each SP, as Shibboleth, Keycloak and authentik do."),
    ("Signed IdP metadata (done)", "Optional (signMetadata), for SPs and federations that verify metadata signatures."),
@@ -90,7 +90,6 @@ LEADS = [
 ]
 TRAILS = [
  ("Breadth of flows", "No Single Logout yet."),
- ("Encryption", "No encrypted assertions yet; several SPs and federations expect the option."),
  ("SP onboarding", "SPs are configured in code or imported from metadata XML; no registry, URL refresh or UI yet."),
 ]
 

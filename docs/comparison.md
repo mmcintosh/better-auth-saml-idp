@@ -14,7 +14,6 @@ Our own column links to the tests that prove each entry. The roadmap derived fro
 ## Where we trail
 
 - **Breadth of flows.** No Single Logout yet.
-- **Encryption.** No encrypted assertions yet; several SPs and federations expect the option.
 - **SP onboarding.** SPs are configured in code or imported from metadata XML; no registry, URL refresh or UI yet.
 
 ## Feature matrix
@@ -41,7 +40,7 @@ Products: **better-auth-saml-idp** (This plugin, pre-release); **Shibboleth IdP*
 | Feature | better-auth-saml-idp | Shibboleth IdP | SimpleSAMLphp | Keycloak | Zitadel | authentik | Logto | Ory Polis | Microsoft Entra ID | Okta | Google Workspace | Auth0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Response / Assertion signing choice | ✅ Yes<br><sub>per SP, with a global default; both signed by default</sub> | ✅ Yes<br><sub>per SP</sub> | ✅ Yes<br><sub>per SP</sub> | ✅ Yes<br><sub>per client</sub> | ❌ No<br><sub>always both</sub> | ✅ Yes<br><sub>per SP</sub> | ❌ No<br><sub>response only</sub> | ❌ No<br><sub>always both</sub> | ✅ Yes | ✅ Yes | 🟡 Partial<br><sub>one checkbox</sub> | 🟡 Partial<br><sub>one or the other</sub> |
-| Encrypted assertions | ❌ No<br><sub>roadmap v1.1</sub> | ✅ Yes<br><sub>on by default</sub> | ✅ Yes<br><sub>per SP</sub> | ✅ Yes<br><sub>AES-256-GCM default</sub> | ❌ No | ✅ Yes | ✅ Yes | ❌ No | ✅ Yes<br><sub>needs P1</sub> | ✅ Yes | ❔ Not documented | ✅ Yes<br><sub>via Actions</sub> |
+| Encrypted assertions | ✅ Yes<br><sub>AES-256-GCM + RSA-OAEP, per SP; verified with node-saml and samlify</sub> | ✅ Yes<br><sub>on by default</sub> | ✅ Yes<br><sub>per SP</sub> | ✅ Yes<br><sub>AES-256-GCM default</sub> | ❌ No | ✅ Yes | ✅ Yes | ❌ No | ✅ Yes<br><sub>needs P1</sub> | ✅ Yes | ❔ Not documented | ✅ Yes<br><sub>via Actions</sub> |
 | Verifies and can require signed AuthnRequests | 🟡 Partial<br><sub>HTTP-Redirect only, per SP; verified live with Cloudflare Access; multiple SP certs</sub> | ✅ Yes | ✅ Yes | ✅ Yes | 🟡 Partial<br><sub>instance-wide switch</sub> | ✅ Yes | ✅ Yes | ❌ No<br><sub>checks the key embedded in the request</sub> | ✅ Yes | ✅ Yes | ❔ Not documented | 🟡 Partial<br><sub>can verify; requiring not documented</sub> |
 | SHA-256 default, SHA-1 only by opt-in | ✅ Yes<br><sub>opt-in logs a warning</sub> | ✅ Yes | ✅ Yes | ✅ Yes | 🟡 Partial<br><sub>accepts SHA-1 inbound</sub> | ✅ Yes | 🟡 Partial<br><sub>fixed SHA-256</sub> | ✅ Yes<br><sub>fixed SHA-256</sub> | ✅ Yes | ✅ Yes | ❔ Not documented | ❌ No<br><sub>SHA-1 is the default</sub> |
 | Signing key rotation | 🟡 Partial<br><sub>extra certs published; zero-downtime procedure verified live</sub> | 🟡 Partial<br><sub>manual</sub> | ✅ Yes<br><sub>two-key rollover</sub> | ✅ Yes<br><sub>active and passive keys</sub> | ✅ Yes<br><sub>automatic</sub> | 🟡 Partial<br><sub>manual</sub> | 🟡 Partial<br><sub>one active at a time</sub> | 🟡 Partial<br><sub>single key</sub> | ✅ Yes<br><sub>expiry emails</sub> | ✅ Yes | ✅ Yes<br><sub>two certificates</sub> | 🟡 Partial<br><sub>tenant-wide key</sub> |
@@ -86,6 +85,7 @@ Products: **better-auth-saml-idp** (This plugin, pre-release); **Shibboleth IdP*
 - **IdP-initiated SSO:** test/integration/idp-initiated.test.ts, test/interop/idp-initiated-interop.test.ts
 - **AuthnRequest over Redirect and POST:** `test/integration/sso-flow.test.ts`
 - **Response / Assertion signing choice:** `test/integration/security.test.ts`
+- **Encrypted assertions:** test/interop/encryption-interop.test.ts, test/unit/encrypt.test.ts
 - **Verifies and can require signed AuthnRequests:** test/integration/security.test.ts, review-findings.test.ts #2
 - **SHA-256 default, SHA-1 only by opt-in:** `test/unit/options.test.ts`
 - **Rejects replayed AuthnRequest IDs:** `test/integration/security.test.ts (R2)`

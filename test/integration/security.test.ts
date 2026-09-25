@@ -345,7 +345,7 @@ describe("§7 algorithms, validity, signatures", () => {
     expect(form.xml.match(/<ds:Signature /g)).toHaveLength(signatures);
     const assertion = /<saml:Assertion [\s\S]*<\/saml:Assertion>/.exec(form.xml)![0];
     expect(assertion.includes("<ds:Signature ")).toBe(want.assertion);
-    await expect((await strictSp(auth, want)).verify(b64(form.xml))).resolves.toBeDefined();
+    await expect((await strictSp(auth, { wantMessageSigned: want.message, wantAssertionsSigned: want.assertion })).verify(b64(form.xml))).resolves.toBeDefined();
     // ...and an SP that wants the missing signature refuses it. (samlify doesn't enforce its
     // want* settings when parsing a Response, so this uses node-saml, which does.)
     const nodeSaml = (w: typeof want) =>
