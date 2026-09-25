@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { resolveOptions, SamlIdpConfigError } from "../options";
 import { serviceProviderFromMetadata, SpMetadataError } from "../saml/sp-metadata";
 import type { SamlIdpOptions } from "../types";
-import { certSummary, checkCert, describeCert, fetchText, httpsOnly, readInput, Report, UsageError } from "./util";
+import { certFromBase64, certSummary, checkCert, describeCert, fetchText, httpsOnly, readInput, Report, UsageError } from "./util";
 
 /** JSON configs may reference PEM files as "file:./idp.key" (relative to the config file). */
 function resolveFileRefs(value: unknown, base: string): unknown {
@@ -89,6 +89,7 @@ export async function checkConfig(path: string | undefined): Promise<Report> {
     });
     for (const u of sp.acsUrls) if (u.startsWith("http:")) report.warn(`SP ${sp.id}: ACS URL ${u} is not https`);
     for (const [i, c] of sp.spCertificates.entries()) checkCert(report, `SP ${sp.id} certificate #${i + 1}`, certSummary(c));
+    if (sp.encryption) checkCert(report, `SP ${sp.id} encryption certificate`, certSummary(certFromBase64(sp.encryption.certificateBase64)));
   }
   return report;
 }

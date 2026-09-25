@@ -465,6 +465,10 @@ SPs parse the decrypted element on its own, outside the Response that declares `
 
 **Out of scope:** encryption certificates advertised in SP metadata (`KeyDescriptor use="encryption"`) are left to the SP-metadata import work. Encrypted NameID/attributes (`EncryptedID`, `EncryptedAttribute`) aren't implemented.
 
+**Verified live with Cloudflare Access (2026-09-25).** With **Enable SAML encryption** on, Access first rejected our plaintext assertion: `SAML Verify: Encryption required but assertion not encrypted`. We then configured `encryption.certificate` for `cf-access` with the defaults (AES-256-GCM, RSA-OAEP mgf1p). The next **Test** returned "Your connection works!" with the expected identity. The request was a signed AuthnRequest (rsa-sha256 over HTTP-Redirect, required per SP), so signed requests, Response and Assertion signatures and encryption were all exercised together. Notes:
+- Cloudflare's certificate is available only through the API (`saml_certificate_set.current_certificate.public_certificate`). The dashboard shows the set ID, and the SP metadata doesn't include it.
+- It's an RSA 2048 CA-style certificate: key usage *Certificate Sign, CRL Sign*, no `keyEncipherment`, valid for one year. Our startup check deliberately checks only type, size and expiry, not key usage, and that choice is what makes this certificate work.
+
 ## D-021: IdP-initiated SSO (SPEC §5 stretch, roadmap v1.1)
 
 `GET /saml2/idp/init?sp=<id>[&RelayState=…]` sends an **unsolicited** Response. It's off by default and enabled per SP with `allowIdpInitiated: true`, which startup validation used to reject as "not supported in this version".

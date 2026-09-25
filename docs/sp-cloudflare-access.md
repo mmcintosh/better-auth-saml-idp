@@ -40,13 +40,30 @@ Put this in `SAML_SERVICE_PROVIDERS`, then redeploy. The plugin's default NameID
 | IdP Entity ID / Issuer URL | the entity ID from step 1 |
 | Signing certificate | the certificate from step 1 |
 | Email attribute name | `email` (optional; the NameID is already the email) |
-| Sign SAML authentication requests | **off** (signed requests are only supported with HTTP-Redirect; leave this off unless you also configure `requireSignedAuthnRequests` + `spCertificate`) |
+| Sign SAML authentication requests | optional. Cloudflare signs over HTTP-Redirect, which the IdP verifies. To require it, set `requireSignedAuthnRequests: true` and give `spCertificate` **both** certificates from Cloudflare's SP metadata. `npx better-auth-saml-idp sp-from-metadata https://<team>.cloudflareaccess.com/cdn-cgi/access/saml-metadata --id cf-access` prints that entry. Verified live on 2026-09-25 (DECISIONS.md D-018) |
 
 Save, then use **Test** on the provider. Run it in a private window: an existing Access session from another login method is reused otherwise, and the result shows that identity instead. You'll be sent to the IdP's `/sign-in` page. After you sign in, Cloudflare shows the identity and attributes it received. **Take a screenshot; this is the Phase 3 evidence.**
 
 ## 4. Protect an app (optional, for a real login)
 
 **Access → Applications → Add an application → Self-hosted.** Choose a hostname you control, allow only the `better-auth-saml-idp` login method, and add a policy that allows your email. Visiting the hostname should send you through the IdP.
+
+## 5. Encrypt assertions (optional)
+
+Verified live on 2026-09-25 (DECISIONS.md D-020): Cloudflare decrypted and accepted our AES-256-GCM + RSA-OAEP assertions. With encryption on, it **rejects** plaintext assertions (`Encryption required but assertion not encrypted`).
+
+1. Edit the identity provider in Zero Trust and turn on **Enable SAML encryption**. The setting is stored straight away, and the edit page then shows a **Certificate set ID**. From then on, logins fail until step 3 is done.
+2. Get the encryption certificate. The dashboard shows only the set ID, and Cloudflare's SP metadata doesn't include the certificate. The API does: create an API token with **Access: Organizations, Identity Providers, and Groups → Read**, then run:
+   ```sh
+   curl -s -H "Authorization: Bearer $TOKEN" \
+     https://api.cloudflare.com/client/v4/accounts/<account-id>/access/identity_providers \
+     | jq -r '.result[] | select(.name=="better-auth-saml-idp") | .saml_certificate_set.current_certificate.public_certificate'
+   ```
+   The result is RSA 2048 and valid for a year, issued by your account's "Access CA - Cloudflare Managed". Its key usage is *Certificate Sign, CRL Sign*, with no `keyEncipherment`. The plugin doesn't enforce key usage on encryption certificates, so it's accepted.
+3. Add it to the SP: `encryption: { certificate: "<that PEM>" }`. The defaults, AES-256-GCM with RSA-OAEP (XML Encryption 1.0), are what Cloudflare expects. Redeploy, then **Test**.
+4. Rotation: Cloudflare replaces the certificate 30 days before expiry, and the set's `previous_certificate` keeps the old one. When that happens, update `encryption.certificate`. `npx better-auth-saml-idp check-config` reports the certificate's expiry.
+
+To see what Cloudflare receives, capture the `SAMLResponse` from the browser's network tab. `npx better-auth-saml-idp decode` checks its structure, algorithms and Response signature. Decrypting it would need Cloudflare's private key, which you don't have.
 
 ## Troubleshooting
 

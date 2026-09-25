@@ -252,6 +252,12 @@ describe("cli: check-config", () => {
     expect(failures(keyMismatch)).toEqual(["signing.certificate: does not match signing.privateKey"]);
   });
 
+  it("reports the SP encryption certificate", async () => {
+    const r = await json(["check-config", config({ serviceProviders: [{ id: "s", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], encryption: { certificate: keys.sp.certificate } }] })]);
+    expect(r.code).toBe(0);
+    expect(r.report.checks.some((c) => c.status === "pass" && /SP s encryption certificate: valid/.test(c.message))).toBe(true);
+  });
+
   it("warns when baseURL isn't pinned", async () => {
     const r = await json(["check-config", config({ baseURL: undefined })]);
     expect(r.report.checks.some((c) => c.status === "warn" && /baseURL/.test(c.message))).toBe(true);
