@@ -21,6 +21,7 @@ jobs:
       - run: pnpm -C examples/workers-hono typecheck
       - run: pnpm test          # node + workerd (D1/Drizzle, validateSchema on), incl. SP interop
       - run: pnpm test:wasm     # validator suite, node + workerd
+      - run: pnpm pack:check    # dist build, publint, Are the Types Wrong
 
   # Real Chromium over HTTPS (Playwright): Keycloak 26.4, SimpleSAMLphp 2.5 and a node-saml POST-binding
   # SP with a cross-site post-ACS redirect, against the example IdP on workerd.

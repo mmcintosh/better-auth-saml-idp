@@ -9,6 +9,14 @@ A [Better Auth](https://www.better-auth.com) plugin that turns your Better Auth 
 > [!WARNING]
 > **Cloudflare Workers users: put `samlIdp()` inside `withCloudflare`'s second argument.** If you write `plugins: [...]` next to `...withCloudflare(...)`, your array **replaces** the Cloudflare plugin. That silently disables its storage validation, IP detection and geolocation. You also need `better-auth-cloudflare` **≥ 0.4**.
 
+## Install
+
+```sh
+npm install better-auth-saml-idp
+```
+
+Not on npm yet: the first release waits for `better-auth-cloudflare` 0.4 (see [CHANGELOG.md](CHANGELOG.md)). Until then, install from a clone with `pnpm build && npm pack`.
+
 ## Requirements
 
 - `better-auth` `>=1.7.5 <1.8.0`
