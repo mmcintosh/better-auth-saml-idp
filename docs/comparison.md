@@ -121,3 +121,4 @@ From [HubSpot's SSO setup guide](https://knowledge.hubspot.com/account-security/
 - **Auth0** (SAML2 Web App addon): [SAML assertions](https://auth0.com/docs/authenticate/protocols/saml/saml-configuration/customize-saml-assertions), [Sign and encrypt](https://auth0.com/docs/authenticate/protocols/saml/saml-sso-integrations/sign-and-encrypt-saml-requests)
 
 Research method: three parallel reviews of vendor documentation (and source code where the docs were silent), 2026-09-25. Corrections welcome as issues or pull requests.
+

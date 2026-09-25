@@ -10,3 +10,4 @@ e2e/.generated/
 test-results/
 playwright-report/
 wrangler.deploy.jsonc
+docs/comparison/.artifact.html
