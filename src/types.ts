@@ -95,7 +95,7 @@ export interface ServiceProviderConfig {
    * stay as configured here, so the metadata can never redirect assertions.
    */
   metadata?: {
-    /** https only. Fetched with a 5 s timeout, no redirects, at most 1 MiB. */
+    /** https only. Fetched with a 5 s timeout, redirects not followed, at most 1 MiB. */
     url: string;
     /** Default 86400 (a day); 300 to 604800. */
     refreshSeconds?: number;

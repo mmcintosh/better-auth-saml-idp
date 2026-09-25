@@ -35,7 +35,7 @@ function serve(current: () => string | Response) {
   const served = { count: 0 };
   vi.stubGlobal("fetch", async (url: string | URL | Request, init?: RequestInit) => {
     expect(String(url)).toBe(MD_URL);
-    expect(init?.redirect).toBe("error");
+    expect(init?.redirect).toBe("manual"); // workerd rejects "error"
     served.count++;
     const r = current();
     return typeof r === "string" ? new Response(r, { headers: { "content-type": "application/samlmetadata+xml" } }) : r;
@@ -123,6 +123,7 @@ describe("SP metadata URL with refresh", () => {
     ["unsigned metadata when the signature is pinned", () => metadata(), { signingCertificate: keys.idpNext.certificate }],
     ["metadata signed by another key than the pinned one", () => metadata({ signWith: { key: keys.sp.privateKey } }), { signingCertificate: keys.idpNext.certificate }],
     ["not XML", () => "<html>login</html>", {}],
+    ["a redirect (not followed)", () => new Response(null, { status: 302, headers: { location: "https://evil.example/md.xml" } }), {}],
   ])("rejects %s (nothing learned, so the unsigned-capable SP has no certificate)", async (_, doc, pin) => {
     const served = serve(doc);
     const logs: string[] = [];

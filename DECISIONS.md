@@ -644,3 +644,7 @@ The verified document is the same string, parsed by the same xmldom, that the re
   - merging learned certificates: 5;
   - backoff: 1.
 
+**Verified live with Cloudflare Access (2026-09-25).** `cf-access` was configured with **no** SP certificates, `requireSignedAuthnRequests: true` and `metadata.url` set to Cloudflare's `/cdn-cgi/access/saml-metadata`. Access's signed AuthnRequest (rsa-sha256, HTTP-Redirect) was verified with the two certificates learned from that metadata, and the login succeeded with encryption on.
+
+The live test also found a **workerd incompatibility the stubbed tests couldn't**: workerd rejects `fetch(..., { redirect: "error" })` ("does not make sense at the edge"). The first attempt therefore failed closed. The refresh failed, no certificates were learned, and the signed request was refused with `UNSIGNED_SAML_REQUEST`. The fix is `redirect: "manual"`, with any non-200 response, including a 3xx, treated as a failure. A redirect test was added.
+

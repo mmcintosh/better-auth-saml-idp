@@ -116,12 +116,14 @@ export class SpMetadataCache {
   }
 
   private async load(sp: ResolvedServiceProvider, md: NonNullable<ResolvedServiceProvider["metadata"]>): Promise<Learned> {
+    // Redirects are not followed: "manual" returns the 3xx, which fails the status check below.
+    // (workerd rejects redirect: "error" outright; found by the live test, D-026.)
     const res = await fetch(md.url, {
-      redirect: "error",
+      redirect: "manual",
       headers: { accept: "application/samlmetadata+xml, application/xml;q=0.9, text/xml;q=0.8" },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-    if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+    if (res.status !== 200) throw new Error(res.status >= 300 && res.status < 400 ? `HTTP ${res.status} redirect (not followed)` : `HTTP ${res.status}`);
     const declared = Number(res.headers.get("content-length") ?? 0);
     if (declared > MAX_BYTES) throw new Error(`larger than ${MAX_BYTES} bytes`);
     const xml = await res.text();
