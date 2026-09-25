@@ -68,5 +68,6 @@
     "sso",
     "cloudflare-workers",
     "hubspot"
-  ]
+  ],
+  "packageManager": "pnpm@10.10.0"
 }
