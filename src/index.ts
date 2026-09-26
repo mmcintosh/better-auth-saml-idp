@@ -109,6 +109,7 @@ export const samlIdp = (options: SamlIdpOptions) => {
     // module-level object would leak one instance's renames into every other (finding #10).
     schema: mergeSchema(samlIdpSchema({ registry: resolved.registry !== undefined, singleLogout: resolved.singleLogout, auditLog: resolved.auditLog !== undefined }), resolved.schema),
     $ERROR_CODES: SAML_IDP_ERROR_CODES,
-    options: { directory },
+    // No `options` (API decision 3): by convention it holds a plugin's configuration, and ours
+    // includes the signing key; the internal SP directory isn't public either.
   } satisfies BetterAuthPlugin;
 };

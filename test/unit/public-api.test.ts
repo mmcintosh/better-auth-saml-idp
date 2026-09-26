@@ -40,4 +40,12 @@ describe("public API: authorize() receives a read-only ServiceProviderInfo", () 
     expect(Object.isFrozen(seen)).toBe(true);
     expect(Object.isFrozen(seen!.acsUrls)).toBe(true);
   });
+
+  it("the plugin object carries no `options` (API decision 3): no internals, and never the signing key", async () => {
+    const { auth } = await createHost({ saml: { serviceProviders: [{ id: "test-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS] }] } });
+    const plugin = (await auth.$context).options.plugins?.find((p) => p.id === "saml-idp") as Record<string, unknown>;
+    expect(plugin).toBeDefined();
+    expect("options" in plugin).toBe(false);
+    expect(JSON.stringify(Object.keys(plugin))).not.toMatch(/directory/);
+  });
 });

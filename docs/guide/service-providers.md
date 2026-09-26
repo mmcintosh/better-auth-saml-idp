@@ -91,7 +91,7 @@ Enabling it adds the `samlIdpServiceProvider` table ([schema](schema.md#samlidps
 - **Validated on every write and every read.** The API refuses an invalid configuration, with the same messages as startup validation. A row that no longer validates (edited by hand, or after an options change) is ignored at sign-in, logged, and shown as `valid: false` in the API.
 - **Code wins.** The API refuses the `id` or entity ID of a code SP (`SERVICE_PROVIDER_IN_CODE`), and such a row is never used.
 - **Lookups are exact:** an SP is found only by exactly its entity ID or id, even on databases whose collation is case-insensitive.
-- **Cached per isolate** for `cacheSeconds`, misses included, so unknown issuers don't each cost a database read. A change is visible at once in the isolate that made it, and within `cacheSeconds` everywhere else. Use `0` to always read (more database load).
+- **Cached per isolate** for `cacheSeconds`, misses included, so unknown issuers don't each cost a database read. A change is visible at once in the isolate that made it, and within `cacheSeconds` everywhere else, including rows edited in the database directly (the API is the supported way to change SPs). Use `0` to always read (more database load).
 - **Disable instead of delete:** `enabled: false` makes the SP unknown without losing its configuration.
 
 ### Registry API

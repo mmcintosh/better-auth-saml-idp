@@ -1133,3 +1133,12 @@ After 1.0, anything public is a semver promise. Review 4 listed six choices that
 - **Test** (`test/unit/client.test.ts`):
   - real client calls are asserted to reach `/api/auth/saml-idp/service-providers/*`;
   - `@ts-expect-error` checks that `authClient.saml2` and `authClient.samlIdp.sso` don't exist. Re-exposing `sso` fails typecheck.
+
+**3. No `options` on the plugin object (option A).**
+- **Before:** `options: { directory }` exposed the internal SP lookup and cache (a class instance) through `auth.options.plugins`. Nothing in the plugin read it, and nothing documented it.
+- **Now:** there is no `options` field. Hosts change SPs through the registry API (immediately); rows edited in the database directly apply within `cacheSeconds`.
+- **Rejected:**
+  - B, a small `invalidateRegistryCache()` handle: new API for a rare need, and it bends the convention.
+  - C, exposing our configuration as `options` like the organization plugin does: it includes the private signing key, readable by every other plugin.
+  - D, leaving it.
+- **Test:** `test/unit/public-api.test.ts` asserts the plugin object has no `options`.

@@ -8,6 +8,7 @@ The first npm release (1.0.0) waits for `better-auth-cloudflare` 0.4, which Work
 
 ### Changed
 
+- **No `options` on the plugin object** (API decision 3, D-040): it exposed the internal SP directory. By Better Auth convention `options` holds a plugin's configuration, and ours includes the signing key, so it stays absent.
 - **One client namespace** (API decision 2, D-040): the registry API moved from `/saml2/idp/service-providers/*` to `/saml-idp/service-providers/*`, so the client offers `authClient.samlIdp.serviceProviders.*` next to `signOutEverywhere()` and `launch()`. The SAML protocol routes (`/saml2/idp/sso`, `slo`, `init`, `resume`, `metadata`, `logout`) keep their URLs, which SPs are configured with, and are no longer offered as client calls.
 - **Public types are an explicit list** (API decision 1, D-040). The plugin's internal `ResolvedSamlIdpOptions` and `ResolvedServiceProvider` are no longer exported. `authorize()` receives a read-only `ServiceProviderInfo` (`id`, `entityId`, `acsUrls`, `nameIdFormat`, `organization`). `StoredServiceProviderConfig`, `ServiceProviderInfo` and `SamlIdpErrorCode` are now exported.
 
