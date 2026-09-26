@@ -79,6 +79,7 @@ Check a JSON configuration with `npx better-auth-saml-idp check-config`. Key rot
 | `0002_seen_request_key.sql` | The replay table's UNIQUE `key` (drop and recreate if upgrading from a pre-release) |
 | `0003_service_providers.sql` | The registry table (`registry.enabled`) |
 | `0004_session_participants.sql` | The Single Logout table (`singleLogout.enabled`) |
+| `0005_audit_events.sql` | The audit-log table (`auditLog.enabled`) |
 
 ```bash
 npx wrangler d1 migrations apply <db> --remote

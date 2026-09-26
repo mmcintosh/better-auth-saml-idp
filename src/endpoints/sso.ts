@@ -107,16 +107,16 @@ export const ssoEndpoint = (state: PluginState) =>
     },
     async (ctx) => {
       const { options } = state;
-      await sweepExpired(ctx.context.adapter as any, (what, e) => ctx.context.logger.warn(`[saml-idp] cleanup of expired ${what} failed`, e));
+      await sweepExpired(ctx.context.adapter as any, (what, e) => ctx.context.logger.warn(`[saml-idp] cleanup of expired ${what} failed`, e), Date.now(), { auditLog: state.options.auditLog !== undefined });
       const isPost = ctx.request?.method === "POST";
 
       // HTTP-POST binding, second leg: the same-site GET re-entry (see the 303 below).
       if (!isPost && ctx.query?.cid !== undefined) {
         const req = await consumeContinuation(ctx.context.internalAdapter, ctx.query.cid);
-        if (!req) return fail(ctx, "PENDING_REQUEST_NOT_FOUND", "unknown or used continuation");
-        if (req.requestId === undefined) return fail(ctx, "PENDING_REQUEST_NOT_FOUND", "continuation without a request ID");
+        if (!req) return fail(ctx, state, "PENDING_REQUEST_NOT_FOUND", "unknown or used continuation");
+        if (req.requestId === undefined) return fail(ctx, state, "PENDING_REQUEST_NOT_FOUND", "continuation without a request ID");
         const sp = await spById(ctx, state, req.spId);
-        if (!sp || resolveAcsUrl(sp, req.acsUrl) !== req.acsUrl) return fail(ctx, "UNKNOWN_SERVICE_PROVIDER", "SP changed");
+        if (!sp || resolveAcsUrl(sp, req.acsUrl) !== req.acsUrl) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", "SP changed");
         return proceed(ctx, state, sp, req);
       }
 
@@ -134,11 +134,11 @@ export const ssoEndpoint = (state: PluginState) =>
         const xml = await decodeAuthnRequest(raw);
         info = await parseAuthnRequest(xml, options.schemaValidator, { now, clockSkewSeconds: options.clockSkewSeconds, ssoUrl });
         sp = await state.directory.byEntityId(ctx.context.adapter as any, info.issuer, lookupLog(ctx));
-        if (!sp) return fail(ctx, "UNKNOWN_SERVICE_PROVIDER", `issuer not registered (${info.issuer.length} chars)`);
+        if (!sp) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", `issuer not registered (${info.issuer.length} chars)`);
         sp = await prepareSp(ctx, state, sp); // the SP's signing certificates may come from metadata
         checkRequestSignature(raw, sp, { allowInsecureSha1: options.signing.allowInsecureSha1 }, xml);
         const acsUrl = resolveAcsUrl(sp, info.acsUrl);
-        if (!acsUrl) return fail(ctx, "ACS_URL_NOT_ALLOWED", `SP ${sp.id}`);
+        if (!acsUrl) return fail(ctx, state, "ACS_URL_NOT_ALLOWED", `SP ${sp.id}`, { spId: sp.id });
         req = {
           spId: sp.id,
           requestId: info.id,
@@ -150,14 +150,14 @@ export const ssoEndpoint = (state: PluginState) =>
           createdAt: now.getTime(),
         };
       } catch (e) {
-        if (e instanceof SamlRequestError) return fail(ctx, e.code, e.detail);
+        if (e instanceof SamlRequestError) return fail(ctx, state, e.code, e.detail);
         throw e;
       }
 
       // R2: first sight of (SP, request ID) wins; every later sighting is a replay.
       const expiresAt = new Date(now.getTime() + (REQUEST_MAX_AGE_SECONDS + 2 * options.clockSkewSeconds) * 1000);
       if (!(await recordRequestId(ctx.context.adapter as any, sp.id, info.id, expiresAt)))
-        return fail(ctx, "DUPLICATE_REQUEST_ID", `SP ${sp.id}`);
+        return fail(ctx, state, "DUPLICATE_REQUEST_ID", `SP ${sp.id}`, { spId: sp.id });
 
       // The SP and ACS URL are trusted from here on: unsatisfiable requests get a SAML status.
       const status = nameIdPolicyStatus(info, sp) ?? authnContextStatus(info, options.authnContextClassRef);

@@ -1,7 +1,7 @@
 // `keygen`: an RSA signing key and a self-signed certificate for the IdP. node:crypto can't
 // create certificates, so this encodes a minimal X.509 v3 certificate in DER itself.
 import { createPublicKey, generateKeyPairSync, randomBytes, sign, X509Certificate, type KeyObject } from "node:crypto";
-import { lstatSync, unlinkSync, writeFileSync } from "node:fs";
+import { unlinkSync, writeFileSync } from "node:fs";
 import { certSummary, describeCert, Report, UsageError } from "./util";
 
 // --- DER ------------------------------------------------------------------------------
@@ -94,13 +94,15 @@ export interface KeygenOptions {
  * and a symlink would redirect the key elsewhere (review 2, R2-CLI-1).
  */
 function writeNew(path: string, data: string, mode: number, force: boolean) {
-  let exists = false;
+  // No check-then-write: the exclusive create is the check, so nothing can slip in between.
   try {
-    lstatSync(path);
-    exists = true;
-  } catch {}
-  if (exists && !force) throw new UsageError(`${path} exists (pass --force to overwrite)`);
-  if (exists) unlinkSync(path);
+    writeFileSync(path, data, { mode, flag: "wx" });
+    return;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+    if (!force) throw new UsageError(`${path} exists (pass --force to overwrite)`);
+  }
+  unlinkSync(path);
   writeFileSync(path, data, { mode, flag: "wx" });
 }
 

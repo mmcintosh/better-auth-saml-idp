@@ -19,7 +19,7 @@ export const resumeEndpoint = (state: PluginState) =>
       },
     },
     async (ctx) => {
-      if (!/^[A-Za-z0-9_-]{43}$/.test(ctx.query.rid)) return fail(ctx, "PENDING_REQUEST_NOT_FOUND", "malformed rid");
+      if (!/^[A-Za-z0-9_-]{43}$/.test(ctx.query.rid)) return fail(ctx, state, "PENDING_REQUEST_NOT_FOUND", "malformed rid");
       const session = await getSessionFromCtx(ctx);
       if (!session) {
         // Not consumed: the user can sign in and come back to the same URL.
@@ -29,22 +29,22 @@ export const resumeEndpoint = (state: PluginState) =>
       // R1: single-use consume through Better Auth's consume path. Everything below runs only
       // for the one caller that won the consume.
       const pending = await consumePending(ctx.context.internalAdapter, ctx.query.rid);
-      if (!pending) return fail(ctx, "PENDING_REQUEST_NOT_FOUND");
+      if (!pending) return fail(ctx, state, "PENDING_REQUEST_NOT_FOUND");
 
       const binding = await bindingValue(ctx, false);
       if (!binding || (await sha256b64url(binding)) !== pending.bindingHash)
-        return fail(ctx, "PENDING_REQUEST_NOT_FOUND", "browser binding mismatch");
+        return fail(ctx, state, "PENDING_REQUEST_NOT_FOUND", "browser binding mismatch");
 
       const sp = await spById(ctx, state, pending.spId);
-      if (!sp) return fail(ctx, "UNKNOWN_SERVICE_PROVIDER", "SP removed since the request was stored");
+      if (!sp) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", "SP removed since the request was stored");
       // IdP-initiated (no request ID): the SP must still have opted in.
       if (pending.requestId === undefined && !sp.allowIdpInitiated)
-        return fail(ctx, "IDP_INITIATED_NOT_ALLOWED", `SP ${sp.id}: opt-in removed since the request was stored`);
+        return fail(ctx, state, "IDP_INITIATED_NOT_ALLOWED", `SP ${sp.id}: opt-in removed since the request was stored`, { spId: sp.id });
       // Configuration may have changed while the user was signing in: re-check the allow-list.
-      if (resolveAcsUrl(sp, pending.acsUrl) !== pending.acsUrl) return fail(ctx, "ACS_URL_NOT_ALLOWED", `SP ${sp.id}`);
+      if (resolveAcsUrl(sp, pending.acsUrl) !== pending.acsUrl) return fail(ctx, state, "ACS_URL_NOT_ALLOWED", `SP ${sp.id}`, { spId: sp.id });
 
       if (pending.forceAuthn && new Date(session.session.createdAt).getTime() < pending.createdAt)
-        return fail(ctx, "REAUTHENTICATION_REQUIRED", `SP ${sp.id}`);
+        return fail(ctx, state, "REAUTHENTICATION_REQUIRED", `SP ${sp.id}`, { spId: sp.id });
 
       return issueResponse(ctx, state, sp, session as any, pending);
     },

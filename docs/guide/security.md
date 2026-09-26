@@ -34,7 +34,7 @@ The plugin can't protect against a host misconfiguration it can't see. In produc
 1. **Size and encoding:** base64 is size-checked before decoding; DEFLATE (Redirect binding) is inflated with a hard 64 KiB cap, so a compression bomb stops early; UTF-8 must be valid.
 2. **No DTDs:** any `<!DOCTYPE` is refused, so entity-expansion and external-entity attacks never reach a parser.
 3. **XSD validation** against the OASIS SAML 2.0 schemas, with a WebAssembly build of libxml2 that also runs on Workers.
-4. **Strict parse:** any parser warning or error rejects the document, as do two attributes with the same expanded name (Namespaces in XML §6.3).
+4. **Strict parse:** any parser warning or error rejects the document, as do two attributes with the same expanded name (Namespaces in XML §6.3) and elements nested more than 100 deep. The parse is linear in the input size.
 5. **Structure:** the right root element, `Version="2.0"`, exactly one `Issuer`, an `ID`, `Destination` equal to this IdP's endpoint if present, and `ProtocolBinding` HTTP-POST if present.
 
 HTTP-Redirect query parameters are parsed by the plugin itself: names are decoded before matching (`Relay%53tate` counts as `RelayState`), and every SAML parameter may appear at most once.

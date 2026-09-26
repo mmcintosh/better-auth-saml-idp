@@ -3,13 +3,20 @@ import type { samlIdp } from "./index";
 
 type ClientOptions = { baseURL?: string | undefined; basePath?: string | undefined } | undefined;
 
+/** `s` without trailing slashes (a loop: `/\/+$/` is quadratic on many slashes). */
+function trimSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s[end - 1] === "/") end--;
+  return s.slice(0, end);
+}
+
 /** The Better Auth endpoint URL for `path`, from the client's baseURL/basePath. */
 function authUrl(options: ClientOptions, path: string): string {
   const base = options?.baseURL ?? (typeof window !== "undefined" ? window.location.origin : "");
   if (!base) throw new Error("samlIdpClient: set baseURL on createAuthClient outside the browser");
   const u = new URL(base);
   // A baseURL with a path is the auth base itself (Better Auth's convention); else basePath.
-  const basePath = u.pathname && u.pathname !== "/" ? u.pathname.replace(/\/+$/, "") : (options?.basePath ?? "/api/auth").replace(/\/+$/, "");
+  const basePath = trimSlashes(u.pathname && u.pathname !== "/" ? u.pathname : (options?.basePath ?? "/api/auth"));
   return `${u.origin}${basePath}${path}`;
 }
 

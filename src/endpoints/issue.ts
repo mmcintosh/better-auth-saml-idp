@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 import type { GenericEndpointContext } from "better-auth";
 import { ERROR_STATUS, SAML_IDP_ERROR_CODES, type SamlIdpErrorCode } from "../errors";
+import { emit } from "../events";
 import { autoPostResponse, errorPage } from "../saml/post-form";
 import { logSafe, type SamlStatus } from "../saml/request";
 import { buildSignedErrorResponse, buildSignedResponse, hasNonXmlChars, newSamlId } from "../saml/response";
@@ -49,8 +50,16 @@ type SessionWithUser = {
 };
 
 /** Error page for a plugin error code; the detail goes to the debug log only. */
-export function fail(ctx: GenericEndpointContext, code: SamlIdpErrorCode, detail?: string): Response {
-  ctx.context.logger.debug(`[saml-idp] ${code}${detail ? `: ${logSafe(detail, 300)}` : ""}`);
+export function fail(
+  ctx: GenericEndpointContext,
+  state: Pick<PluginState, "options">,
+  code: SamlIdpErrorCode,
+  detail?: string,
+  who: { spId?: string; userId?: string } = {},
+): Response {
+  const safe = detail ? logSafe(detail, 300) : undefined;
+  ctx.context.logger.debug(`[saml-idp] ${code}${safe ? `: ${safe}` : ""}`);
+  emit(ctx, state.options, { type: "denied", code, ...(who.spId ? { spId: who.spId } : {}), ...(who.userId ? { userId: who.userId } : {}), ...(safe ? { detail: safe } : {}) });
   const logout = code === "LOGOUT_NOT_SUPPORTED" || code === "LOGOUT_STATE_NOT_FOUND" || code === "INVALID_RETURN_TO";
   return errorPage(ERROR_STATUS[code], code, SAML_IDP_ERROR_CODES[code].message, logout ? "Sign-out could not be completed" : undefined);
 }
@@ -64,8 +73,17 @@ export function samlError(
   state: PluginState,
   req: Pick<ValidatedRequest, "requestId" | "acsUrl" | "relayState" | "spId">,
   status: SamlStatus,
+  userId?: string,
 ): Response {
   ctx.context.logger.debug(`[saml-idp] SAML status ${status.code}/${status.subCode ?? "-"} for SP ${req.spId}`);
+  emit(ctx, state.options, {
+    type: "denied",
+    code: "SAML_STATUS",
+    status: { code: status.code, ...(status.subCode ? { subCode: status.subCode } : {}) },
+    spId: req.spId,
+    ...(userId ? { userId } : {}),
+    ...(status.message ? { detail: logSafe(status.message, 300) } : {}),
+  });
   const res = buildSignedErrorResponse(state.options, { requestId: req.requestId, acsUrl: req.acsUrl, status, now: new Date() });
   return autoPostResponse(req.acsUrl, res.base64, req.relayState);
 }
@@ -144,24 +162,25 @@ export async function issueResponse(
   sp = await prepareSp(ctx, state, sp); // the encryption certificate may come from metadata
   const now = new Date();
   const principal = await eligiblePrincipal(ctx, state, session, now);
-  if ("code" in principal) return fail(ctx, principal.code, principal.detail);
+  if ("code" in principal) return fail(ctx, state, principal.code, principal.detail, { spId: sp.id, userId: session.user.id });
   const user = principal.user;
+  const who = { spId: sp.id, userId: user.id };
 
   // Organization plugin (D-031): memberships for the SP's organization rule, attributes and
   // authorize(). An SP that requires an organization fails closed without the plugin.
   const orgPlugin = hasOrganizationPlugin(ctx.context.options.plugins as { id: string }[] | undefined);
-  if (sp.organization && !orgPlugin) return fail(ctx, "ACCESS_DENIED", `SP ${sp.id} requires an organization, but the organization plugin isn't installed`);
+  if (sp.organization && !orgPlugin) return fail(ctx, state, "ACCESS_DENIED", `SP ${sp.id} requires an organization, but the organization plugin isn't installed`, who);
   let organizations: OrganizationMembership[] = [];
   if (orgPlugin) {
     try {
       organizations = await loadMemberships(ctx.context.adapter as any, user.id);
     } catch (e) {
       ctx.context.logger.error(`[saml-idp] could not load organization memberships for SP ${sp.id}`, e);
-      return fail(ctx, "INTERNAL_ERROR");
+      return fail(ctx, state, "INTERNAL_ERROR", undefined, who);
     }
   }
   const organization = sp.organization ? matchOrganization(organizations, sp.organization) : undefined;
-  if (sp.organization && !organization) return fail(ctx, "ACCESS_DENIED", `user ${user.id} is not a member of SP ${sp.id}'s organization (with an allowed role)`);
+  if (sp.organization && !organization) return fail(ctx, state, "ACCESS_DENIED", `user ${user.id} is not a member of SP ${sp.id}'s organization (with an allowed role)`, who);
 
   let allowed = false;
   try {
@@ -170,7 +189,7 @@ export async function issueResponse(
     ctx.context.logger.error(`[saml-idp] authorize() threw for SP ${sp.id}`, e);
     allowed = false;
   }
-  if (allowed !== true) return fail(ctx, "ACCESS_DENIED", `authorize() denied user ${user.id} for SP ${sp.id}`);
+  if (allowed !== true) return fail(ctx, state, "ACCESS_DENIED", `authorize() denied user ${user.id} for SP ${sp.id}`, who);
 
   let nameId: unknown;
   let attributes: ReturnType<ResolvedServiceProvider["attributes"]>;
@@ -179,23 +198,23 @@ export async function issueResponse(
     attributes = sp.attributes(user, { organizations, organization }, (field) => warnMissingField(ctx, sp, field));
   } catch (e) {
     ctx.context.logger.error(`[saml-idp] nameId()/attributes() threw for SP ${sp.id}`, e);
-    return fail(ctx, "INTERNAL_ERROR");
+    return fail(ctx, state, "INTERNAL_ERROR", undefined, who);
   }
   if (typeof nameId !== "string" || nameId.length === 0) {
     ctx.context.logger.error(`[saml-idp] nameId() returned an empty value for SP ${sp.id}`);
-    return fail(ctx, "INTERNAL_ERROR");
+    return fail(ctx, state, "INTERNAL_ERROR", undefined, who);
   }
   // An identifier is never altered: one XML can't carry is refused (D-036).
   if (hasNonXmlChars(nameId)) {
     ctx.context.logger.error(`[saml-idp] the NameID for SP ${sp.id} contains characters XML can't carry; not issuing`);
-    return fail(ctx, "INTERNAL_ERROR");
+    return fail(ctx, state, "INTERNAL_ERROR", undefined, who);
   }
 
   // The SP asked about a specific principal: answer only for that one (Core §3.4.1.4).
   if (request.subject) {
     const formatOk = !request.subject.format || request.subject.format === sp.nameIdFormat || request.subject.format === NAMEID_FORMAT.unspecified;
     if (!formatOk || request.subject.nameId !== nameId)
-      return samlError(ctx, state, request, { code: "Responder", subCode: "UnknownPrincipal", message: "The signed-in user is not the requested subject" });
+      return samlError(ctx, state, request, { code: "Responder", subCode: "UnknownPrincipal", message: "The signed-in user is not the requested subject" }, user.id);
   }
 
   const sessionIndex = sessionIndexOf(ctx.context.secret, session.session.id, sp.id);
@@ -220,8 +239,23 @@ export async function issueResponse(
       await recordParticipant(ctx.context.adapter as any, session.session.id, { spId: sp.id, nameId, nameIdFormat: sp.nameIdFormat, sessionIndex }, new Date(session.session.expiresAt));
     } catch (e) {
       ctx.context.logger.error(`[saml-idp] could not record SP ${sp.id} as a logout participant; not issuing`, e);
-      return fail(ctx, "INTERNAL_ERROR", "logout participant not recorded");
+      return fail(ctx, state, "INTERNAL_ERROR", "logout participant not recorded", who);
     }
   }
+  emit(ctx, state.options, {
+    type: "assertion.issued",
+    spId: sp.id,
+    entityId: sp.entityId,
+    userId: user.id,
+    sessionId: session.session.id,
+    assertionId: signed.assertionId,
+    initiatedBy: request.requestId === undefined ? "idp" : "sp",
+    ...(request.requestId !== undefined ? { inResponseTo: request.requestId } : {}),
+    acsUrl: request.acsUrl,
+    nameIdFormat: sp.nameIdFormat,
+    nameId,
+    attributes: Object.keys(attributes),
+    encrypted: signed.encrypted,
+  });
   return autoPostResponse(request.acsUrl, signed.base64, request.relayState);
 }

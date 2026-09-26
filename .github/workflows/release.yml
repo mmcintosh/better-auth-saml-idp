@@ -49,7 +49,8 @@ jobs:
       # The SBOM describes what a user installs: the tarball's runtime dependency tree.
       - run: |
           mkdir -p sbom-root && cd sbom-root && npm init -y >/dev/null
-          npm install --ignore-scripts --no-audit --no-fund ../out/*.tgz
+          # --legacy-peer-deps: peers (better-auth) are the host's, not part of this package.
+          npm install --ignore-scripts --no-audit --no-fund --legacy-peer-deps ../out/*.tgz
       - uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           path: sbom-root
@@ -57,6 +58,7 @@ jobs:
           output-file: out/better-auth-saml-idp-${{ steps.meta.outputs.version }}.cdx.json
           upload-artifact: false
           upload-release-assets: false
+      - run: node scripts/sbom-add-libxml2.mjs out/better-auth-saml-idp-${{ steps.meta.outputs.version }}.cdx.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with: { name: release, path: out/, retention-days: 30 }
       - if: github.event_name == 'push'

@@ -254,11 +254,31 @@ const optionsSchema = z
           })
           .strict()
           .optional(),
+        samlIdpAuditEvent: z
+          .object({
+            modelName: z.string().min(1).optional(),
+            fields: z
+              .object(Object.fromEntries(["type", "at", "spId", "userId", "code", "ipAddress", "userAgent", "details", "expiresAt"].map((f) => [f, z.string().min(1)])))
+              .partial()
+              .strict()
+              .optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),
     signMetadata: z.boolean().optional(),
     singleLogout: z.object({ enabled: z.boolean() }).strict().optional(),
+    events: z
+      .object({
+        onAssertionIssued: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onAssertionIssued"]>>().optional(),
+        onDenied: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onDenied"]>>().optional(),
+        onLogout: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onLogout"]>>().optional(),
+      })
+      .strict()
+      .optional(),
+    auditLog: z.object({ enabled: z.boolean(), retentionDays: z.number().int().min(1).max(3650).optional() }).strict().optional(),
     registry: z
       .object({
         enabled: z.boolean(),
@@ -551,6 +571,8 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
     schema: o.schema,
     signMetadata: o.signMetadata ?? false,
     singleLogout: o.singleLogout?.enabled ?? false,
+    events: o.events,
+    auditLog: o.auditLog?.enabled ? { retentionDays: o.auditLog.retentionDays ?? 90 } : undefined,
     registry: o.registry?.enabled
       ? { canManage: o.registry.canManage, permissions: o.registry.permissions ?? false, cacheMs: (o.registry.cacheSeconds ?? 60) * 1000, authorize: o.registry.authorize }
       : undefined,

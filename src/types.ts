@@ -248,6 +248,10 @@ export interface SamlIdpOptions {
       modelName?: string;
       fields?: Partial<Record<"spId" | "entityId" | "config" | "enabled" | "createdAt" | "updatedAt" | "updatedBy", string>>;
     };
+    samlIdpAuditEvent?: {
+      modelName?: string;
+      fields?: Partial<Record<"type" | "at" | "spId" | "userId" | "code" | "ipAddress" | "userAgent" | "details" | "expiresAt", string>>;
+    };
   };
   /**
    * SAML Single Logout (D-028): SP- and IdP-initiated logout, front-channel, propagated to every
@@ -255,6 +259,18 @@ export interface SamlIdpOptions {
    * `samlIdpSessionParticipant` table and the `/saml2/idp/slo` and `/saml2/idp/logout` endpoints.
    */
   singleLogout?: { enabled: boolean };
+  /**
+   * Observability (D-038): called after an assertion is issued, a request is refused, or an IdP
+   * session is ended by Single Logout. Handlers run in the background and can't affect the flow;
+   * a throw is logged. For audit trails, SIEM forwarding and metrics.
+   */
+  events?: import("./events").SamlIdpEventHandlers;
+  /**
+   * Also record those events in the `samlIdpAuditEvent` table (D-038), kept `retentionDays`
+   * (default 90) and then swept. Refusals that identify neither an SP nor a user are not stored
+   * (anyone can generate them); they still reach `events.onDenied`.
+   */
+  auditLog?: import("./events").AuditLogOptions;
   /**
    * Database-backed SP registry (D-027): SPs stored in the `samlIdpServiceProvider` table, in
    * addition to `serviceProviders`, managed at runtime without a redeploy. Stored SPs are plain
@@ -338,6 +354,8 @@ export interface ResolvedSamlIdpOptions {
   schema: SamlIdpOptions["schema"];
   signMetadata: boolean;
   singleLogout: boolean;
+  events: import("./events").SamlIdpEventHandlers | undefined;
+  auditLog: { retentionDays: number } | undefined;
   registry: { canManage: NonNullable<SamlIdpOptions["registry"]>["canManage"]; permissions: boolean; cacheMs: number; authorize: ResolvedServiceProvider["authorize"] | undefined } | undefined;
   /** Non-fatal configuration warnings, logged once at startup. */
   warnings: string[];

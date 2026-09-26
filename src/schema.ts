@@ -8,9 +8,10 @@ import type { BetterAuthPluginDBSchema } from "better-auth/db";
  * "serial" or "uuid", which ignore forced ids), so replay protection never depends on it.
  * Hosts' hand-written schemas should also add UNIQUE(spId, requestId) (see README).
  */
-export function samlIdpSchema(opts: { registry?: boolean; singleLogout?: boolean } = {}) {
+export function samlIdpSchema(opts: { registry?: boolean; singleLogout?: boolean; auditLog?: boolean } = {}) {
   return {
     ...(opts.registry ? registrySchema() : {}),
+    ...(opts.auditLog ? auditSchema() : {}),
     ...(opts.singleLogout ? logoutSchema() : {}),
     samlIdpSeenRequest: {
       fields: {
@@ -48,6 +49,28 @@ function registrySchema() {
         { fields: ["spId"], unique: true, name: "saml_idp_service_provider_sp_id_unique" },
         { fields: ["entityId"], unique: true, name: "saml_idp_service_provider_entity_id_unique" },
       ],
+    },
+  } satisfies BetterAuthPluginDBSchema;
+}
+
+/**
+ * The audit log (D-038): one row per event, with the fields worth querying as columns and the
+ * whole event as JSON in `details`. Rows expire after `auditLog.retentionDays`.
+ */
+function auditSchema() {
+  return {
+    samlIdpAuditEvent: {
+      fields: {
+        type: { type: "string", required: true, input: false, index: true },
+        at: { type: "date", required: true, input: false, index: true },
+        spId: { type: "string", required: false, input: false, index: true },
+        userId: { type: "string", required: false, input: false, index: true },
+        code: { type: "string", required: false, input: false },
+        ipAddress: { type: "string", required: false, input: false },
+        userAgent: { type: "string", required: false, input: false },
+        details: { type: "string", required: true, input: false },
+        expiresAt: { type: "date", required: true, input: false, index: true },
+      },
     },
   } satisfies BetterAuthPluginDBSchema;
 }

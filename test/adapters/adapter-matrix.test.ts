@@ -7,7 +7,7 @@
 // Each run creates a fresh database and migrates it with Better Auth's own migrator, as a host would.
 import { betterAuth } from "better-auth";
 import { admin, organization } from "better-auth/plugins";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { samlIdp } from "../../src";
 import { listParticipants } from "../../src/storage/participants";
 import { recordRequestId } from "../../src/storage/seen";
@@ -105,6 +105,7 @@ async function build() {
           serviceProviders: [{ id: "test-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], singleLogoutService: { url: "https://sp.test/slo" } }],
           registry: { enabled: true, canManage: ({ user }) => user.role === "admin", cacheSeconds: 0 },
           singleLogout: { enabled: true },
+          auditLog: { enabled: true },
         }),
       ),
     ],
@@ -217,6 +218,19 @@ describe.skipIf(!KIND)(`adapter matrix: ${KIND}`, { timeout: 60_000 }, () => {
       ["A", ["admin", "member"]],
       ["B", ["owner"]],
     ]);
+  });
+
+  it("audit log: events are written with dates and nullable columns intact", async () => {
+    const browser = new Browser(auth);
+    const user = await browser.signUp();
+    await readAutoPost(await browser.fetch(await redirectUrl(authnRequestXml().xml)));
+    const c = await ctx();
+    const find = async () => (await c.adapter.findMany({ model: "samlIdpAuditEvent", where: [{ field: "userId", value: user.id }] })) as Record<string, any>[];
+    await vi.waitFor(async () => expect((await find()).map((r) => r.type)).toContain("assertion.issued"));
+    const row = (await find()).find((r) => r.type === "assertion.issued")!;
+    expect(row).toMatchObject({ spId: "test-sp", code: null });
+    expect(new Date(row.expiresAt).getTime()).toBeGreaterThan(new Date(row.at).getTime());
+    expect(JSON.parse(row.details)).toMatchObject({ initiatedBy: "sp", attributes: expect.any(Array) });
   });
 
   it("the expiry sweep deletes expired rows (lt) and keeps live ones", async () => {

@@ -6,8 +6,13 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 The first npm release (1.0.0) waits for `better-auth-cloudflare` 0.4, which Workers users need.
 
+### Security
+
+- **Hardening (D-037):** the pre-parse attribute scan in `parseXmlStrict` could take quadratic time on unterminated markup: 2.5 s for 64 KiB. It is now linear, and element nesting is capped at 100. This was not reachable in the default configuration, because libxml2 schema validation rejects such input first. It protects hosts that replace `schemaValidator`, and the CLI.
+
 ### Added
 
+- **Observability** ([guide](docs/guide/observability.md)): `events.onAssertionIssued`, `onDenied` and `onLogout` callbacks, which run in the background and can't affect the flow, and an optional `auditLog` table (`samlIdpAuditEvent`, D1 migration `0005`) with retention.
 - **Supply chain:**
   - every GitHub Action pinned by SHA, least-privilege tokens;
   - CodeQL (security-extended); a runtime dependency audit that blocks; dependency review on PRs; OSV-Scanner; OpenSSF Scorecard; Dependabot;

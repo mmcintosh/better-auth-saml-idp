@@ -112,6 +112,51 @@ export const samlIdpSessionParticipants = sqliteTable(
 ```
 </details>
 
+## `samlIdpAuditEvent` (with `auditLog.enabled`)
+
+One row per [event](observability.md): issued assertions, refusals that name an SP or a user, and logouts.
+
+| Field | Type | Key | Description |
+|---|---|---|---|
+| `id` | string | primary | Row id. |
+| `type` | string | index | `assertion.issued`, `denied` or `logout`. |
+| `at` | date | index | When. |
+| `spId` | string? | index | The SP, if any. |
+| `userId` | string? | index | The user, if any. |
+| `code` | string? | | For `denied`: the error code, or `SAML_STATUS`. |
+| `ipAddress` | string? | | The client IP, as Better Auth reads it. |
+| `userAgent` | string? | | The browser's User-Agent (at most 300 characters). |
+| `details` | string | | The whole event as JSON. It includes the NameID, which may be personal data. |
+| `expiresAt` | date | index | `at` + `auditLog.retentionDays`. Swept automatically. |
+
+<details><summary>Hand-written Drizzle (SQLite/D1)</summary>
+
+```ts
+export const samlIdpAuditEvents = sqliteTable(
+  "saml_idp_audit_events",
+  {
+    id: text("id").primaryKey(),
+    type: text("type").notNull(),
+    at: integer("at", { mode: "timestamp_ms" }).notNull(),
+    spId: text("sp_id"),
+    userId: text("user_id"),
+    code: text("code"),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    details: text("details").notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [
+    index("saml_idp_audit_events_at_idx").on(t.at),
+    index("saml_idp_audit_events_type_idx").on(t.type),
+    index("saml_idp_audit_events_sp_idx").on(t.spId),
+    index("saml_idp_audit_events_user_idx").on(t.userId),
+    index("saml_idp_audit_events_expires_idx").on(t.expiresAt),
+  ],
+);
+```
+</details>
+
 ## Other storage
 
 - **`verification`** (Better Auth's table): pending sign-in requests (`resume` links), POST-binding continuations, and logout state. All are single-use (consumed atomically) and short-lived. With secondary storage such as KV configured, set `verification: { storeInDatabase: true }` so single-use consumption stays atomic.

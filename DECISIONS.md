@@ -959,3 +959,90 @@ The verifier held. Issuance didn't:
 - End-to-end tests with samlify cover both cases, and mutation checks confirm the tests fail without each fix.
 
 The byte-flip property also caught its own oracle: flipping base64 padding in `SignatureValue` to a space leaves the same signature bytes, so it still verifies. The oracle now compares only the content outside the Signature.
+
+## D-037: CodeQL findings: a quadratic XML pre-scan, and xmldom's nesting cost (2026-09-26)
+
+The first CodeQL run (security-extended) flagged polynomial regular expressions in `src/saml/xml.ts`, the scan for duplicate expanded attribute names (R3-7) that `parseXmlStrict` runs before xmldom. The warning was measured instead of argued:
+
+| Input (unterminated markup, repeated) | 64 KiB (largest SAMLRequest) | 1 MiB (largest SP metadata) |
+|---|---|---|
+| `</` | **2,463 ms** | minutes (quadratic) |
+| `<!--` | 502 ms | |
+| `<!DOCTYPE` | 457 ms | |
+
+The regex rescanned to the end of the input from every `<` looking for a terminator.
+
+**Reachability: not exploitable in the default configuration.** Every caller runs libxml2 schema validation before `parseXmlStrict`:
+- AuthnRequests, LogoutRequests and LogoutResponses, in `sso.ts` and `slo.ts`, before any signature check;
+- SP metadata, from `metadata.url` or `serviceProviderFromMetadata`.
+
+libxml2 rejects all of these inputs in 0–7 ms (measured), and the validator refuses anything over 128 KiB. So the quadratic scan only ever saw schema-valid documents, where it is linear. An initial assessment called this a DoS; tracing the call sites showed otherwise.
+
+It is still worth fixing, as defense in depth. `parseXmlStrict` promises linear time on its own, which matters for:
+- hosts that replace `schemaValidator`;
+- the CLI's `decode`;
+- any future caller.
+
+**Fix:** a hand-written scanner, linear in the input:
+- constructs are found with `indexOf` from where the last one ended;
+- unterminated markup is refused at once (xmldom would refuse it too);
+- namespace prefixes resolve through per-prefix binding stacks, O(1) at any depth. The old lookup walked the element stack, which was also quadratic.
+
+The same cases now take 0–12 ms at 64 KiB and at most 71 ms at 1 MiB.
+
+**xmldom itself** turned out to be quadratic in nested namespace declarations: it copies scopes per element. 1 MiB of nesting took 27 s in xmldom alone, and 66 ms at 64 KiB. Validation bounds this in practice (size, and libxml2's own depth limit). Still, **nesting is now capped at `MAX_XML_DEPTH` = 100** before xmldom or xml-crypto see a document. SAML messages nest about 10 deep.
+
+**Tests** (`test/unit/xml-scanner.test.ts`):
+- every hostile shape at 1 MiB finishes in under 2 s;
+- the depth limit holds at the boundary;
+- namespace scopes revert after a child closes and don't leak from self-closing siblings;
+- `>` inside attribute values doesn't end the tag;
+- a property: generated well-formed trees (comments, CDATA, both quote styles, whitespace, namespaces) are never refused.
+
+**Mutation checks:** the old regex scanner, no depth limit, and no scope pop each fail the tests.
+
+**The other CodeQL findings:**
+- **`src/cli/keygen.ts`, file-system race:** harmless, because the write was already exclusive (`wx`). It is restructured anyway so the exclusive create is the only check.
+- **`src/client.ts`, `/\/+$/`:** runs on the developer's own `baseURL`. Replaced with a loop anyway.
+- **Test and e2e code:** now excluded from CodeQL, because it doesn't ship.
+- **`scripts/check-links.mjs`:** a false positive. The stripped text becomes a heading slug and is never rendered.
+
+**SBOM:**
+- The release SBOM listed Better Auth's packages, because npm installs peers by default; it now installs with `--legacy-peer-deps`.
+- It now also lists **libxml2**, compiled into `wasm/xsd.wasm` and invisible to scanners. Version and source hash are read from the wasm build script, and a CPE lets vulnerability databases match libxml2 CVEs (`scripts/sbom-add-libxml2.mjs`).
+
+## D-038: Observability: event callbacks and an audit-log table (2026-09-26)
+
+Hosts need to know what their IdP did: for audit trails, for SIEM, and for answering "who signed in to payroll yesterday?". Until now there were only log lines.
+
+**Design:**
+- **Three callbacks,** one per outcome an auditor asks about:
+  - `events.onAssertionIssued`: who, which SP, which NameID, which attribute names (never values), SP- or IdP-initiated, encrypted or not;
+  - `events.onDenied`: every refusal, as an error page `code` or a SAML status Response (`SAML_STATUS` with `status`);
+  - `events.onLogout`: the IdP session ended by SLO, and the SPs about to be notified.
+- **Observers, never gates.** Handlers run through Better Auth's `runInBackground` (`waitUntil` on Workers), so a slow handler never delays the user, and the host's `backgroundTasks.handler` keeps the work alive after the response. A throw or rejection is logged and changes nothing. Access decisions stay in `authorize`, where a throw means *deny*. An observer that could block sign-in would be a second, badly placed gate.
+- **One emission point per outcome.** `fail()` and `samlError()`, which every refusal already goes through, now emit `denied`. They take the plugin state, and the compiler found every call site. Refusals carry the SP and user whenever the request identified them.
+- **IP address** is read as Better Auth reads it (`advanced.ipAddress.ipAddressHeaders`, `disableIpTracking`), so it matches Better Auth's own session records. `withCloudflare` sets `cf-connecting-ip`.
+
+**Audit table** (`auditLog: { enabled, retentionDays = 90 }`, table `samlIdpAuditEvent`, D1 migration `0005`):
+- **Columns:** the queryable fields are columns (`type`, `at`, `spId`, `userId`, `code`, `ipAddress`, `userAgent`, indexed where useful), and the whole event is JSON in `details`, so new event fields need no migration.
+- **Anonymous refusals aren't stored.** A refusal that names neither an SP nor a user (a malformed request, an unknown issuer) reaches `onDenied` but not the table. Otherwise anyone could grow the table at will.
+- **Retention:** rows expire after `retentionDays` and are swept with the plugin's other expiring rows.
+- **Best effort,** like the callbacks: a failed write is logged, and sign-in proceeds. Hosts that need guaranteed delivery forward from the callbacks.
+
+**Tests** (`test/integration/events.test.ts`, Node and workerd/D1; plus the adapter matrix on Postgres, MySQL and MongoDB):
+- field contents of all three events;
+- three kinds of denial;
+- a throwing handler doesn't break sign-in;
+- a handler that never settles doesn't delay it;
+- events are delivered through the host's background-task handler;
+- audit rows, and that anonymous denials are absent;
+- retention arithmetic and the sweep;
+- no table without the option.
+
+**Mutation checks:**
+- storing anonymous denials fails a test;
+- not catching handler errors fails a test;
+- running handlers outside Better Auth's background tasks fails a test.
+
+That last mutant first survived. The test handler recorded synchronously before its first `await`, so it recorded even without a background task. The handler now finishes after a delay, so only a task the host waits on can deliver it.

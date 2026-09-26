@@ -4,6 +4,7 @@
 //  - The IdP session ends FIRST; then each other participating SP gets a signed LogoutRequest
 //    through the browser, one hop at a time (state in a single-use verification value named by
 //    the RelayState); finally the originator gets a LogoutResponse (or the browser returnTo).
+import { emit } from "../events";
 import type { GenericEndpointContext } from "better-auth";
 import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
 import { deleteSessionCookie } from "better-auth/cookies";
@@ -131,7 +132,7 @@ async function nextHop(ctx: GenericEndpointContext, state: PluginState, ls: Logo
 async function finish(ctx: GenericEndpointContext, state: PluginState, ls: LogoutState): Promise<Response | never> {
   if (ls.origin.kind === "idp") throw ctx.redirect(ls.origin.returnTo);
   const sp = await spById(ctx, state, ls.origin.spId);
-  if (!sp?.singleLogoutService) return fail(ctx, "LOGOUT_NOT_SUPPORTED", `originating SP ${ls.origin.spId} has no SLO endpoint any more`);
+  if (!sp?.singleLogoutService) return fail(ctx, state, "LOGOUT_NOT_SUPPORTED", `originating SP ${ls.origin.spId} has no SLO endpoint any more`, { spId: ls.origin.spId });
   // Metadata's ResponseLocation, when the SP has one, is where responses go (Metadata §2.2.2).
   const responseUrl = sp.singleLogoutService.responseUrl ?? sp.singleLogoutService.url;
   const xml = buildLogoutResponse({
@@ -168,7 +169,9 @@ async function handleLogoutRequest(ctx: GenericEndpointContext, state: PluginSta
     return finish(ctx, state, { origin, remaining: [], partial: false });
   }
   const ended = await endSession(ctx, session);
-  return nextHop(ctx, state, { origin, remaining: ended.participants.filter((p) => p.spId !== sp.id), partial: ended.partial });
+  const remaining = ended.participants.filter((p) => p.spId !== sp.id);
+  emit(ctx, state.options, { type: "logout", initiatedBy: "sp", spId: sp.id, userId: session.user.id, sessionId: session.session.id, notifying: remaining.map((p) => p.spId) });
+  return nextHop(ctx, state, { origin, remaining, partial: ended.partial });
 }
 
 function rawFrom(ctx: GenericEndpointContext, isPost: boolean, param: "SAMLRequest" | "SAMLResponse"): RawAuthnRequest {
@@ -193,7 +196,7 @@ export const sloEndpoint = (state: PluginState) =>
     },
     async (ctx) => {
       const { options } = state;
-      await sweepExpired(ctx.context.adapter as any, (what, e) => ctx.context.logger.warn(`[saml-idp] cleanup of expired ${what} failed`, e), Date.now(), { participants: true });
+      await sweepExpired(ctx.context.adapter as any, (what, e) => ctx.context.logger.warn(`[saml-idp] cleanup of expired ${what} failed`, e), Date.now(), { participants: true, auditLog: state.options.auditLog !== undefined });
       const isPost = ctx.request?.method === "POST";
       const input = ((isPost ? ctx.body : ctx.query) ?? {}) as z.infer<typeof params>;
       const now = new Date();
@@ -204,9 +207,9 @@ export const sloEndpoint = (state: PluginState) =>
         // Re-entry of an HTTP-POST LogoutRequest on a same-site GET (cookies now present).
         if (!isPost && input.cid !== undefined) {
           const req = await consume<PendingLogoutRequest>(ctx.context.internalAdapter, CONTINUE_PREFIX, input.cid);
-          if (!req) return fail(ctx, "LOGOUT_STATE_NOT_FOUND", "unknown or used logout continuation");
+          if (!req) return fail(ctx, state, "LOGOUT_STATE_NOT_FOUND", "unknown or used logout continuation");
           const sp = await spById(ctx, state, req.spId);
-          if (!sp?.singleLogoutService) return fail(ctx, "LOGOUT_NOT_SUPPORTED", `SP ${req.spId}`);
+          if (!sp?.singleLogoutService) return fail(ctx, state, "LOGOUT_NOT_SUPPORTED", `SP ${req.spId}`, { spId: req.spId });
           return await handleLogoutRequest(ctx, state, sp, req);
         }
 
@@ -214,7 +217,7 @@ export const sloEndpoint = (state: PluginState) =>
         if (input.SAMLResponse !== undefined) {
           const raw = rawFrom(ctx, isPost, "SAMLResponse");
           const ls = await consume<LogoutState>(ctx.context.internalAdapter, STATE_PREFIX, raw.relayState);
-          if (!ls?.current) return fail(ctx, "LOGOUT_STATE_NOT_FOUND", "unknown or used logout state");
+          if (!ls?.current) return fail(ctx, state, "LOGOUT_STATE_NOT_FOUND", "unknown or used logout state");
           const sp = await spById(ctx, state, ls.current.spId);
           try {
             const xml = await decodeAuthnRequest(raw);
@@ -241,9 +244,9 @@ export const sloEndpoint = (state: PluginState) =>
         const xml = await decodeAuthnRequest(raw);
         const info = await parseLogoutRequest(xml, options.schemaValidator, parseOpts);
         const found = await state.directory.byEntityId(ctx.context.adapter as any, info.issuer, lookupLog(ctx));
-        if (!found) return fail(ctx, "UNKNOWN_SERVICE_PROVIDER", `logout: issuer not registered (${info.issuer.length} chars)`);
+        if (!found) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", `logout: issuer not registered (${info.issuer.length} chars)`);
         const sp = await prepareSp(ctx, state, found);
-        if (!sp.singleLogoutService) return fail(ctx, "LOGOUT_NOT_SUPPORTED", `SP ${sp.id} has no singleLogoutService`);
+        if (!sp.singleLogoutService) return fail(ctx, state, "LOGOUT_NOT_SUPPORTED", `SP ${sp.id} has no singleLogoutService`, { spId: sp.id });
         // Profiles §4.4.4.1: a LogoutRequest must be authenticated. With SP certificates: a valid
         // signature. Without: only the session binding in handleLogoutRequest (SessionIndex).
         const signed = isSigned(raw, xml);
@@ -256,7 +259,7 @@ export const sloEndpoint = (state: PluginState) =>
         // Bindings §3.4.5.2 / §3.5.5.2: a signed message must say where it's going.
         if (signed && info.destination === undefined) throw new SamlRequestError("INVALID_SAML_REQUEST", "a signed LogoutRequest needs a Destination");
         const expiresAt = new Date(now.getTime() + (300 + 2 * options.clockSkewSeconds) * 1000);
-        if (!(await recordRequestId(ctx.context.adapter as any, sp.id, `logout:${info.id}`, expiresAt))) return fail(ctx, "DUPLICATE_REQUEST_ID", `SP ${sp.id}`);
+        if (!(await recordRequestId(ctx.context.adapter as any, sp.id, `logout:${info.id}`, expiresAt))) return fail(ctx, state, "DUPLICATE_REQUEST_ID", `SP ${sp.id}`, { spId: sp.id });
         const req: PendingLogoutRequest = {
           spId: sp.id,
           requestId: info.id,
@@ -271,7 +274,7 @@ export const sloEndpoint = (state: PluginState) =>
         }
         return await handleLogoutRequest(ctx, state, sp, req);
       } catch (e) {
-        if (e instanceof SamlRequestError) return fail(ctx, e.code, e.detail);
+        if (e instanceof SamlRequestError) return fail(ctx, state, e.code, e.detail);
         throw e;
       }
     },
@@ -297,12 +300,13 @@ export const logoutEndpoint = (state: PluginState) =>
     },
     async (ctx) => {
       const returnTo = safeReturnTo(ctx, state, ctx.query?.returnTo);
-      if (!returnTo) return fail(ctx, "INVALID_RETURN_TO", "returnTo is not a same-origin path or a trusted origin");
+      if (!returnTo) return fail(ctx, state, "INVALID_RETURN_TO", "returnTo is not a same-origin path or a trusted origin");
       const session = await getSessionFromCtx(ctx);
       if (!session) throw ctx.redirect(returnTo);
       // Logout CSRF: another site can't silently log the user out everywhere.
       if (isDriveByCrossSite(ctx)) return confirmPage(ctx.request?.url ?? `${idpBaseURL(state.options, ctx.context.baseURL)}${LOGOUT_PATH}`, "", "sign-out");
       const ended = await endSession(ctx, session);
+      emit(ctx, state.options, { type: "logout", initiatedBy: "idp", userId: session.user.id, sessionId: session.session.id, notifying: ended.participants.map((p) => p.spId) });
       return nextHop(ctx, state, { origin: { kind: "idp", returnTo }, remaining: ended.participants, partial: ended.partial });
     },
   );

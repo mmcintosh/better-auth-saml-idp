@@ -34,6 +34,8 @@ Every option `samlIdp()` accepts. Options are validated when `samlIdp()` is call
 | `accountPolicy` | `object` | strict | Who may receive assertions. See [`accountPolicy`](#accountpolicy). |
 | `registry` | `object` | off | The database-backed SP registry and its API. See [`registry`](#registry). |
 | `singleLogout` | `object` | off | SAML Single Logout. See [`singleLogout`](#singlelogout). |
+| `events` | `object` | none | `{ onAssertionIssued?, onDenied?, onLogout? }` callbacks. They run in the background and can't affect the flow. See [Observability](observability.md). |
+| `auditLog` | `object` | off | `{ enabled, retentionDays? }`: also record events in the `samlIdpAuditEvent` table. See [`auditLog`](#auditlog). |
 | `signMetadata` | `boolean` | `false` | Sign the IdP metadata document (enveloped signature with the active key). For SPs and federations that verify metadata. |
 | `schema` | `object` | none | Rename the plugin's tables and columns. See [`schema`](#schema). |
 | `schemaValidator` | `{ validate(xml, kind) }` | libxml2 (WASM) | Replace the XSD validator every inbound message goes through. You shouldn't need this. |
@@ -79,6 +81,13 @@ The API is mounted only when `canManage` or `permissions` is set.
 |---|---|---|---|
 | `enabled` | `boolean` | **required** | Adds the `samlIdpSessionParticipant` table, the `/saml2/idp/slo` and `/saml2/idp/logout` endpoints, and `SingleLogoutService` in metadata. SPs take part with their [`singleLogoutService`](#service-provider-options). |
 
+## `auditLog`
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | `boolean` | **required** | Adds the [`samlIdpAuditEvent`](schema.md#samlidpauditevent-with-auditlogenabled) table and records every event in it, except refusals that identify neither an SP nor a user. See [Observability](observability.md#audit-log-table). |
+| `retentionDays` | `number` | `90` | How long rows are kept before the sweep deletes them. 1 to 3650. |
+
 ## `schema`
 
 Rename tables or columns, as with other Better Auth plugins. Field maps use schema property keys (for Drizzle, the property names), not raw column names.
@@ -88,6 +97,7 @@ schema: {
   samlIdpSeenRequest: { modelName: "saml_replay", fields: { expiresAt: "expires" } },
   samlIdpServiceProvider: { modelName: "saml_sps" },
   samlIdpSessionParticipant: { fields: { sessionKey: "session_hash" } },
+  samlIdpAuditEvent: { modelName: "saml_audit" },
 }
 ```
 

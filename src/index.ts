@@ -25,6 +25,7 @@ export { serviceProviderFromMetadata, SpMetadataError } from "./saml/sp-metadata
 export { samlIdpStatements, type SamlServiceProviderAction } from "./access";
 export type { SpFromMetadataOptions, SpFromMetadataResult } from "./saml/sp-metadata";
 export type * from "./types";
+export type { AssertionIssuedEvent, AuditLogOptions, DeniedEvent, LogoutEvent, SamlIdpEvent, SamlIdpEventHandlers } from "./events";
 
 export const samlIdp = (options: SamlIdpOptions) => {
   const resolved = resolveOptions(options);
@@ -78,7 +79,7 @@ export const samlIdp = (options: SamlIdpOptions) => {
     },
     // A fresh schema object per plugin: mergeSchema mutates its first argument, so a shared
     // module-level object would leak one instance's renames into every other (finding #10).
-    schema: mergeSchema(samlIdpSchema({ registry: resolved.registry !== undefined, singleLogout: resolved.singleLogout }), resolved.schema),
+    schema: mergeSchema(samlIdpSchema({ registry: resolved.registry !== undefined, singleLogout: resolved.singleLogout, auditLog: resolved.auditLog !== undefined }), resolved.schema),
     $ERROR_CODES: SAML_IDP_ERROR_CODES,
     options: { directory },
   } satisfies BetterAuthPlugin;

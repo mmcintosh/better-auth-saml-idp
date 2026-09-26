@@ -131,4 +131,28 @@ export const samlIdpSessionParticipants = sqliteTable(
   (t) => [index("saml_idp_session_participants_session_idx").on(t.sessionKey), index("saml_idp_session_participants_expires_idx").on(t.expiresAt)],
 );
 
-export const schema = { users, sessions, accounts, verifications, rateLimits, samlIdpSeenRequests, samlIdpServiceProviders, samlIdpSessionParticipants };
+/** Audit log (only needed with `auditLog.enabled`; D-038). */
+export const samlIdpAuditEvents = sqliteTable(
+  "saml_idp_audit_events",
+  {
+    id: text("id").primaryKey(),
+    type: text("type").notNull(),
+    at: integer("at", { mode: "timestamp_ms" }).notNull(),
+    spId: text("sp_id"),
+    userId: text("user_id"),
+    code: text("code"),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    details: text("details").notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [
+    index("saml_idp_audit_events_at_idx").on(t.at),
+    index("saml_idp_audit_events_type_idx").on(t.type),
+    index("saml_idp_audit_events_sp_idx").on(t.spId),
+    index("saml_idp_audit_events_user_idx").on(t.userId),
+    index("saml_idp_audit_events_expires_idx").on(t.expiresAt),
+  ],
+);
+
+export const schema = { users, sessions, accounts, verifications, rateLimits, samlIdpSeenRequests, samlIdpServiceProviders, samlIdpSessionParticipants, samlIdpAuditEvents };

@@ -56,7 +56,7 @@ ROADMAP = [
    ("Supply chain and project files (done)", "Every GitHub Action pinned by SHA with least-privilege tokens; CodeQL, a blocking runtime dependency audit, dependency review, OSV-Scanner, OpenSSF Scorecard and Dependabot. SECURITY.md, CONTRIBUTING.md, issue forms, and a versioning and support policy."),
    ("Fuzzing (done)", "Property-based tests (fast-check) of the signature verifier, every inbound parser and issuance. The verifier held; issuance had five kinds of characters that produced invalid or unverifiable assertions, all fixed (D-036)."),
    ("Live SP verification", "Done: Cloudflare Access, Okta and Auth0, live, with signed requests (Redirect and POST) and encrypted assertions (D-034, D-035). Next: AWS IAM Identity Center."),
-   ("Observability hooks", "onAssertionIssued, onLogout and onDenied callbacks for the host's logging and SIEM, and an optional audit-log table."),
+   ("Observability hooks (done)", "onAssertionIssued, onDenied and onLogout callbacks, run in the background (waitUntil on Workers) and isolated from the flow, plus an optional audit-log table with retention that doesn't store anonymous noise (D-038)."),
    ("better-auth-cloudflare 0.4", "Replace the vendored build once 0.4 is on npm (the README requires it for Workers users)."),
    ("Key rotation guide (done)", "docs/key-rotation.md: add next certificate, switch, retire. Rehearsed live with Cloudflare Access with zero downtime."),
    ("Database adapter test matrix", "Postgres, MySQL and MongoDB proven in CI next to SQLite and D1 (MongoDB found a real gap, fixed: D-033), with a Databases page in the guide. Still to add: Drizzle on Postgres/MySQL, and Prisma."),

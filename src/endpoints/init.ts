@@ -52,11 +52,11 @@ export const initEndpoint = (state: PluginState) =>
     },
     async (ctx) => {
       const { options } = state;
-      await sweepExpired(ctx.context.adapter as any, (what, e) => ctx.context.logger.warn(`[saml-idp] cleanup of expired ${what} failed`, e));
+      await sweepExpired(ctx.context.adapter as any, (what, e) => ctx.context.logger.warn(`[saml-idp] cleanup of expired ${what} failed`, e), Date.now(), { auditLog: state.options.auditLog !== undefined });
       const spId = ctx.query?.sp;
       const sp = spId === undefined ? undefined : await spById(ctx, state, spId);
-      if (!sp) return fail(ctx, "UNKNOWN_SERVICE_PROVIDER", `init: unknown sp (${spId?.length ?? 0} chars)`);
-      if (!sp.allowIdpInitiated) return fail(ctx, "IDP_INITIATED_NOT_ALLOWED", `SP ${sp.id}`);
+      if (!sp) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", `init: unknown sp (${spId?.length ?? 0} chars)`);
+      if (!sp.allowIdpInitiated) return fail(ctx, state, "IDP_INITIATED_NOT_ALLOWED", `SP ${sp.id}`, { spId: sp.id });
 
       const requestedRelayState = ctx.query?.RelayState;
       const relayState = idpInitiatedRelayState(sp, requestedRelayState);
