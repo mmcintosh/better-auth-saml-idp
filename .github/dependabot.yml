@@ -1,0 +1,19 @@
+# Weekly, grouped updates. Better Auth itself is excluded: the peer range is deliberate
+# (ADDENDUM-01 R4) and new minors are tried by the upstream canary instead.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+    groups:
+      dev: { dependency-type: development, update-types: [minor, patch] }
+      runtime: { dependency-type: production, update-types: [minor, patch] }
+    ignore:
+      - dependency-name: better-auth
+      - dependency-name: "@better-auth/*"
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      actions: { patterns: ["*"] }

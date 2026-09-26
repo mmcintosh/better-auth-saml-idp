@@ -26,6 +26,7 @@ Everything about running Better Auth as a SAML 2.0 Identity Provider. New here? 
 | [Errors](errors.md) | Every error code, when it happens and what to do; SAML status Responses |
 | [Security](security.md) | Every control: how it works, its options, the errors it produces |
 | [Schema](schema.md) | Every table and field |
+| [Versioning and support](versioning.md) | What a version number promises (for SPs too), Better Auth compatibility, support windows, deprecations |
 
 ## SP guides
 

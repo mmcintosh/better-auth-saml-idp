@@ -63,6 +63,10 @@
       "default": "./dist/saml/wasm/load.node.js"
     }
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "engines": {
     "node": ">=20"
   },

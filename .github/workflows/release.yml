@@ -1,0 +1,69 @@
+# Release: the full test suite, then the exact tarball that was tested is published to npm with
+# provenance (a signed statement, from GitHub's OIDC token, of which commit and workflow built it)
+# and attached to a GitHub release with its CycloneDX SBOM.
+#
+# - Push a tag `vX.Y.Z` matching package.json's version (and "private" removed) to publish.
+# - Run it by hand (Actions > Release > Run workflow) for a dry run: everything except publishing,
+#   with the tarball and SBOM kept as workflow artifacts.
+# See CONTRIBUTING.md#releasing for the npm side (trusted publishing).
+name: Release
+on:
+  push: { tags: ["v*"] }
+  workflow_dispatch:
+permissions: { contents: read }
+concurrency: { group: release, cancel-in-progress: false }
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck && pnpm lint && pnpm test && pnpm test:wasm && pnpm pack:check
+      - run: pnpm audit --prod --audit-level low
+
+  package:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions: { contents: write, id-token: write }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: 24, cache: pnpm, registry-url: "https://registry.npmjs.org" }
+      - run: pnpm install --frozen-lockfile
+      - id: meta
+        env: { REF_NAME: "${{ github.ref_name }}", EVENT: "${{ github.event_name }}" }
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          private="$(node -p 'require("./package.json").private === true')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT" = push ]; then
+            [ "$REF_NAME" = "v$version" ] || { echo "::error::tag $REF_NAME doesn't match package.json version $version"; exit 1; }
+            [ "$private" = false ] || { echo "::error::package.json is still \"private\": true"; exit 1; }
+          fi
+      - run: pnpm build && mkdir -p out && pnpm pack --pack-destination out
+      # The SBOM describes what a user installs: the tarball's runtime dependency tree.
+      - run: |
+          mkdir -p sbom-root && cd sbom-root && npm init -y >/dev/null
+          npm install --ignore-scripts --no-audit --no-fund ../out/*.tgz
+      - uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          path: sbom-root
+          format: cyclonedx-json
+          output-file: out/better-auth-saml-idp-${{ steps.meta.outputs.version }}.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with: { name: release, path: out/, retention-days: 30 }
+      - if: github.event_name == 'push'
+        run: npm publish out/*.tgz --provenance --access public
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
+      - if: github.event_name == 'push'
+        env: { GH_TOKEN: "${{ github.token }}", VERSION: "${{ steps.meta.outputs.version }}" }
+        run: |
+          awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {on=1; next} on && /^## \[/ {exit} on' CHANGELOG.md > notes.md
+          gh release create "v$VERSION" out/* --title "v$VERSION" --notes-file notes.md --verify-tag

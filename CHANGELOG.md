@@ -8,6 +8,11 @@ The first npm release (1.0.0) waits for `better-auth-cloudflare` 0.4, which Work
 
 ### Added
 
+- **Supply chain:**
+  - every GitHub Action pinned by SHA, least-privilege tokens;
+  - CodeQL (security-extended); a runtime dependency audit that blocks; dependency review on PRs; OSV-Scanner; OpenSSF Scorecard; Dependabot;
+  - a release workflow publishing with npm provenance, with a CycloneDX SBOM.
+- **Project files:** [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), issue forms (bug, SP interop, feature), a PR template, and [Versioning and support](docs/guide/versioning.md).
 - **Property-based fuzzing** (fast-check) of the signature verifier (XSW, mutation, byte flips) and of every inbound parser, plus an issuance round-trip over hostile user data. `FUZZ_RUNS` sets the depth.
 
 - **SAML 2.0 IdP plugin for Better Auth** with SP-initiated SSO.

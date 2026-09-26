@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/mmcintosh/better-auth-saml-idp/security/advisories/new
+    about: Privately, please. Never in a public issue (see SECURITY.md).
+  - name: Read the guide
+    url: https://github.com/mmcintosh/better-auth-saml-idp/blob/main/docs/guide/README.md
+    about: Options, every error code, troubleshooting by symptom.

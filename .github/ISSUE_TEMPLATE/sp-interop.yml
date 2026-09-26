@@ -1,0 +1,43 @@
+name: SP interop report
+description: A service provider works, or doesn't, with this IdP.
+labels: [interop]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Both kinds of report help: "works with X" becomes an SP guide, "doesn't" becomes a fix.
+        Use throwaway users and replace any personal data. Never paste private keys.
+  - type: input
+    id: sp
+    attributes:
+      label: Service provider
+      placeholder: "e.g. Zoom, Salesforce, Grafana 12, AWS IAM Identity Center"
+    validations: { required: true }
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options: [Works, Works with a workaround, Doesn't work]
+    validations: { required: true }
+  - type: checkboxes
+    id: features
+    attributes:
+      label: What you tried
+      options:
+        - label: SP-initiated sign-in
+        - label: IdP-initiated sign-in
+        - label: Signed AuthnRequests
+        - label: Encrypted assertions
+        - label: Single Logout
+        - label: SP metadata URL (certificates from metadata)
+  - type: textarea
+    id: config
+    attributes:
+      label: The SP entry you used
+      description: "Your serviceProviders entry, or the registry JSON, plus the settings you chose on the SP's side (binding, NameID format, attribute names)."
+      render: ts
+  - type: textarea
+    id: detail
+    attributes:
+      label: What happened
+      description: "For failures: the error code or message on either side, and `npx better-auth-saml-idp decode` output of the request."

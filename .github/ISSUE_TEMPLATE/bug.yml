@@ -1,0 +1,50 @@
+name: Bug report
+description: Something doesn't work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Security issue?** Stop here and [report it privately](https://github.com/mmcintosh/better-auth-saml-idp/security/advisories/new).
+        Never paste private keys, real certificates, session cookies or real users' data. Replace them with throwaway values.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations: { required: true }
+  - type: input
+    id: code
+    attributes:
+      label: Error code
+      description: The code on the error page or in the log (e.g. `UNSIGNED_SAML_REQUEST`). See docs/guide/errors.md.
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: Your `samlIdp({...})` options (keys removed) and the steps. A minimal repository is ideal.
+      render: ts
+    validations: { required: true }
+  - type: textarea
+    id: decode
+    attributes:
+      label: The SAML message, if relevant
+      description: "Output of `npx better-auth-saml-idp decode '<URL or SAMLRequest>'` (see docs/guide/cli.md), with personal data replaced."
+      render: text
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: better-auth-saml-idp (or commit), better-auth, better-auth-cloudflare if used
+      placeholder: "commit abc1234, better-auth 1.7.5"
+    validations: { required: true }
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime
+      options: [Cloudflare Workers, Node, Other]
+    validations: { required: true }
+  - type: input
+    id: database
+    attributes:
+      label: Database and adapter
+      placeholder: "D1 + Drizzle, PostgreSQL + Kysely, MongoDB, …"

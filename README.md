@@ -7,6 +7,8 @@ Turn your [Better Auth](https://www.better-auth.com) server into a **SAML 2.0 Id
 [![Better Auth](https://img.shields.io/badge/better--auth-%E2%89%A51.7.5%20%3C1.8-black)](https://www.better-auth.com)
 [![Runs on](https://img.shields.io/badge/runs%20on-Cloudflare%20Workers%20%7C%20Node%2020%2B-f38020)](examples/workers-hono/README.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/mmcintosh/better-auth-saml-idp/badge)](https://scorecard.dev/viewer/?uri=github.com/mmcintosh/better-auth-saml-idp)
+[![CodeQL](https://github.com/mmcintosh/better-auth-saml-idp/actions/workflows/codeql.yml/badge.svg)](https://github.com/mmcintosh/better-auth-saml-idp/actions/workflows/codeql.yml)
 
 📖 **[Read the guide](docs/guide/README.md)**: getting started, every option, every error code, security controls, schema, Single Logout, `@better-auth/sso` interop, Cloudflare Workers, the CLI and troubleshooting.
 
@@ -539,7 +541,12 @@ A feature-by-feature comparison with Shibboleth, SimpleSAMLphp, Keycloak, Zitade
 - [docs/key-rotation.md](docs/key-rotation.md) describes the zero-downtime rotation procedure.
 - [DECISIONS.md](DECISIONS.md) has every security-relevant design decision, with its tests and mutation proofs.
 
-Please report vulnerabilities privately through GitHub's security advisories, not in public issues.
+Please report vulnerabilities privately, as [SECURITY.md](SECURITY.md) describes, not in public issues. It also covers the supply chain:
+- actions pinned by SHA;
+- CodeQL, runtime dependency audits, OSV-Scanner and OpenSSF Scorecard;
+- npm provenance and a CycloneDX SBOM with every release.
+
+Versioning, Better Auth compatibility and support windows are in [Versioning and support](docs/guide/versioning.md).
 
 ## 🧪 Development
 
@@ -553,7 +560,7 @@ pnpm pack:check    # dist build, publint, Are the Types Wrong
 scripts/use-better-auth.sh latest-1.7   # run the suite against another Better Auth version
 ```
 
-CI runs all of these, plus a gitleaks scan of the whole history, on Better Auth 1.7.5 and the latest 1.7.x.
+CI runs all of these, plus a gitleaks scan of the whole history, on Better Auth 1.7.5 and the latest 1.7.x, on Node 22 and 24. [CONTRIBUTING.md](CONTRIBUTING.md) has the rest: the adapter matrix, fuzzing, e2e, conventions and releasing.
 
 ## License
 
@@ -561,4 +568,4 @@ MIT © Mark McIntosh. Third-party components (libxml2 in `wasm/xsd.wasm`, and th
 
 ## Contributing
 
-Contributions are welcome: bug reports, SP interop reports (especially "it works with X"), fixes and features. For anything significant, please open an issue first. Security-sensitive changes should come with tests that fail without the change, as in [DECISIONS.md](DECISIONS.md).
+Contributions are welcome: bug reports, [SP interop reports](https://github.com/mmcintosh/better-auth-saml-idp/issues/new?template=sp-interop.yml) (especially "it works with X"), fixes and features. For anything significant, please open an issue first. See [CONTRIBUTING.md](CONTRIBUTING.md): security-sensitive changes come with tests that fail without the change, as in [DECISIONS.md](DECISIONS.md).
