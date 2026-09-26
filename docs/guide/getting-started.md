@@ -112,7 +112,7 @@ Or build the entry from the SP's metadata:
 npx better-auth-saml-idp sp-from-metadata https://sp.example.com/saml/metadata --id my-sp
 ```
 
-SPs can also be added at runtime with the [registry](service-providers.md#registry). Step-by-step guides: [Cloudflare Access](../sp-cloudflare-access.md), [Okta](../sp-okta.md), [HubSpot](../hubspot.md), [AWS IAM Identity Center](../sp-aws-iam-identity-center.md), and [testing with other SPs](../testing-with-sps.md).
+SPs can also be added at runtime with the [registry](service-providers.md#registry). Step-by-step guides: [Cloudflare Access](../sp-cloudflare-access.md), [Okta](../sp-okta.md), [Auth0](../sp-auth0.md), [HubSpot](../hubspot.md), [AWS IAM Identity Center](../sp-aws-iam-identity-center.md), and [testing with other SPs](../testing-with-sps.md).
 
 ## 7. Check it
 

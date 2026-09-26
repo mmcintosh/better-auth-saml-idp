@@ -92,6 +92,7 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 
 - [x] Cloudflare Access: live, with signed requests, encrypted assertions, metadata refresh and key rotation
 - [x] Okta: live (Integrator org as SP), signed requests verified, plain and encrypted assertions, SP stored in the D1 registry ([guide](docs/sp-okta.md))
+- [x] Auth0: live (Enterprise SAML connection), signed requests verified with a certificate learned from Auth0's metadata URL, first/last name attributes ([guide](docs/sp-auth0.md))
 - [x] Keycloak 26.4 and SimpleSAMLphp 2.5: real Chromium over HTTPS, in CI
 - [x] node-saml, samlify and `@better-auth/sso`: in CI, on Node and workerd
 - [x] SAMLtool: Response validation

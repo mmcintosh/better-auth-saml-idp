@@ -917,3 +917,21 @@ If the stored config hadn't validated, the SP would have been unknown, not signe
 
 **Documented** in `docs/sp-okta.md`: the direct admin URL (the menu location varies by plan), the metadata needing an admin session, the 5 kB var limit and why the registry is the better home, and Okta's own authenticator enrollment on first sign-in.
 
+## D-035: Auth0 as a live SP; tolerate ProtocolBinding=HTTP-Redirect (2026-09-26)
+
+An Auth0 free tenant added the example Worker through an Enterprise SAML connection, with requests signed (RSA-SHA256) over HTTP-Redirect. Auth0's SP metadata is public (`/samlp/metadata?connection=…`), so Auth0 was stored in the **D1 registry** with **only `metadata.url`**: no certificates configured, and signed requests required.
+
+**Found (interop):** Auth0's AuthnRequest carries `ProtocolBinding="…:HTTP-Redirect"`. The attribute names the binding for the *Response*, which can't be HTTP-Redirect (Profiles §4.1.2), and Auth0 fills it with its request binding. The IdP refused it (`INVALID_SAML_REQUEST`).
+
+**Fix:** HTTP-Redirect in `ProtocolBinding` is treated as "no preference", and the Response goes by HTTP-POST as always. Other bindings, such as Artifact, are still refused. This is safe because the Response is still only ever posted to an allow-listed ACS URL. Tests cover both cases.
+
+**Result:** Auth0's "Try" signed in and returned the profile:
+- `sub: samlp|better-auth|<email>`, from our NameID;
+- `given_name` / `family_name`, from the declarative map (`{ field: "name", part: "first" | "last" }`).
+
+Auth0's signed request was verified with the certificate **learned from its metadata URL**, from a registry SP. The `npx better-auth-saml-idp decode --cert` run before the fix also confirmed that Auth0's query signature verifies.
+
+**Auth0 setup notes** (docs/sp-auth0.md):
+- The connection must be enabled for an application (in the connection's Applications tab, or the application's Connections tab), otherwise "the connection is not enabled".
+- The Sign In URL only saves with "Save Changes" at the bottom of the page.
+

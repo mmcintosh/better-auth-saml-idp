@@ -423,6 +423,26 @@ describe("§7 auto-POST page", () => {
 });
 
 describe("§7 inbound request validation", () => {
+  it("ProtocolBinding HTTP-Redirect (Auth0 sends its request binding there) is answered over HTTP-POST", async () => {
+    const { browser } = await host();
+    await browser.signUp();
+    const xml = authnRequestXml({ extraAttrs: "" }).xml.replace(
+      'ProtocolBinding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"',
+      'ProtocolBinding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"',
+    );
+    const form = await readAutoPost(await browser.fetch(await redirectUrl(xml)));
+    expect(form.xml).toContain("status:Success");
+  });
+
+  it("ProtocolBinding Artifact is refused (unsupported)", async () => {
+    const { browser } = await host();
+    const xml = authnRequestXml().xml.replace(
+      'ProtocolBinding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"',
+      'ProtocolBinding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact"',
+    );
+    expect(await pageCode(await browser.fetch(await redirectUrl(xml)))).toBe("INVALID_SAML_REQUEST");
+  });
+
   it.each([
     ["schema-invalid child element", { inner: "<samlp:Bogus/>" }],
     ["Destination for another IdP", { destination: "https://other-idp.test/sso" }],

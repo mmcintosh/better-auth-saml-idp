@@ -23,6 +23,7 @@ export class SamlRequestError extends Error {
   }
 }
 
+export const BINDING_REDIRECT_URI = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect";
 export const invalid = (detail: string) => new SamlRequestError("INVALID_SAML_REQUEST", detail);
 
 /** Attacker-controlled text in debug logs: bounded length, no control characters. */
@@ -264,8 +265,12 @@ export async function parseAuthnRequest(
   const destination = root.getAttribute("Destination")?.trim() || undefined;
   if (destination !== undefined && destination !== opts.ssoUrl) throw invalid("Destination does not match this IdP's SSO URL");
 
+  // ProtocolBinding names the binding for the *Response*. Responses are always HTTP-POST here.
+  // HTTP-Redirect can't carry a Response (Profiles §4.1.2), yet some SPs send it, filled with
+  // their *request* binding (Auth0 does): treat it as "no preference" and POST as always
+  // (D-035). Anything else (e.g. Artifact) is a binding we don't support: refuse.
   const protocolBinding = root.getAttribute("ProtocolBinding")?.trim() || undefined;
-  if (protocolBinding !== undefined && protocolBinding !== BINDING_POST)
+  if (protocolBinding !== undefined && protocolBinding !== BINDING_POST && protocolBinding !== BINDING_REDIRECT_URI)
     throw invalid("only the HTTP-POST response binding is supported");
 
   const acsUrl = root.getAttribute("AssertionConsumerServiceURL")?.trim() || undefined;
