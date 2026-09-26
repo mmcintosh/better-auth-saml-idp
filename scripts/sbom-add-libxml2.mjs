@@ -18,7 +18,9 @@ const [major, minor] = version.split(".");
 const url = `https://download.gnome.org/sources/libxml2/${major}.${minor}/libxml2-${version}.tar.xz`;
 
 const sbom = JSON.parse(readFileSync(file, "utf8"));
-sbom.components = (sbom.components ?? []).filter((c) => c.name !== "libxml2");
+// Drop the scratch project the tarball was installed into (and its lockfile), which aren't
+// part of the package, then (re)add libxml2.
+sbom.components = (sbom.components ?? []).filter((c) => c.name !== "libxml2" && c.name !== "sbom-root" && !c.name.startsWith("/"));
 sbom.components.push({
   type: "library",
   "bom-ref": `pkg:generic/libxml2@${version}`,

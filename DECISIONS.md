@@ -970,7 +970,7 @@ The first CodeQL run (security-extended) flagged polynomial regular expressions 
 | `<!--` | 502 ms | |
 | `<!DOCTYPE` | 457 ms | |
 
-The regex rescanned to the end of the input from every `<` looking for a terminator.
+The regex rescanned to the end of the input from every `<` looking for a terminator. D-030 had timed it at "under 10 ms for 200 KB of unterminated tags". That was true for the shape it tried, but not for unterminated comments or end tags.
 
 **Reachability: not exploitable in the default configuration.** Every caller runs libxml2 schema validation before `parseXmlStrict`:
 - AuthnRequests, LogoutRequests and LogoutResponses, in `sso.ts` and `slo.ts`, before any signature check;
