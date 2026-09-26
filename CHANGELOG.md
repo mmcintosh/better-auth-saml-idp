@@ -6,6 +6,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 The first npm release (1.0.0) waits for `better-auth-cloudflare` 0.4, which Workers users need.
 
+### Changed
+
+- **Public types are an explicit list** (API decision 1, D-040). The plugin's internal `ResolvedSamlIdpOptions` and `ResolvedServiceProvider` are no longer exported. `authorize()` receives a read-only `ServiceProviderInfo` (`id`, `entityId`, `acsUrls`, `nameIdFormat`, `organization`). `StoredServiceProviderConfig`, `ServiceProviderInfo` and `SamlIdpErrorCode` are now exported.
+
 ### Security
 
 - **Third review (D-039), two independent reports:**

@@ -156,7 +156,7 @@ The last word, per SP (code SPs; stored SPs use `registry.authorize`):
 }
 ```
 
-Anything other than exactly `true` is `ACCESS_DENIED`, and so is a throw (logged). It runs on the freshly re-read user.
+Anything other than exactly `true` is `ACCESS_DENIED`, and so is a throw (logged). It runs on the freshly re-read user. `serviceProvider` is a read-only `ServiceProviderInfo`: `id`, `entityId`, `acsUrls`, `nameIdFormat` and the `organization` rule.
 
 ## Registry permissions
 

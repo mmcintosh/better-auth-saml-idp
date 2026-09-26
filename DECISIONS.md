@@ -1104,3 +1104,17 @@ That last mutant first survived. The test handler recorded synchronously before 
 - registering the npm name;
 - a reproducible-build check for `wasm/xsd.wasm`;
 - repository settings: private vulnerability reporting, reviewers on the `npm` environment, branch protection.
+
+## D-040: API decisions before 1.0 (2026-09-26)
+
+After 1.0, anything public is a semver promise. Review 4 listed six choices that would be breaking to change later. They are taken one at a time, each with its options, and recorded here.
+
+**1. Exported types: an explicit list (option A).**
+- **Before:** `export type * from "./types"` published every type, including the plugin's resolved internals: `ResolvedSamlIdpOptions`, which holds a `KeyObject` and startup warnings, and `ResolvedServiceProvider`. Any refactor of those would have been a major version.
+- **Now:**
+  - The index exports a named list: options, SP config, attributes, callback contexts, events, the validator interface, `StoredServiceProviderConfig`, `SamlIdpErrorCode`.
+  - `authorize()` receives `ServiceProviderInfo`, a frozen, read-only view (`id`, `entityId`, `acsUrls`, `nameIdFormat`, `organization`), instead of the internal object.
+- **Rejected:**
+  - B, marking the internals `@internal`: semver would still see them as public.
+  - C, stabilising everything: that freezes internals.
+- **Test:** `test/unit/public-api.test.ts` asserts the view's exact keys and that it is frozen. It also uses `@ts-expect-error` on the internal types, so typecheck fails if they are exported again (checked by re-adding `export type *`).

@@ -28,10 +28,23 @@ export interface AttributeContext {
   organization: OrganizationMembership | undefined;
 }
 
+/**
+ * What callbacks see of a service provider: a stable, read-only view. The plugin's own resolved
+ * form holds internals (functions, parsed keys, cache settings) that may change in any release.
+ */
+export interface ServiceProviderInfo {
+  readonly id: string;
+  readonly entityId: string;
+  readonly acsUrls: readonly string[];
+  readonly nameIdFormat: string;
+  /** The SP's organization rule, if it has one. */
+  readonly organization: Readonly<{ slug?: string; id?: string; roles?: readonly string[] }> | undefined;
+}
+
 export interface AuthorizeContext {
   user: SamlIdpUser;
   session: Session;
-  serviceProvider: ResolvedServiceProvider;
+  serviceProvider: ServiceProviderInfo;
   /** The user's organization memberships (organization plugin); empty without it. */
   organizations: OrganizationMembership[];
 }

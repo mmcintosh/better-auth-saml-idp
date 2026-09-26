@@ -26,7 +26,29 @@ export { libxml2Validator } from "./saml/validator";
 export { serviceProviderFromMetadata, SpMetadataError } from "./saml/sp-metadata";
 export { samlIdpStatements, type SamlServiceProviderAction } from "./access";
 export type { SpFromMetadataOptions, SpFromMetadataResult } from "./saml/sp-metadata";
-export type * from "./types";
+// An explicit list (API decision 1, before 1.0): what's here is supported; the plugin's resolved
+// internals (ResolvedSamlIdpOptions, ResolvedServiceProvider) are not exported and may change.
+export type {
+  AttributeContext,
+  AttributeMap,
+  AttributeSource,
+  AuthorizeContext,
+  DigestAlgorithm,
+  OrganizationMembership,
+  SamlAttributeValue,
+  SamlIdpOptions,
+  SamlIdpUser,
+  SchemaKind,
+  SchemaValidationResult,
+  SchemaValidator,
+  ServiceProviderConfig,
+  ServiceProviderEncryptionConfig,
+  ServiceProviderInfo,
+  SignatureAlgorithm,
+  SigningConfig,
+} from "./types";
+export type { SamlIdpErrorCode } from "./errors";
+export type { StoredServiceProviderConfig } from "./options";
 export type { AssertionIssuedEvent, AuditLogOptions, DeniedEvent, LogoutEvent, SamlIdpEvent, SamlIdpEventHandlers } from "./events";
 
 export const samlIdp = (options: SamlIdpOptions) => {

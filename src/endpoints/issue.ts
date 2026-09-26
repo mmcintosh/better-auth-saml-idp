@@ -12,7 +12,7 @@ import type { SpDirectory } from "../saml/sp-directory";
 import { hasOrganizationPlugin, loadMemberships, matchOrganization, warnClaimableOrganizations } from "../organizations";
 import { recordParticipant, sessionIndexOf } from "../storage/participants";
 import { base64url, type ValidatedRequest } from "../storage/pending";
-import { NAMEID_FORMAT, type OrganizationMembership, type ResolvedSamlIdpOptions, type ResolvedServiceProvider, type SamlIdpUser } from "../types";
+import { NAMEID_FORMAT, type OrganizationMembership, type ResolvedSamlIdpOptions, type ResolvedServiceProvider, type SamlIdpUser, type ServiceProviderInfo } from "../types";
 
 /** A mapped field the user object lacks: warn once per SP and field (typo, or a field not in the schema). */
 const warnedMissing = new Set<string>();
@@ -161,6 +161,17 @@ function defaultNameId(ctx: GenericEndpointContext, sp: ResolvedServiceProvider,
   return user.email;
 }
 
+/** The public, read-only view of an SP that callbacks receive (not the internal resolved form). */
+export function serviceProviderInfo(sp: ResolvedServiceProvider): ServiceProviderInfo {
+  return Object.freeze({
+    id: sp.id,
+    entityId: sp.entityId,
+    acsUrls: Object.freeze([...sp.acsUrls]),
+    nameIdFormat: sp.nameIdFormat,
+    organization: sp.organization ? Object.freeze({ ...sp.organization, ...(sp.organization.roles ? { roles: Object.freeze([...sp.organization.roles]) } : {}) }) : undefined,
+  });
+}
+
 export async function issueResponse(
   ctx: GenericEndpointContext,
   state: PluginState,
@@ -195,7 +206,7 @@ export async function issueResponse(
 
   let allowed = false;
   try {
-    allowed = await sp.authorize({ user, session: session.session as any, serviceProvider: sp, organizations });
+    allowed = await sp.authorize({ user, session: session.session as any, serviceProvider: serviceProviderInfo(sp), organizations });
   } catch (e) {
     ctx.context.logger.error(`[saml-idp] authorize() threw for SP ${sp.id}`, e);
     allowed = false;
