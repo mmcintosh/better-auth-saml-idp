@@ -190,6 +190,8 @@ export const sloEndpoint = (state: PluginState) =>
       query: params.optional(),
       body: params.optional(),
       metadata: {
+        // A browser navigation (or an SP's POST), not something to call from the client (API decision 2).
+        isAction: false,
         allowedMediaTypes: ["application/x-www-form-urlencoded"],
         openapi: { operationId: "samlIdpSingleLogout", summary: "SAML Single Logout endpoint (HTTP-Redirect and HTTP-POST bindings)" },
       },
@@ -296,7 +298,7 @@ export const logoutEndpoint = (state: PluginState) =>
     {
       method: "GET",
       query: z.object({ returnTo: z.string().max(2048).optional() }).optional(),
-      metadata: { openapi: { operationId: "samlIdpLogout", summary: "Log out of the IdP and every SP that got an assertion in this session" } },
+      metadata: { isAction: false, openapi: { operationId: "samlIdpLogout", summary: "Log out of the IdP and every SP that got an assertion in this session" } },
     },
     async (ctx) => {
       const returnTo = safeReturnTo(ctx, state, ctx.query?.returnTo);

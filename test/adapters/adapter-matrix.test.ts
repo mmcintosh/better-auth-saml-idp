@@ -176,11 +176,11 @@ describe.skipIf(!KIND)(`adapter matrix: ${KIND}`, { timeout: 60_000 }, () => {
     await c.adapter.update({ model: "user", where: [{ field: "id", value: user.id }], update: { role: "admin" } });
     const sp = { id: "stored", entityId: "https://Stored.test/sp", acsUrls: ["https://stored.test/acs"] };
     const post = (path: string, body: unknown) =>
-      browser.fetch(`${AUTH_BASE}/saml2/idp/service-providers${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      browser.fetch(`${AUTH_BASE}/saml-idp/service-providers${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     const results = await Promise.all(Array.from({ length: 5 }, () => post("/create", { serviceProvider: sp, enabled: false })));
     expect(results.filter((r) => r.status === 200)).toHaveLength(1);
     expect(results.filter((r) => r.status === 409)).toHaveLength(4);
-    const got = (await (await browser.fetch(`${AUTH_BASE}/saml2/idp/service-providers/get?id=stored`)).json()) as any;
+    const got = (await (await browser.fetch(`${AUTH_BASE}/saml-idp/service-providers/get?id=stored`)).json()) as any;
     expect(got.serviceProvider).toMatchObject({ enabled: false, valid: true });
     expect(Number.isNaN(new Date(got.serviceProvider.createdAt).getTime())).toBe(false);
     await post("/update", { id: "stored", serviceProvider: sp, enabled: true });
@@ -197,12 +197,12 @@ describe.skipIf(!KIND)(`adapter matrix: ${KIND}`, { timeout: 60_000 }, () => {
     const c = await ctx();
     await c.adapter.update({ model: "user", where: [{ field: "id", value: user.id }], update: { role: "admin" } });
     const post = (path: string, body: unknown) =>
-      browser.fetch(`${AUTH_BASE}/saml2/idp/service-providers${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      browser.fetch(`${AUTH_BASE}/saml-idp/service-providers${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     const sp = { id: "casey", entityId: "https://casey.test/sp", acsUrls: ["https://casey.test/acs"] };
     expect((await post("/create", { serviceProvider: sp })).status).toBe(200);
     expect((await post("/update", { id: "CASEY", serviceProvider: { ...sp, id: "CASEY" } })).status).toBe(404);
     expect((await post("/delete", { id: "CASEY" })).status).toBe(404);
-    const got = (await (await browser.fetch(`${AUTH_BASE}/saml2/idp/service-providers/get?id=casey`)).json()) as any;
+    const got = (await (await browser.fetch(`${AUTH_BASE}/saml-idp/service-providers/get?id=casey`)).json()) as any;
     expect(got.serviceProvider).toMatchObject({ id: "casey", valid: true });
   });
 

@@ -109,7 +109,7 @@ export function registryEndpoints(state: PluginState) {
 
   return {
     samlIdpListServiceProviders: createAuthEndpoint(
-      "/saml2/idp/service-providers",
+      "/saml-idp/service-providers",
       { method: "GET", use: [sensitiveSessionMiddleware], metadata: { openapi: { operationId: "samlIdpListServiceProviders" } } },
       async (ctx) => {
         await manager(ctx, state, "list");
@@ -124,7 +124,7 @@ export function registryEndpoints(state: PluginState) {
     ),
 
     samlIdpGetServiceProvider: createAuthEndpoint(
-      "/saml2/idp/service-providers/get",
+      "/saml-idp/service-providers/get",
       { method: "GET", use: [sensitiveSessionMiddleware], query: z.object({ id: idSchema }) },
       async (ctx) => {
         await manager(ctx, state, "read");
@@ -135,7 +135,7 @@ export function registryEndpoints(state: PluginState) {
     ),
 
     samlIdpCreateServiceProvider: createAuthEndpoint(
-      "/saml2/idp/service-providers/create",
+      "/saml-idp/service-providers/create",
       { method: "POST", use: [sensitiveSessionMiddleware], body: z.object({ serviceProvider: spBody, enabled: z.boolean().optional() }) },
       async (ctx) => {
         const user = await manager(ctx, state, "create");
@@ -159,7 +159,7 @@ export function registryEndpoints(state: PluginState) {
     ),
 
     samlIdpUpdateServiceProvider: createAuthEndpoint(
-      "/saml2/idp/service-providers/update",
+      "/saml-idp/service-providers/update",
       { method: "POST", use: [sensitiveSessionMiddleware], body: z.object({ id: idSchema, serviceProvider: spBody, enabled: z.boolean().optional() }) },
       async (ctx) => {
         const user = await manager(ctx, state, "update");
@@ -190,7 +190,7 @@ export function registryEndpoints(state: PluginState) {
     ),
 
     samlIdpDeleteServiceProvider: createAuthEndpoint(
-      "/saml2/idp/service-providers/delete",
+      "/saml-idp/service-providers/delete",
       { method: "POST", use: [sensitiveSessionMiddleware], body: z.object({ id: idSchema }) },
       async (ctx) => {
         const user = await manager(ctx, state, "delete");

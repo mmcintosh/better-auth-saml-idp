@@ -12,7 +12,7 @@ const CODE_SP = { id: "code-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS] as [s
 let n = 0;
 const tag = () => `${Date.now().toString(36)}${n++}`;
 const api = (browser: Browser, path: string, body?: unknown) =>
-  browser.fetch(`${AUTH_BASE}/saml2/idp/service-providers${path}`, {
+  browser.fetch(`${AUTH_BASE}/saml-idp/service-providers${path}`, {
     method: body === undefined ? "GET" : "POST",
     headers: { "content-type": "application/json", origin: BASE_URL },
     body: body === undefined ? undefined : JSON.stringify(body),

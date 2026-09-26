@@ -36,7 +36,7 @@ async function host(o: { adminOptions?: Record<string, unknown>; registry?: Reco
   return { auth, as };
 }
 const call = (b: Browser, path: string, body?: unknown) =>
-  b.fetch(`${AUTH_BASE}/saml2/idp/service-providers${path}`, {
+  b.fetch(`${AUTH_BASE}/saml-idp/service-providers${path}`, {
     method: body === undefined ? "GET" : "POST",
     headers: { "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),

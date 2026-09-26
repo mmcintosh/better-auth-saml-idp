@@ -191,11 +191,11 @@ betterAuth({
 
 | Action | Endpoint |
 |---|---|
-| `list` | `GET /saml2/idp/service-providers` |
-| `read` | `GET /saml2/idp/service-providers/get` |
-| `create` | `POST /saml2/idp/service-providers/create` |
-| `update` | `POST /saml2/idp/service-providers/update` |
-| `delete` | `POST /saml2/idp/service-providers/delete` |
+| `list` | `GET /saml-idp/service-providers` |
+| `read` | `GET /saml-idp/service-providers/get` |
+| `create` | `POST /saml-idp/service-providers/create` |
+| `update` | `POST /saml-idp/service-providers/update` |
+| `delete` | `POST /saml-idp/service-providers/delete` |
 
 - The admin plugin's **default** roles grant nothing on `samlServiceProvider`: you opt roles in explicitly. `adminUserIds` are always allowed.
 - A user with several roles is allowed if any of them grants the action.

@@ -296,7 +296,7 @@ export interface SamlIdpOptions {
   registry?: {
     enabled: boolean;
     /**
-     * Who may manage stored SPs through the HTTP API (`/saml2/idp/service-providers/*`). The API
+     * Who may manage stored SPs through the HTTP API (`/saml-idp/service-providers/*`). The API
      * is only mounted when this is set; it requires a signed-in user and keeps Better Auth's
      * origin checks. E.g. `({ user }) => user.role === "admin"`.
      */

@@ -48,6 +48,8 @@ export const initEndpoint = (state: PluginState) =>
       method: "GET",
       query: z.object({ sp: z.string().max(64).optional(), RelayState: z.string().max(4096).optional() }).optional(),
       metadata: {
+        // A browser navigation (or an SP's POST), not something to call from the client (API decision 2).
+        isAction: false,
         openapi: {
           operationId: "samlIdpInitiatedSignOn",
           summary: "IdP-initiated SAML SSO",

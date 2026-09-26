@@ -52,6 +52,8 @@ export const metadataEndpoint = (getIdp: (baseURL: string) => Idp, options: Reso
     {
       method: "GET",
       metadata: {
+        // A browser navigation (or an SP's POST), not something to call from the client (API decision 2).
+        isAction: false,
         openapi: {
           operationId: "getSamlIdpMetadata",
           summary: "SAML IdP metadata",

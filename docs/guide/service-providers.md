@@ -100,16 +100,16 @@ The API is mounted when `canManage` or `permissions` is set. Every call needs a 
 
 | Method | Path | Body / query | Returns |
 |---|---|---|---|
-| GET | `/saml2/idp/service-providers` | | `{ serviceProviders: [...] }`: code SPs (`source: "code"`) and stored SPs (`source: "database"`, with `config`, `enabled`, `valid`, `issues`, timestamps, `updatedBy`) |
-| GET | `/saml2/idp/service-providers/get` | `?id=` | `{ serviceProvider }` |
-| POST | `/saml2/idp/service-providers/create` | `{ serviceProvider, enabled? }` | `{ serviceProvider, warnings }` |
-| POST | `/saml2/idp/service-providers/update` | `{ id, serviceProvider, enabled? }` (full replacement; `id` can't change) | `{ serviceProvider, warnings }` |
-| POST | `/saml2/idp/service-providers/delete` | `{ id }` | `{ deleted }` |
+| GET | `/saml-idp/service-providers` | | `{ serviceProviders: [...] }`: code SPs (`source: "code"`) and stored SPs (`source: "database"`, with `config`, `enabled`, `valid`, `issues`, timestamps, `updatedBy`) |
+| GET | `/saml-idp/service-providers/get` | `?id=` | `{ serviceProvider }` |
+| POST | `/saml-idp/service-providers/create` | `{ serviceProvider, enabled? }` | `{ serviceProvider, warnings }` |
+| POST | `/saml-idp/service-providers/update` | `{ id, serviceProvider, enabled? }` (full replacement; `id` can't change) | `{ serviceProvider, warnings }` |
+| POST | `/saml-idp/service-providers/delete` | `{ id }` | `{ deleted }` |
 
 With the [client plugin](options.md#client-plugin):
 
 ```ts
-const { data, error } = await authClient.saml2.idp.serviceProviders.create({
+const { data, error } = await authClient.samlIdp.serviceProviders.create({
   serviceProvider: {
     id: "zoom",
     entityId: "https://example.zoom.us",

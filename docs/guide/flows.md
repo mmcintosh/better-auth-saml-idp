@@ -15,7 +15,7 @@ All paths are relative to your Better Auth base path (for example `/api/auth`).
 | GET | `/saml2/idp/init?sp=<id>` | IdP-initiated SSO, for SPs with `allowIdpInitiated`. |
 | GET, POST | `/saml2/idp/slo` | [Single Logout](single-logout.md) messages from SPs. |
 | GET | `/saml2/idp/logout?returnTo=` | IdP-initiated Single Logout. |
-| GET, POST | `/saml2/idp/service-providers/*` | [Registry API](service-providers.md#registry-api). |
+| GET, POST | `/saml-idp/service-providers/*` | [Registry API](service-providers.md#registry-api). |
 
 ## SP-initiated SSO
 

@@ -355,7 +355,7 @@ All paths are relative to your Better Auth base path, for example `/api/auth`.
 | GET | `/saml2/idp/init?sp=<id>` | IdP-initiated SSO, for SPs with `allowIdpInitiated` |
 | GET, POST | `/saml2/idp/slo` | [Single Logout](#single-logout): SPs' LogoutRequests and LogoutResponses (both bindings) |
 | GET | `/saml2/idp/logout?returnTo=` | IdP-initiated logout: every SP, then back to `returnTo` |
-| GET, POST | `/saml2/idp/service-providers/*` | [Registry API](#managing-sps-at-runtime-registry), only with `registry.canManage` |
+| GET, POST | `/saml-idp/service-providers/*` | [Registry API](#managing-sps-at-runtime-registry), only with `registry.canManage` |
 
 ### Attributes
 
@@ -478,7 +478,7 @@ const roles = {
 import { samlIdpClient } from "better-auth-saml-idp/client";
 const authClient = createAuthClient({ plugins: [samlIdpClient()] });
 
-await authClient.saml2.idp.serviceProviders.create({ serviceProvider: { id: "zoom", entityId: "…", acsUrls: ["…"] } });
+await authClient.samlIdp.serviceProviders.create({ serviceProvider: { id: "zoom", entityId: "…", acsUrls: ["…"] } });
 authClient.samlIdp.signOutEverywhere({ returnTo: "/" }); // Single Logout, every SP
 authClient.samlIdp.launch("hubspot");                    // IdP-initiated SSO
 ```
@@ -499,11 +499,11 @@ samlIdp({
 
 | Method | Path | |
 |---|---|---|
-| GET | `/saml2/idp/service-providers` | List SPs, code and stored, with any validation issues |
-| GET | `/saml2/idp/service-providers/get?id=` | One stored SP |
-| POST | `/saml2/idp/service-providers/create` | `{ serviceProvider, enabled? }` |
-| POST | `/saml2/idp/service-providers/update` | `{ id, serviceProvider, enabled? }`: full replacement; the id can't change |
-| POST | `/saml2/idp/service-providers/delete` | `{ id }` |
+| GET | `/saml-idp/service-providers` | List SPs, code and stored, with any validation issues |
+| GET | `/saml-idp/service-providers/get?id=` | One stored SP |
+| POST | `/saml-idp/service-providers/create` | `{ serviceProvider, enabled? }` |
+| POST | `/saml-idp/service-providers/update` | `{ id, serviceProvider, enabled? }`: full replacement; the id can't change |
+| POST | `/saml-idp/service-providers/delete` | `{ id }` |
 
 **How stored SPs behave:**
 - They're plain JSON: the same options as in code, minus functions.

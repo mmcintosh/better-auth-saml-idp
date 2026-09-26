@@ -27,7 +27,7 @@ function navigate(url: string): void {
 
 /**
  * Client plugin. Registry calls are typed from the server plugin, e.g.
- * `authClient.saml2.idp.serviceProviders.create({ serviceProvider })`. The SAML flows themselves
+ * `authClient.samlIdp.serviceProviders.create({ serviceProvider })`. The SAML flows themselves
  * are browser navigations, so these helpers build (and follow) their URLs:
  *
  *   authClient.samlIdp.signOutEverywhere({ returnTo: "/" }); // Single Logout, every SP

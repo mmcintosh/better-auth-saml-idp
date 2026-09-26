@@ -41,7 +41,7 @@ async function admin(auth: any, role = "admin") {
 }
 
 const api = (browser: Browser, path: string, body?: unknown, origin = BASE_URL) =>
-  browser.fetch(`${AUTH_BASE}/saml2/idp/service-providers${path}`, {
+  browser.fetch(`${AUTH_BASE}/saml-idp/service-providers${path}`, {
     method: body === undefined ? "GET" : "POST",
     headers: { "content-type": "application/json", ...(origin ? { origin } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),

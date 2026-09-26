@@ -1118,3 +1118,18 @@ After 1.0, anything public is a semver promise. Review 4 listed six choices that
   - B, marking the internals `@internal`: semver would still see them as public.
   - C, stabilising everything: that freezes internals.
 - **Test:** `test/unit/public-api.test.ts` asserts the view's exact keys and that it is frozen. It also uses `@ts-expect-error` on the internal types, so typecheck fails if they are exported again (checked by re-adding `export type *`).
+
+**2. The client namespace: one, `authClient.samlIdp` (option A).**
+- **Before:** there were two namespaces.
+  - `authClient.saml2.idp.*` was inferred from route paths. It held the registry API, and also the SAML protocol routes as fetch functions, which are browser navigations and pointless to call.
+  - `authClient.samlIdp.*` held the hand-written helpers.
+- **Now:**
+  - The registry API lives at `/saml-idp/service-providers/*`, so its inferred client is `authClient.samlIdp.serviceProviders.*`, next to the helpers.
+  - The protocol routes keep `/saml2/idp/*`: SPs are configured with those URLs, so they can never move. They are marked `isAction: false`, so the client doesn't offer them.
+  - One prefix is for SAML, and the other is for the app's own API.
+- **Rejected:**
+  - B, hiding the protocol routes but keeping two namespaces.
+  - C, putting the helpers under `saml2.idp`: mixing hand-written actions into the inferred object is fragile.
+- **Test** (`test/unit/client.test.ts`):
+  - real client calls are asserted to reach `/api/auth/saml-idp/service-providers/*`;
+  - `@ts-expect-error` checks that `authClient.saml2` and `authClient.samlIdp.sso` don't exist. Re-exposing `sso` fails typecheck.

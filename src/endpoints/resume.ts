@@ -12,6 +12,8 @@ export const resumeEndpoint = (state: PluginState) =>
       method: "GET",
       query: z.object({ rid: z.string().max(128) }),
       metadata: {
+        // A browser navigation (or an SP's POST), not something to call from the client (API decision 2).
+        isAction: false,
         openapi: {
           operationId: "samlIdpResume",
           summary: "Resume a pending SAML sign-in after the user has authenticated",

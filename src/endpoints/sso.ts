@@ -102,6 +102,8 @@ export const ssoEndpoint = (state: PluginState) =>
       query: params.optional(),
       body: params.optional(),
       metadata: {
+        // A browser navigation (or an SP's POST), not something to call from the client (API decision 2).
+        isAction: false,
         allowedMediaTypes: ["application/x-www-form-urlencoded"],
         openapi: {
           operationId: "samlIdpSingleSignOn",

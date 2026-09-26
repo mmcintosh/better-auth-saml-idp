@@ -179,7 +179,7 @@ createAuthClient({ plugins: [samlIdpClient()] });
 
 | Member | Description |
 |---|---|
-| `authClient.saml2.idp.serviceProviders.{list,get,create,update,delete}` | The registry API, typed from the server plugin. |
+| `authClient.samlIdp.serviceProviders.{list,get,create,update,delete}` | The registry API, typed from the server plugin. |
 | `authClient.samlIdp.logoutUrl({ returnTo? })` | URL of IdP-initiated Single Logout. |
 | `authClient.samlIdp.signOutEverywhere({ returnTo? })` | Navigate there. |
 | `authClient.samlIdp.launchUrl(spId, { relayState? })` | URL of IdP-initiated SSO. |
