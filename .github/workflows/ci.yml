@@ -25,6 +25,30 @@ jobs:
       - run: pnpm test:wasm     # validator suite, node + workerd
       - run: pnpm pack:check    # dist build, publint, Are the Types Wrong
 
+  # Every database-dependent behaviour against real database servers (test/adapters).
+  adapters:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - db: postgres
+            url: postgres://postgres:test@localhost:5432/postgres
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: { POSTGRES_PASSWORD: test }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: npx vitest run --project node test/adapters
+        env: { ADAPTER_DB: "${{ matrix.db }}", ADAPTER_URL: "${{ matrix.url }}" }
+
   # Secret scan over the full git history (.gitleaks.toml).
   secrets:
     runs-on: ubuntu-latest
