@@ -935,3 +935,5 @@ Auth0's signed request was verified with the certificate **learned from its meta
 - The connection must be enabled for an application (in the connection's Applications tab, or the application's Connections tab), otherwise "the connection is not enabled".
 - The Sign In URL only saves with "Save Changes" at the bottom of the page.
 
+**Round 2: HTTP-POST signed requests (the D-025 verifier, live).** With Auth0's Protocol Binding switched to HTTP-POST, Auth0 posted an AuthnRequest with an **enveloped XML signature**. The log shows `POST /sso`, then the same-site `GET /sso?cid=…` re-entry. Because signatures are required and the certificate came only from Auth0's metadata, the request passed the full XSW rule set (one direct-child Signature, a single Reference to the root's unique ID, allow-listed algorithms, no comments, configured certificates only), and Auth0 signed in again with the same profile. This is the first live SP exercising the hardened XML-signature verifier.
+
