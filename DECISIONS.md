@@ -901,3 +901,19 @@ After the fix, all 8 behaviours pass on MongoDB, including the first-insert race
 
 **Not yet covered:** Drizzle on Postgres and MySQL, and Prisma (still on the roadmap).
 
+## D-034: Okta as a live SP (2026-09-26)
+
+An Okta Integrator (free) org added the example Worker as an external SAML IdP (Security → Identity Providers). Its SP metadata, downloaded because it needs an admin session, was turned into an entry with `npx better-auth-saml-idp sp-from-metadata`. That gave the entity ID and ACS URL, `requireSignedAuthnRequests` with Okta's signing certificate, and Okta's encryption certificate.
+
+**Round 1, plain assertions (SP in the `SAML_SERVICE_PROVIDERS` var):**
+- Okta sent a signed AuthnRequest (HTTP-Redirect, RSA-SHA256), and it was verified.
+- After a Better Auth sign-in, Okta accepted the signed Response and assertion and JIT-provisioned the user, then applied its own authenticator enrollment.
+
+**Round 2, encrypted assertions:** enabling `encryption` pushed the JSON var past Workers' 5.1 kB limit for a text binding, so Okta moved into the **D1 registry**, with the same config plus `encryption` and an attribute map, inserted as a row. Okta signed in again, which proves:
+- it decrypted our AES-256-GCM / RSA-OAEP assertion;
+- signed requests and encryption work for a stored SP.
+
+If the stored config hadn't validated, the SP would have been unknown, not signed in.
+
+**Documented** in `docs/sp-okta.md`: the direct admin URL (the menu location varies by plan), the metadata needing an admin session, the 5 kB var limit and why the registry is the better home, and Okta's own authenticator enrollment on first sign-in.
+
