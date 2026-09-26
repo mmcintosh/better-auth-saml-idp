@@ -52,10 +52,14 @@ FEATURES = [
 
 ROADMAP = [
  ("v1.0", "First npm release", "Ship what is built, safely.", [
-   ("Release engineering (done)", "dist build with type declarations, Biome lint, gitleaks, publint and Are the Types Wrong, clean-project install on Node and Workers, changelog; npm provenance at publish."),
+   ("Release engineering (done)", "dist build with type declarations, Biome lint, gitleaks, publint and Are the Types Wrong, clean-project install on Node and Workers, changelog; a CI-only release workflow publishing with npm provenance and a CycloneDX SBOM."),
+   ("Supply chain and project files (done)", "Every GitHub Action pinned by SHA with least-privilege tokens; CodeQL, a blocking runtime dependency audit, dependency review, OSV-Scanner, OpenSSF Scorecard and Dependabot. SECURITY.md, CONTRIBUTING.md, issue forms, and a versioning and support policy."),
+   ("Fuzzing (done)", "Property-based tests (fast-check) of the signature verifier, every inbound parser and issuance. The verifier held; issuance had five kinds of characters that produced invalid or unverifiable assertions, all fixed (D-036)."),
+   ("Live SP verification", "Done: Cloudflare Access, Okta and Auth0, live, with signed requests (Redirect and POST) and encrypted assertions (D-034, D-035). Next: AWS IAM Identity Center."),
+   ("Observability hooks", "onAssertionIssued, onLogout and onDenied callbacks for the host's logging and SIEM, and an optional audit-log table."),
    ("better-auth-cloudflare 0.4", "Replace the vendored build once 0.4 is on npm (the README requires it for Workers users)."),
    ("Key rotation guide (done)", "docs/key-rotation.md: add next certificate, switch, retire. Rehearsed live with Cloudflare Access with zero downtime."),
-   ("Database adapter test matrix", "Postgres, MySQL and MongoDB now proven in CI next to SQLite and D1 (MongoDB found a real gap, fixed: D-033), with a Databases page in the guide. Still to add: Drizzle on Postgres/MySQL, and Prisma."),
+   ("Database adapter test matrix", "Postgres, MySQL and MongoDB proven in CI next to SQLite and D1 (MongoDB found a real gap, fixed: D-033), with a Databases page in the guide. Still to add: Drizzle on Postgres/MySQL, and Prisma."),
    ("Second adversarial review (done)", "Fresh-eyes review plus an independent review by a different model (D-029, D-030); every finding fixed with a regression test. Everything since the first round: POST re-entry, error Responses, account policy, NameID, encryption, IdP-initiated SSO, POST signatures, metadata refresh, the registry and the CLI."),
  ]),
  ("v1.1", "Close the expected-feature gaps", "What admins and SPs assume every IdP has.", [
@@ -87,7 +91,7 @@ LEADS = [
  ("Replay protection you can check", "AuthnRequest replay is rejected by a database unique key and tested under concurrency across separate instances. Most peers don't document replay handling for inbound requests."),
  ("Strict identity by default", "Only verified email addresses get assertions; admin-impersonation sessions and anonymous users are refused. The user and session are re-read from the database right before signing."),
  ("Honest protocol answers", "IsPassive, RequestedAuthnContext, Subject and NameIDPolicy are honoured, and failures go back as signed SAML status Responses. authentik, Logto and Ory Polis show HTML errors instead."),
- ("Runs where your app runs", "A Better Auth plugin that runs on Cloudflare Workers and Node, verified live against Cloudflare Access. Every other self-hosted option here is a separate server."),
+ ("Runs where your app runs", "A Better Auth plugin that runs on Cloudflare Workers and Node, verified live against Cloudflare Access, Okta and Auth0. Every other self-hosted option here is a separate server."),
 ]
 TRAILS = [
  ("Step-up authentication", "RequestedAuthnContext is matched exactly; there's no mapping to the host's 2FA state yet."),

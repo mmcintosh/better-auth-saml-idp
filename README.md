@@ -14,7 +14,7 @@ Turn your [Better Auth](https://www.better-auth.com) server into a **SAML 2.0 Id
 
 **LIVE**:
 
-- **Example IdP (Workers + Hono + D1)**: [better-auth-saml-idp-example.mmcintosh-f61.workers.dev](https://better-auth-saml-idp-example.mmcintosh-f61.workers.dev/), which serves Cloudflare Access sign-ins, verified live
+- **Example IdP (Workers + Hono + D1)**: [better-auth-saml-idp-example.mmcintosh-f61.workers.dev](https://better-auth-saml-idp-example.mmcintosh-f61.workers.dev/), which signs users in to Cloudflare Access, Okta and Auth0, verified live
 - **Feature comparison with eleven SAML IdPs**: [mmcintosh.github.io/better-auth-saml-idp/comparison](https://mmcintosh.github.io/better-auth-saml-idp/comparison/)
 
 > **Unofficial community plugin.** This project isn't affiliated with or endorsed by Better Auth. Status: **pre-release**. The first npm release waits for `better-auth-cloudflare` 0.4 ([CHANGELOG](CHANGELOG.md)). Every design decision and its evidence is in [DECISIONS.md](DECISIONS.md).
@@ -30,6 +30,9 @@ Turn your [Better Auth](https://www.better-auth.com) server into a **SAML 2.0 Id
 - 🛡️ **Hardened input**: every message is checked against the OASIS XSDs by a libxml2 WebAssembly build that also runs on Workers. DOCTYPEs are refused, DEFLATE output is capped, and duplicate or encoded parameters are rejected.
 - ✅ **Signed AuthnRequests** over Redirect *and* POST, with defences against XML signature wrapping. Each defence is mutation-tested.
 - 🔁 **Replay protection** you can check: a database unique key, tested under concurrency across separate instances.
+- 🗄️ **Your database**: proven in CI on PostgreSQL, MySQL, MongoDB, SQLite and Cloudflare D1, with Better Auth's own migrations ([Databases](docs/guide/databases.md)).
+- 🎲 **Fuzz-tested**: property-based tests throw hostile input at every parser and the signature verifier, and hostile user data at issuance ([D-036](DECISIONS.md)).
+- 📦 **Supply chain**: SHA-pinned actions, CodeQL, dependency audits, OpenSSF Scorecard, and releases with npm provenance and an SBOM ([SECURITY.md](SECURITY.md)).
 - 👤 **Strict identity**: only verified emails get assertions; impersonated and anonymous sessions are refused; the user and session are re-read right before signing.
 - 🚪 **Single Logout**: SP- and IdP-initiated, propagated through the browser to every SP that received an assertion in the session.
 - 🗂️ **SP registry**: add, change, disable and remove SPs at runtime through an admin-gated, audited API, or configure them in code.
@@ -46,10 +49,14 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 
 **v1.0: First npm release**
 
-- [x] **Release engineering**: dist build with type declarations, Biome lint, gitleaks, publint and Are the Types Wrong, clean-project install on Node and Workers, changelog; npm provenance at publish.
+- [x] **Release engineering**: dist build with type declarations, Biome lint, gitleaks, publint and Are the Types Wrong, clean-project install on Node and Workers, changelog; a CI-only release workflow publishing with npm provenance and a CycloneDX SBOM.
+- [x] **Supply chain and project files**: Every GitHub Action pinned by SHA with least-privilege tokens; CodeQL, a blocking runtime dependency audit, dependency review, OSV-Scanner, OpenSSF Scorecard and Dependabot. SECURITY.md, CONTRIBUTING.md, issue forms, and a versioning and support policy.
+- [x] **Fuzzing**: Property-based tests (fast-check) of the signature verifier, every inbound parser and issuance. The verifier held; issuance had five kinds of characters that produced invalid or unverifiable assertions, all fixed (D-036).
+- [ ] **Live SP verification**: Done: Cloudflare Access, Okta and Auth0, live, with signed requests (Redirect and POST) and encrypted assertions (D-034, D-035). Next: AWS IAM Identity Center.
+- [ ] **Observability hooks**: onAssertionIssued, onLogout and onDenied callbacks for the host's logging and SIEM, and an optional audit-log table.
 - [ ] **better-auth-cloudflare 0.4**: Replace the vendored build once 0.4 is on npm (the README requires it for Workers users).
 - [x] **Key rotation guide**: docs/key-rotation.md: add next certificate, switch, retire. Rehearsed live with Cloudflare Access with zero downtime.
-- [ ] **Database adapter test matrix**: Postgres, MySQL and MongoDB now proven in CI next to SQLite and D1 (MongoDB found a real gap, fixed: D-033), with a Databases page in the guide. Still to add: Drizzle on Postgres/MySQL, and Prisma.
+- [ ] **Database adapter test matrix**: Postgres, MySQL and MongoDB proven in CI next to SQLite and D1 (MongoDB found a real gap, fixed: D-033), with a Databases page in the guide. Still to add: Drizzle on Postgres/MySQL, and Prisma.
 - [x] **Second adversarial review**: Fresh-eyes review plus an independent review by a different model (D-029, D-030); every finding fixed with a regression test. Everything since the first round: POST re-entry, error Responses, account policy, NameID, encryption, IdP-initiated SSO, POST signatures, metadata refresh, the registry and the CLI.
 
 **v1.1: Close the expected-feature gaps**
@@ -98,6 +105,13 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 - [x] Keycloak 26.4 and SimpleSAMLphp 2.5: real Chromium over HTTPS, in CI
 - [x] node-saml, samlify and `@better-auth/sso`: in CI, on Node and workerd
 - [x] SAMLtool: Response validation
+- [ ] AWS IAM Identity Center: next, live
+
+**Databases, in CI:**
+
+- [x] PostgreSQL 17, MySQL 8.4 and MongoDB 8.2 (replica set): every database-dependent behaviour, including replay protection under concurrency
+- [x] SQLite (Node) and Cloudflare D1 via Drizzle (workerd): the whole suite
+- [ ] Drizzle on PostgreSQL/MySQL, and Prisma
 - [ ] HubSpot and AWS IAM Identity Center: guides written ([HubSpot](docs/hubspot.md), [AWS](docs/sp-aws-iam-identity-center.md)), not yet run live
 
 ## 📚 Table of Contents

@@ -9,7 +9,7 @@ Our own column links to the tests that prove each entry. The roadmap derived fro
 - **Replay protection you can check.** AuthnRequest replay is rejected by a database unique key and tested under concurrency across separate instances. Most peers don't document replay handling for inbound requests.
 - **Strict identity by default.** Only verified email addresses get assertions; admin-impersonation sessions and anonymous users are refused. The user and session are re-read from the database right before signing.
 - **Honest protocol answers.** IsPassive, RequestedAuthnContext, Subject and NameIDPolicy are honoured, and failures go back as signed SAML status Responses. authentik, Logto and Ory Polis show HTML errors instead.
-- **Runs where your app runs.** A Better Auth plugin that runs on Cloudflare Workers and Node, verified live against Cloudflare Access. Every other self-hosted option here is a separate server.
+- **Runs where your app runs.** A Better Auth plugin that runs on Cloudflare Workers and Node, verified live against Cloudflare Access, Okta and Auth0. Every other self-hosted option here is a separate server.
 
 ## Where we trail
 
