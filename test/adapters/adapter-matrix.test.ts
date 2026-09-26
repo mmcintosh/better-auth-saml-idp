@@ -35,6 +35,9 @@ const databases: Record<string, () => Promise<Db>> = {
     const url = new URL(URL_);
     url.pathname = `/${name}`;
     const pool = new Pool({ connectionString: url.toString(), max: 10 });
+    // DROP DATABASE … WITH (FORCE) at teardown ends any leftover connections; pg reports that as an
+    // "error" event on idle clients, which is expected here.
+    pool.on("error", () => {});
     return {
       database: pool,
       migrate: true,
