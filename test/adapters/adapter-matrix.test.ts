@@ -48,6 +48,25 @@ const databases: Record<string, () => Promise<Db>> = {
       },
     };
   },
+
+  async mysql() {
+    const mysql = await import("mysql2/promise");
+    const name = `saml_matrix_${Date.now().toString(36)}`;
+    const admin = await mysql.createConnection(URL_);
+    await admin.query(`CREATE DATABASE ${name}`);
+    const url = new URL(URL_);
+    url.pathname = `/${name}`;
+    const pool = mysql.createPool({ uri: url.toString(), connectionLimit: 10, timezone: "Z" });
+    return {
+      database: pool,
+      migrate: true,
+      async close() {
+        await pool.end();
+        await admin.query(`DROP DATABASE IF EXISTS ${name}`);
+        await admin.end();
+      },
+    };
+  },
 };
 
 let db: Db;

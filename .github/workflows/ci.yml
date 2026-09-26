@@ -34,12 +34,20 @@ jobs:
         include:
           - db: postgres
             url: postgres://postgres:test@localhost:5432/postgres
+          - db: mysql
+            url: mysql://root:test@127.0.0.1:3306/mysql
+    # Both services start for every entry (GitHub Actions can't vary services per matrix entry).
     services:
       postgres:
         image: postgres:17-alpine
         env: { POSTGRES_PASSWORD: test }
         ports: ["5432:5432"]
         options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+      mysql:
+        image: mysql:8.4
+        env: { MYSQL_ROOT_PASSWORD: test }
+        ports: ["3306:3306"]
+        options: --health-cmd "mysqladmin ping -ptest --silent" --health-interval 5s --health-timeout 5s --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
