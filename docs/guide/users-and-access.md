@@ -48,7 +48,7 @@ The NameID is the SP's primary identifier for the user. Each SP sets `nameIdForm
 | Transient | `urn:oasis:names:tc:SAML:2.0:nameid-format:transient` | A new random value for every assertion. |
 | Unspecified | `urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified` | The email. |
 
-`NAMEID_FORMAT` exports these constants. A code SP can override the value with `nameId: (user) => string`, which must return a non-empty string.
+`NAMEID_FORMAT` exports these constants. A code SP can override the value with `nameId: (user) => string`, which must return a non-empty string. A NameID the XML can't carry exactly (control characters, lone surrogates, U+FFFD, or line endings such as CR and U+2028) is refused with `INTERNAL_ERROR` and logged, never altered.
 
 If a request's `NameIDPolicy` asks for another format than the SP's, the SP gets `InvalidNameIDPolicy`. If it names a `Subject`, the NameID must match the signed-in user, otherwise `UnknownPrincipal`.
 
@@ -102,7 +102,9 @@ It must be synchronous and return strings or string arrays. A throw means `INTER
 
 ### How attributes appear
 
-Each attribute is sent with `NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic"`, one `AttributeValue` per value, with values XML-escaped. Attribute names are what the SP expects: check its documentation (for example `email`, `firstName`, or URIs such as `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress`).
+Each attribute is sent with `NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic"`, one `AttributeValue` per value, with values XML-escaped. So that every SP parses the value and verifies the signature:
+- characters XML 1.0 can't carry (control characters other than TAB, LF and CR; U+FFFE/U+FFFF; lone surrogates) and U+FFFD are removed;
+- CR, CRLF, U+0085, U+2028 and U+2029 become LF, which is how XML parsers would read most of them anyway. Attribute names are what the SP expects: check its documentation (for example `email`, `firstName`, or URIs such as `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress`).
 
 ## Organizations
 

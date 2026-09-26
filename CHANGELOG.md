@@ -8,6 +8,8 @@ The first npm release (1.0.0) waits for `better-auth-cloudflare` 0.4, which Work
 
 ### Added
 
+- **Property-based fuzzing** (fast-check) of the signature verifier (XSW, mutation, byte flips) and of every inbound parser, plus an issuance round-trip over hostile user data. `FUZZ_RUNS` sets the depth.
+
 - **SAML 2.0 IdP plugin for Better Auth** with SP-initiated SSO.
   - AuthnRequests over the HTTP-Redirect and HTTP-POST bindings.
   - Responses over HTTP-POST.

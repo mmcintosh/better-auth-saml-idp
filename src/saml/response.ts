@@ -15,8 +15,42 @@ const ENVELOPED = "http://www.w3.org/2000/09/xmldsig#enveloped-signature";
 
 const XML_ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" };
 
+/**
+ * Characters XML 1.0 can't carry, even escaped (Char production: no C0 controls other than tab,
+ * LF and CR; no U+FFFE/U+FFFF); lone UTF-16 surrogates, which UTF-8 encoding would replace after
+ * signing, breaking the signature; and U+FFFD, which xmldom-based SPs (node-saml among them)
+ * reject as an encoding error. Found by fuzzing (D-036).
+ */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching control characters is the point
+const NOT_XML_CHAR = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFD-\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+/**
+ * Line endings parsers rewrite to LF: CR and CRLF (XML 1.0), and NEL, LINE SEPARATOR and (from
+ * 0.9) PARAGRAPH SEPARATOR, which xmldom also rewrites, and so xml-crypto, which signs over
+ * xmldom's view. libxml2 keeps them (XML 1.0), so an SP canonicalising with it (xmlsec) would
+ * digest different text from what was signed.
+ */
+const LINE_END = /\r[\n\u0085]?|[\u0085\u2028\u2029]/g;
+
+/**
+ * True if `s` contains a character XML 1.0 can't represent, or a line ending parsers rewrite, so
+ * that it can't arrive as sent.
+ */
+export const hasNonXmlChars = (s: string) => {
+  NOT_XML_CHAR.lastIndex = 0;
+  LINE_END.lastIndex = 0;
+  return NOT_XML_CHAR.test(s) || LINE_END.test(s);
+};
+
+/**
+ * Escape for XML text and attribute values. Characters XML can't carry are removed (not replaced
+ * with U+FFFD, see above), so the document is always well-formed, every SP parses it, and the
+ * signed bytes are the sent bytes. The line endings above become LF, as parsers would read them
+ * anyway (`&#xD;` instead breaks signatures at SPs that re-serialise before verifying: samlify). (Identifiers such as
+ * the NameID are checked with `hasNonXmlChars` first and refused rather than altered.)
+ */
 export function escapeXml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => XML_ESCAPES[c] ?? c);
+  return s.replace(NOT_XML_CHAR, "").replace(LINE_END, "\n").replace(/[&<>"']/g, (c) => XML_ESCAPES[c] ?? c);
 }
 
 /** SAML IDs must be NCNames: start with a letter or underscore. */

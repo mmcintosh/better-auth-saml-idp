@@ -939,3 +939,23 @@ Auth0's signed request was verified with the certificate **learned from its meta
 
 **Round 3: encrypted assertions.** `encryption` was added to the stored Auth0 config with a D1 `UPDATE`, and no redeploy. Because `metadata.url` is set, the encryption key comes from Auth0's metadata, the rotation path. Auth0 signed in again (01:49:33, past the 60 s registry cache after the update), so it decrypted our AES-256-GCM / RSA-OAEP assertion. Two independent SPs, Okta and Auth0, now decrypt our assertions live, as well as Cloudflare Access.
 
+## D-036: Fuzzing; characters XML can't carry in issued assertions (2026-09-26)
+
+Property-based tests (fast-check, `test/fuzz/`) now cover:
+- **the XML signature verifier:** mutated signed values, wrapping, duplicated IDs, moved or duplicated Signatures and random byte flips never verify a different document;
+- **every inbound parser:** hostile input only ever produces a `SamlRequestError` / `XmlParseError`, in bounded time;
+- **issuance:** a Response built from arbitrary user data is well-formed, schema-valid, and verifies both as built and as sent (UTF-8).
+
+The verifier held. Issuance didn't:
+- **C0 controls, U+FFFE/U+FFFF:** the Response failed the XSD ("PCDATA invalid Char value"), which xmldom had accepted.
+- **Lone surrogates:** the Response was signed over the JavaScript string, but UTF-8 encoding replaced the surrogate, so the sent Response didn't verify.
+- **U+FFFD:** xmldom warns "source encoding issues?"; strict parsers (ours, and node-saml's) reject the document.
+- **CR:** parsers read it as LF. Escaping it as `&#xD;` kept the value, but samlify re-serialises before verifying, and its signature check failed.
+- **U+0085, U+2028, U+2029:** xmldom rewrites them to LF (XML 1.1 rules; U+2029 from 0.9), and xml-crypto signs over xmldom's view. libxml2 keeps them (XML 1.0), so an xmlsec-based SP would digest different text. (Reasoned from the specs; xmlsec wasn't available to try.)
+
+**Fix:**
+- `escapeXml` removes the first three kinds and turns the line endings into LF, as most parsers would read them anyway. Attribute values arrive changed only where they could never have arrived intact.
+- The NameID is an identifier, so it is never altered: one containing any of these is refused (`INTERNAL_ERROR`, logged).
+- End-to-end tests with samlify cover both cases, and mutation checks confirm the tests fail without each fix.
+
+The byte-flip property also caught its own oracle: flipping base64 padding in `SignatureValue` to a space leaves the same signature bytes, so it still verifies. The oracle now compares only the content outside the Signature.

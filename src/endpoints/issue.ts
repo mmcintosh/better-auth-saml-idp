@@ -3,7 +3,7 @@ import type { GenericEndpointContext } from "better-auth";
 import { ERROR_STATUS, SAML_IDP_ERROR_CODES, type SamlIdpErrorCode } from "../errors";
 import { autoPostResponse, errorPage } from "../saml/post-form";
 import { logSafe, type SamlStatus } from "../saml/request";
-import { buildSignedErrorResponse, buildSignedResponse, newSamlId } from "../saml/response";
+import { buildSignedErrorResponse, buildSignedResponse, hasNonXmlChars, newSamlId } from "../saml/response";
 import type { SpMetadataCache } from "../saml/sp-metadata-refresh";
 import type { SpDirectory } from "../saml/sp-directory";
 import { hasOrganizationPlugin, loadMemberships, matchOrganization } from "../organizations";
@@ -183,6 +183,11 @@ export async function issueResponse(
   }
   if (typeof nameId !== "string" || nameId.length === 0) {
     ctx.context.logger.error(`[saml-idp] nameId() returned an empty value for SP ${sp.id}`);
+    return fail(ctx, "INTERNAL_ERROR");
+  }
+  // An identifier is never altered: one XML can't carry is refused (D-036).
+  if (hasNonXmlChars(nameId)) {
+    ctx.context.logger.error(`[saml-idp] the NameID for SP ${sp.id} contains characters XML can't carry; not issuing`);
     return fail(ctx, "INTERNAL_ERROR");
   }
 

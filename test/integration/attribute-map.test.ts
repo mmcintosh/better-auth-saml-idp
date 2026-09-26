@@ -37,4 +37,24 @@ describe("declarative attribute map", () => {
     expect(form.xml).toContain('Name="email"');
     expect(logs.filter((m) => /no field "department"/.test(m))).toHaveLength(1);
   });
+
+  it("characters XML can't carry are removed from values, CR becomes LF, and the SP verifies (D-036)", async () => {
+    const { parsed } = await issue({ note: { value: "a\u0000b\u001fc\ud800d\ufffde" }, lines: { value: "one\r\ntwo\tthree" } });
+    expect(parsed.extract.attributes).toMatchObject({ note: "abcde", lines: "one\ntwo\tthree" });
+  });
+});
+
+describe("NameID the XML can't carry", () => {
+  it("is refused (INTERNAL_ERROR, logged), never altered (D-036)", async () => {
+    const logs: string[] = [];
+    const { auth } = await createHost({
+      saml: { serviceProviders: [{ id: "test-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], nameId: () => "user\u0001@example.com" }] },
+      auth: { logger: { level: "error", log: (_level: string, message: string) => logs.push(message) } },
+    });
+    const browser = new Browser(auth);
+    await browser.signUp(undefined);
+    const res = await browser.fetch(await redirectUrl(authnRequestXml().xml));
+    expect(await res.text()).toContain("INTERNAL_ERROR");
+    expect(logs.some((m) => /characters XML can't carry/.test(m))).toBe(true);
+  });
 });
