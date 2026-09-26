@@ -1,6 +1,6 @@
 # Auth0 as a service provider
 
-Auth0 can use a SAML identity provider through an **Enterprise SAML connection**, so users sign in to your Auth0 applications with their Better Auth account. Verified live on 2026-09-26 with a free Auth0 tenant: Auth0's **signed** AuthnRequests were verified with the certificate the plugin learned from Auth0's public metadata (the SP stored in the database registry with only `metadata.url`), and Auth0 received the NameID and first/last name attributes. Both request bindings were verified: HTTP-Redirect (query signature) and HTTP-POST (an enveloped XML signature, checked with the plugin's signature-wrapping defences) (DECISIONS D-035).
+Auth0 can use a SAML identity provider through an **Enterprise SAML connection**, so users sign in to your Auth0 applications with their Better Auth account. Verified live on 2026-09-26 with a free Auth0 tenant: Auth0's **signed** AuthnRequests were verified with the certificate the plugin learned from Auth0's public metadata (the SP stored in the database registry with only `metadata.url`), and Auth0 received the NameID and first/last name attributes. Encrypted assertions were decrypted too, with the key taken from Auth0's metadata. Both request bindings were verified: HTTP-Redirect (query signature) and HTTP-POST (an enveloped XML signature, checked with the plugin's signature-wrapping defences) (DECISIONS D-035).
 
 ## 1. Create the connection in Auth0
 
