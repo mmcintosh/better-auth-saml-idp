@@ -55,7 +55,8 @@ ROADMAP = [
    ("Release engineering (done)", "dist build with type declarations, Biome lint, gitleaks, publint and Are the Types Wrong, clean-project install on Node and Workers, changelog; npm provenance at publish."),
    ("better-auth-cloudflare 0.4", "Replace the vendored build once 0.4 is on npm (the README requires it for Workers users)."),
    ("Key rotation guide (done)", "docs/key-rotation.md: add next certificate, switch, retire. Rehearsed live with Cloudflare Access with zero downtime."),
-   ("Second adversarial review", "Everything since the first round: POST re-entry, error Responses, account policy, NameID, encryption, IdP-initiated SSO, POST signatures, metadata refresh, the registry and the CLI."),
+   ("Database adapter test matrix", "Prove every Better Auth adapter, not just SQLite and D1: Kysely and Drizzle on Postgres and MySQL, Prisma, and MongoDB (including its lazily created unique indexes), as CI service containers; plus a Databases page in the guide."),
+   ("Second adversarial review (done)", "Fresh-eyes review plus an independent review by a different model (D-029, D-030); every finding fixed with a regression test. Everything since the first round: POST re-entry, error Responses, account policy, NameID, encryption, IdP-initiated SSO, POST signatures, metadata refresh, the registry and the CLI."),
  ]),
  ("v1.1", "Close the expected-feature gaps", "What admins and SPs assume every IdP has.", [
    ("IdP-initiated SSO (done)", "Opt-in per SP, off by default; RelayState only from a per-SP allow-list. Supported by 8 of the 11 products compared (partially by Ory Polis), including all four commercial IdPs."),
