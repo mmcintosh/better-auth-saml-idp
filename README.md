@@ -80,6 +80,17 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 - [x] **Declarative attribute mapping**: Per-SP map from attribute name to user field, constant, split list or first/last name; usable from JSON configuration.
 - [ ] **Upstreaming**: Propose integration with @better-auth/sso on better-auth #6254 once v1 is stable.
 
+**Proposed: Under review**
+
+- [ ] **Salesforce as a live SP**: Free Developer Edition; a classic, strict SAML SP. Another "verified with" line next to Cloudflare Access, Okta and Auth0.
+- [ ] **Load test and benchmark**: Throughput and latency of sign-ins on Workers under concurrency, published with the method so others can rerun it.
+- [ ] **Release automation**: Changesets: changelog entries written with each PR, version bumps and the release PR generated, so a release is one merge.
+- [ ] **Admin page in the example**: A reference page in the Workers example for managing SPs through the registry API. The plugin itself still ships no UI.
+- [ ] **NameID from a user field**: For stored SPs, choose the NameID source (for example a username or employee ID) in JSON, as attributes already can.
+- [ ] **MongoDB uniqueness report to Better Auth**: Better Auth's own tables (user.email, session.token) declare uniqueness the way that MongoDB's adapter ignores (D-033). A careful upstream report.
+- [ ] **Offer the verifier to @better-auth/sso**: Our hardened XML-signature verifier (XSW defences, mutation-tested, fuzzed) could harden the SP side too.
+- [ ] **Community Plugins listing**: An entry in Better Auth's Community Plugins at v1.0.
+
 **Not planned: Out of scope**
 
 - 🚫 **Artifact binding**: None of the four modern open-source IdPs supports it; no target SP needs it.

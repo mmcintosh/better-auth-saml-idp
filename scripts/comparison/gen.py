@@ -142,7 +142,7 @@ td.us,thead th.us{{background:var(--accent-soft)}}
 .lane h3{{font-size:17px;margin-top:4px}}
 .lane ul{{list-style:none;margin:0;padding:0;display:grid;gap:10px}}
 .lane li strong{{display:block;font-size:14px}} .lane li span{{color:var(--muted);font-size:13px}}
-.lane-3,.lane-4{{background:transparent}} .lane-4 .ver{{color:var(--muted)}}
+.lane-3,.lane-4,.lane-5{{background:transparent}} .lane-5 .ver{{color:var(--muted)}}
 .hub{{display:grid;gap:6px;margin:0;padding:0;list-style:none}}
 .hub li{{display:grid;grid-template-columns:90px 1fr;gap:10px;font-size:14px}}
 .hub li b{{font:500 12px var(--mono);color:var(--muted);padding-top:2px}}
