@@ -67,6 +67,23 @@ const databases: Record<string, () => Promise<Db>> = {
       },
     };
   },
+
+  async mongodb() {
+    const { MongoClient } = await import("mongodb");
+    const { mongodbAdapter } = await import("better-auth/adapters/mongodb");
+    const client = new MongoClient(URL_);
+    await client.connect();
+    const database = client.db(`saml_matrix_${Date.now().toString(36)}`);
+    return {
+      // No migrations: the adapter creates collections and indexes (UNIQUE ones too) on first use.
+      database: mongodbAdapter(database, { client }),
+      migrate: false,
+      async close() {
+        await database.dropDatabase();
+        await client.close();
+      },
+    };
+  },
 };
 
 let db: Db;
@@ -113,6 +130,13 @@ describe.skipIf(!KIND)(`adapter matrix: ${KIND}`, { timeout: 60_000 }, () => {
     await db?.close();
   });
 
+  it("the seen-request UNIQUE key is enforced by the database itself, even on the very first inserts (MongoDB creates indexes lazily)", async () => {
+    const c = await ctx();
+    const expires = new Date(Date.now() + 60_000);
+    const first = await Promise.all(Array.from({ length: 8 }, () => recordRequestId(c.adapter, "sp-x", "_same", expires)));
+    expect(first.filter(Boolean)).toHaveLength(1);
+  });
+
   it("a full sign-in: request parked, resumed once, Response issued", async () => {
     const browser = new Browser(auth);
     const toLogin = await browser.fetch(await redirectUrl(authnRequestXml().xml));
@@ -130,13 +154,6 @@ describe.skipIf(!KIND)(`adapter matrix: ${KIND}`, { timeout: 60_000 }, () => {
     const results = await Promise.all(Array.from({ length: 10 }, () => browser.fetch(url)));
     expect(results.filter((r) => r.status === 302)).toHaveLength(1);
     expect((await Promise.all(results.filter((r) => r.status !== 302).map(code))).every((c) => c === "DUPLICATE_REQUEST_ID")).toBe(true);
-  });
-
-  it("the seen-request UNIQUE key is enforced by the database itself", async () => {
-    const c = await ctx();
-    const expires = new Date(Date.now() + 60_000);
-    const first = await Promise.all(Array.from({ length: 8 }, () => recordRequestId(c.adapter, "sp-x", "_same", expires)));
-    expect(first.filter(Boolean)).toHaveLength(1);
   });
 
   it("a resume link is consumed once, even when used concurrently", async () => {

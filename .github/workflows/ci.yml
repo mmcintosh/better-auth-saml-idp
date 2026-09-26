@@ -36,6 +36,10 @@ jobs:
             url: postgres://postgres:test@localhost:5432/postgres
           - db: mysql
             url: mysql://root:test@127.0.0.1:3306/mysql
+          # A single-node replica set, as production MongoDB is: Better Auth's adapter uses
+          # transactions, which standalone servers don't support.
+          - db: mongodb
+            url: mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true
     # Both services start for every entry (GitHub Actions can't vary services per matrix entry).
     services:
       postgres:
@@ -54,6 +58,13 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      # Service containers can't take arguments (--replSet), so MongoDB starts here.
+      - if: matrix.db == 'mongodb'
+        run: |
+          docker run -d --name mongo -p 27017:27017 mongo:8.2 --replSet rs0 --bind_ip_all
+          for i in $(seq 1 30); do docker exec mongo mongosh --quiet --eval 'db.runCommand({ping:1}).ok' 2>/dev/null | grep -q 1 && break; sleep 2; done
+          docker exec mongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
+          for i in $(seq 1 30); do docker exec mongo mongosh --quiet --eval 'rs.status().myState' 2>/dev/null | grep -q '^1$' && break; sleep 2; done
       - run: npx vitest run --project node test/adapters
         env: { ADAPTER_DB: "${{ matrix.db }}", ADAPTER_URL: "${{ matrix.url }}" }
 

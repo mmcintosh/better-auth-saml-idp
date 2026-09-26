@@ -19,6 +19,10 @@ export function samlIdpSchema(opts: { registry?: boolean; singleLogout?: boolean
         requestId: { type: "string", required: true, input: false },
         expiresAt: { type: "date", required: true, input: false, index: true },
       },
+      // Also declared as a table-level index: Better Auth 1.7's MongoDB adapter creates indexes
+      // only from `indexes`, ignoring field-level `unique` (the SQL migrators honour both). Without
+      // this, replay protection silently did nothing on MongoDB (adapter matrix, D-033).
+      indexes: [{ fields: ["key"], unique: true, name: "saml_idp_seen_request_key_unique" }],
     },
   } satisfies BetterAuthPluginDBSchema;
 }
@@ -40,6 +44,10 @@ function registrySchema() {
         updatedAt: { type: "date", required: true, input: false },
         updatedBy: { type: "string", required: false, input: false },
       },
+      indexes: [
+        { fields: ["spId"], unique: true, name: "saml_idp_service_provider_sp_id_unique" },
+        { fields: ["entityId"], unique: true, name: "saml_idp_service_provider_entity_id_unique" },
+      ],
     },
   } satisfies BetterAuthPluginDBSchema;
 }
@@ -61,6 +69,7 @@ function logoutSchema() {
         sessionIndex: { type: "string", required: true, input: false },
         expiresAt: { type: "date", required: true, input: false, index: true },
       },
+      indexes: [{ fields: ["key"], unique: true, name: "saml_idp_session_participant_key_unique" }],
     },
   } satisfies BetterAuthPluginDBSchema;
 }

@@ -864,3 +864,40 @@ Writing the references surfaced three corrections:
 - **In the plugin:** a refresh unsettled after 30 s counts as abandoned and is replaced. The first-use wait is also bounded by its own timer, not only by the fetch's abort signal. Tested with a fetch that never settles; mutation-checked (without the rule, no second attempt happens).
 - **In the example:** `advanced.backgroundTasks.handler` passes work to the current request's `waitUntil` (through `AsyncLocalStorage`, since one auth instance serves every request in the isolate). The Workers guide documents this as a requirement.
 
+## D-033: Database adapter matrix, and replay protection on MongoDB (2026-09-26)
+
+**What.** `test/adapters/adapter-matrix.test.ts` runs every database-dependent behaviour against a real server, selected by `ADAPTER_DB`:
+- a full sign-in;
+- replay under 10 concurrent identical requests, and the seen-request UNIQUE key enforced by the database itself (the first test on a fresh database, so on MongoDB it races the lazily created index);
+- a concurrent single-use resume;
+- a registry create race, exact lookups, and boolean and date round-trips;
+- logout participants: upsert, list, clear;
+- organization memberships (`in`);
+- the expiry sweep (`lt`).
+
+CI runs it on PostgreSQL 17 and MySQL 8.4 (Kysely, as Better Auth builds for a raw pool) and MongoDB 8.2 as a single-node replica set, next to the existing SQLite and D1 suites. Each run creates a fresh database and migrates it with Better Auth's own migrator.
+
+**Found: replay protection did nothing on MongoDB.** With the plugin as it was:
+- 10 of 10 replayed requests were accepted;
+- 5 of 5 concurrent registry creates succeeded;
+- logout participants were duplicated.
+
+The cause: Better Auth 1.7's MongoDB adapter creates indexes only from table-level `indexes` declarations and ignores field-level `unique: true`, which the SQL migrators and `npx auth generate` do honour. Our tables declared uniqueness only at field level.
+
+**Fix.** Each unique column is also declared as a named table-level unique index:
+- `saml_idp_seen_request_key_unique`;
+- `saml_idp_service_provider_sp_id_unique` and `saml_idp_service_provider_entity_id_unique`;
+- `saml_idp_session_participant_key_unique`.
+
+They're named because an unnamed one collides with the name the field-level flag reserves, and Better Auth refuses that. The field-level flags stay, so SQL databases and the D1 schema are unchanged.
+
+After the fix, all 8 behaviours pass on MongoDB, including the first-insert race (the adapter awaits index creation before inserting). Postgres, MySQL, SQLite and D1 were re-run and still pass. `npx auth generate` now also emits the named `uniqueIndex(...)` entries.
+
+**Also learned.**
+- MongoDB needs a replica set: Better Auth's adapter uses transactions when given a `client`, and a standalone server rejects them ("Transaction numbers are only allowed on a replica set member").
+- MongoDB 8.0 doesn't start on Linux kernels 6.19 and newer (SERVER-121912); 8.2 does.
+- MySQL's default collation is case-insensitive, so the registry's exact-match lookup (review 2) is now proven against a real database.
+- **Upstream:** Better Auth's own core tables declare uniqueness at field level (for example `user.email` and `session.token`), so on MongoDB those may not be backed by unique indexes either. This is worth a careful report to Better Auth; it's not ours to fix.
+
+**Not yet covered:** Drizzle on Postgres and MySQL, and Prisma (still on the roadmap).
+
