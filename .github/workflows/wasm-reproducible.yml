@@ -1,0 +1,29 @@
+# The shipped wasm/xsd.wasm is a binary: prove it is exactly what the source builds. Rebuilds
+# libxml2 + wasm-validator/c/xsdv.c in the digest-pinned emscripten image (wasm-validator/build.sh)
+# and fails if a single byte differs from the committed file (review 4).
+#
+# Runs when the binary or its source changes, weekly (so a silently changed download would show),
+# and by hand. It pulls a ~1 GB image and compiles libxml2, so not on every push.
+name: Reproducible wasm
+on:
+  push:
+    branches: [main]
+    paths: ["wasm/**", "wasm-validator/**", ".github/workflows/wasm-reproducible.yml"]
+  pull_request:
+    paths: ["wasm/**", "wasm-validator/**", ".github/workflows/wasm-reproducible.yml"]
+  schedule: [{ cron: "37 3 * * 3" }]
+  workflow_dispatch:
+permissions: { contents: read }
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { persist-credentials: false }
+      - run: sha256sum wasm/xsd.wasm && cat wasm/xsd.wasm.sha256
+      - run: wasm-validator/build.sh
+      - name: The rebuilt binary is byte-identical to the committed one
+        run: |
+          sha256sum wasm/xsd.wasm
+          git diff --stat --exit-code -- wasm/ || { echo "::error::wasm/xsd.wasm does not match its source build"; exit 1; }
