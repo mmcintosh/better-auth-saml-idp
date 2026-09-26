@@ -12,6 +12,9 @@ import { buildSignedResponse, escapeXml } from "../../src/saml/response";
 import { libxml2Validator } from "../../src/saml/validator";
 import { parseXmlStrict, XmlParseError } from "../../src/saml/xml";
 import { verifyEnvelopedSignature } from "../../src/saml/xmldsig";
+import { parseLogoutRequest, parseLogoutResponse } from "../../src/saml/logout";
+import { serviceProviderFromMetadata, SpMetadataError } from "../../src/saml/sp-metadata";
+import cloudflareMetadata from "../fixtures/sp-metadata/cloudflare-access.xml?raw";
 import { baseOptions } from "../support/config";
 
 const keys = inject("keys");
@@ -26,14 +29,31 @@ const VALID =
   `Destination="https://idp.test/sso" AssertionConsumerServiceURL="https://sp.test/acs">` +
   `<saml:Issuer>https://sp.test/metadata</saml:Issuer><samlp:NameIDPolicy Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"/></samlp:AuthnRequest>`;
 
-/** Only SamlRequestError (or XmlParseError) may escape, never a TypeError or the like. */
+/** Only SamlRequestError, XmlParseError or SpMetadataError may escape, never a TypeError or the like. */
 const onlyCleanErrors = async (fn: () => unknown) => {
   try {
     await fn();
   } catch (e) {
-    if (!(e instanceof SamlRequestError) && !(e instanceof XmlParseError)) throw e;
+    if (!(e instanceof SamlRequestError) && !(e instanceof XmlParseError) && !(e instanceof SpMetadataError)) throw e;
   }
 };
+
+/** Random insertions, deletions and replacements in a valid document. */
+const edits = fc.array(fc.tuple(fc.nat(), fc.constantFrom("insert", "delete", "replace"), fc.string({ minLength: 1, maxLength: 12 })), { minLength: 1, maxLength: 4 });
+function mutate(xml: string, list: [number, string, string][]): string {
+  for (const [pos, op, text] of list) {
+    const at = pos % (xml.length + 1);
+    xml = op === "insert" ? xml.slice(0, at) + text + xml.slice(at) : op === "delete" ? xml.slice(0, at) + xml.slice(at + text.length) : xml.slice(0, at) + text + xml.slice(at + text.length);
+  }
+  return xml;
+}
+const LOGOUT_REQUEST =
+  `<samlp:LogoutRequest ${NS} ID="_lr" Version="2.0" IssueInstant="2026-09-26T00:00:00Z" Destination="https://idp.test/slo">` +
+  `<saml:Issuer>https://sp.test/metadata</saml:Issuer><saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">a@b.test</saml:NameID>` +
+  `<samlp:SessionIndex>_s</samlp:SessionIndex></samlp:LogoutRequest>`;
+const LOGOUT_RESPONSE =
+  `<samlp:LogoutResponse ${NS} ID="_lp" Version="2.0" IssueInstant="2026-09-26T00:00:00Z" Destination="https://idp.test/slo" InResponseTo="_x">` +
+  `<saml:Issuer>https://sp.test/metadata</saml:Issuer><samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status></samlp:LogoutResponse>`;
 
 describe("fuzz: inbound input only ever produces clean rejections", () => {
   it("parseRedirectQuery: any query string", async () => {
@@ -82,6 +102,37 @@ describe("fuzz: inbound input only ever produces clean rejections", () => {
             expect(info.id.length).toBeGreaterThan(0);
           });
         },
+      ),
+      { numRuns: RUNS },
+    );
+  });
+
+  it("parseLogoutRequest / parseLogoutResponse: random edits in valid messages", async () => {
+    const opts = { now, clockSkewSeconds: 60, sloUrl: "https://idp.test/slo" };
+    // Both originals must parse, or the property proves nothing.
+    await parseLogoutRequest(LOGOUT_REQUEST, validator, opts);
+    await parseLogoutResponse(LOGOUT_RESPONSE, validator, opts);
+    await fc.assert(
+      fc.asyncProperty(edits, fc.boolean(), (list, request) =>
+        onlyCleanErrors(async () => {
+          const info = request ? await parseLogoutRequest(mutate(LOGOUT_REQUEST, list), validator, opts) : await parseLogoutResponse(mutate(LOGOUT_RESPONSE, list), validator, opts);
+          expect(info.issuer.length).toBeGreaterThan(0);
+        }),
+      ),
+      { numRuns: RUNS },
+    );
+  });
+
+  it("serviceProviderFromMetadata: random edits in real SP metadata (Cloudflare Access)", async () => {
+    await serviceProviderFromMetadata(cloudflareMetadata, { id: "cf" });
+    await fc.assert(
+      fc.asyncProperty(edits, (list) =>
+        onlyCleanErrors(async () => {
+          const r = await serviceProviderFromMetadata(mutate(cloudflareMetadata, list), { id: "cf" });
+          // Anything accepted is a usable SP entry.
+          expect(r.serviceProvider.entityId.length).toBeGreaterThan(0);
+          expect(r.serviceProvider.acsUrls.length).toBeGreaterThan(0);
+        }),
       ),
       { numRuns: RUNS },
     );

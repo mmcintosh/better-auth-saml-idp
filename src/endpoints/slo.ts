@@ -304,7 +304,7 @@ export const logoutEndpoint = (state: PluginState) =>
       const session = await getSessionFromCtx(ctx);
       if (!session) throw ctx.redirect(returnTo);
       // Logout CSRF: another site can't silently log the user out everywhere.
-      if (isDriveByCrossSite(ctx)) return confirmPage(ctx.request?.url ?? `${idpBaseURL(state.options, ctx.context.baseURL)}${LOGOUT_PATH}`, "", "sign-out");
+      if (isDriveByCrossSite(ctx, { sameSiteToo: true })) return confirmPage(ctx.request?.url ?? `${idpBaseURL(state.options, ctx.context.baseURL)}${LOGOUT_PATH}`, "", "sign-out");
       const ended = await endSession(ctx, session);
       emit(ctx, state.options, { type: "logout", initiatedBy: "idp", userId: session.user.id, sessionId: session.session.id, notifying: ended.participants.map((p) => p.spId) });
       return nextHop(ctx, state, { origin: { kind: "idp", returnTo }, remaining: ended.participants, partial: ended.partial });

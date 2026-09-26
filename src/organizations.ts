@@ -12,6 +12,53 @@ const MAX_MEMBERSHIPS = 500;
 /** Is Better Auth's organization plugin installed? */
 export const hasOrganizationPlugin = (plugins: readonly { id: string }[] | undefined) => (plugins ?? []).some((p) => p.id === "organization");
 
+/**
+ * Can users create organizations (and so choose slugs and names)? The organization plugin's
+ * `allowUserToCreateOrganization` defaults to true; a function counts as "yes", since it may be.
+ */
+export function usersCanCreateOrganizations(plugins: readonly { id: string; options?: unknown }[] | undefined): boolean {
+  const org = (plugins ?? []).find((p) => p.id === "organization");
+  if (!org) return false;
+  return (org.options as { allowUserToCreateOrganization?: unknown } | undefined)?.allowUserToCreateOrganization !== false;
+}
+
+/**
+ * What in this SP's configuration a user could satisfy with an organization they created
+ * themselves (review 4, R4-1): a rule by slug (a slug nobody has taken yet can be claimed), and
+ * organization attributes without an `only` allow-list (any name or slug the user chose).
+ */
+const warnedClaimable = new Set<string>();
+
+/**
+ * Warn, once per SP, when users can create organizations and this SP relies on something they
+ * could claim. Called at startup for code SPs and at first issuance for stored ones.
+ */
+export function warnClaimableOrganizations(
+  logger: { warn(message: string): void },
+  plugins: readonly { id: string; options?: unknown }[] | undefined,
+  sp: { id: string; organization?: { slug?: string; id?: string }; attributeMap?: Record<string, unknown> },
+): void {
+  if (warnedClaimable.has(sp.id) || !usersCanCreateOrganizations(plugins)) return;
+  const reasons = claimableOrganizationUse(sp);
+  if (reasons.length === 0) return;
+  warnedClaimable.add(sp.id);
+  logger.warn(
+    `[saml-idp] SP ${sp.id}: users can create organizations (organization plugin, allowUserToCreateOrganization), so a user can satisfy this with an organization they made: ${reasons.join("; ")}. Set allowUserToCreateOrganization: false, or use organization ids and \`only\`.`,
+  );
+}
+
+export function claimableOrganizationUse(sp: { organization?: { slug?: string; id?: string }; attributeMap?: Record<string, unknown> }): string[] {
+  const out: string[] = [];
+  if (sp.organization && sp.organization.id === undefined && sp.organization.slug !== undefined)
+    out.push(`organization rule by slug "${sp.organization.slug}" (use its id)`);
+  // With a rule, unlisted organization attributes cover only the rule's organization.
+  if (!sp.organization)
+    for (const [name, source] of Object.entries(sp.attributeMap ?? {}))
+      if (source && typeof source === "object" && "organization" in source && !(source as { only?: unknown }).only)
+        out.push(`attribute "${name}" from organizations without \`only\``);
+  return out;
+}
+
 export async function loadMemberships(adapter: Adapter, userId: string): Promise<OrganizationMembership[]> {
   const members = (await adapter.findMany({ model: "member", where: [{ field: "userId", value: userId }], limit: MAX_MEMBERSHIPS })) as {
     organizationId: string;

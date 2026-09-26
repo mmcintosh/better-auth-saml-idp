@@ -4,7 +4,7 @@ import { sign as cryptoSign } from "node:crypto";
 import { deflateRawSync } from "node:zlib";
 import type { ResolvedSamlIdpOptions } from "../types";
 import { SIGNATURE_ALGORITHM_URI } from "./idp";
-import { child, DATETIME_WITH_ZONE, invalid, logSafe, MAX_REQUEST_BYTES, NS_ASSERTION, NS_PROTOCOL, REQUEST_MAX_AGE_SECONDS } from "./request";
+import { checkMessageShape, child, DATETIME_WITH_ZONE, invalid, logSafe, MAX_REQUEST_BYTES, NS_ASSERTION, NS_PROTOCOL, REQUEST_MAX_AGE_SECONDS } from "./request";
 import { escapeXml, newSamlId, signElement } from "./response";
 import { precheckXml, type SchemaValidator } from "./validator";
 import { parseXmlStrict } from "./xml";
@@ -44,6 +44,7 @@ async function parseMessage(xml: string, rootName: "LogoutRequest" | "LogoutResp
   } catch (e) {
     throw invalid(`not well-formed: ${logSafe((e as Error).message)}`);
   }
+  checkMessageShape(doc);
   const root = doc.documentElement as any;
   if (!root || root.namespaceURI !== NS_PROTOCOL || root.localName !== rootName) throw invalid(`root element is not samlp:${rootName}`);
   if ((root.getAttribute("Version") ?? "").trim() !== "2.0") throw invalid("Version must be 2.0");

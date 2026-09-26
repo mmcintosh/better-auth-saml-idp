@@ -68,8 +68,10 @@ const attributeSource = z.custom<AttributeSource>(() => true).superRefine((v, ct
   const o = v as Record<string, unknown>;
   const keys = Object.keys(o);
   if ("organization" in o) {
-    if (keys.length !== 1) issue("{ organization } takes no other keys");
+    for (const k of keys) if (k !== "organization" && k !== "only") issue(`unknown key "${k}" (expected organization, only)`);
     if (!["slugs", "names", "ids", "roles"].includes(o.organization as string)) issue('must be "slugs", "names", "ids" or "roles"', ["organization"]);
+    if (o.only !== undefined && !(Array.isArray(o.only) && o.only.length > 0 && o.only.length <= 100 && o.only.every((x) => typeof x === "string" && x.length > 0)))
+      issue("must be a non-empty array of organization ids or slugs (at most 100)", ["only"]);
     return;
   }
   if ("value" in o) {

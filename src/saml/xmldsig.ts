@@ -10,6 +10,7 @@
 //  - canonicalization, transforms, signature and digest algorithms are on allow-lists
 //    (SHA-1 only by explicit opt-in; no XPath/XSLT transforms, no WithComments variants);
 //  - only the given certificates verify it: KeyInfo in the message is ignored.
+import { createPublicKey, verify as verifyRaw } from "node:crypto";
 import { SignedXml } from "xml-crypto";
 
 const DS = "http://www.w3.org/2000/09/xmldsig#";
@@ -98,7 +99,32 @@ export function verifyEnvelopedSignature(
 
   if (certs.length === 0) return { present: true, valid: undefined, ...names };
   let problem = "signature does not verify with any configured certificate";
-  for (const [i, cert] of certs.entries()) {
+  // Pick the certificate before the expensive part (review 4, R4-2). xml-crypto validates the
+  // Reference (re-parse, ID lookups, canonicalising the whole document) before it looks at the
+  // key, so trying N certificates cost N full verifications. Canonicalise SignedInfo once, with
+  // xml-crypto's own code, check the SignatureValue against each key (a cheap RSA operation), and
+  // run the full verification only for a certificate that matches. If this pre-check can't run,
+  // every certificate is tried in full as before; either way the full check decides.
+  let candidates = [...certs.entries()];
+  try {
+    const probe = new SignedXml({ publicCert: certs[0], getCertFromKeyInfo: () => null });
+    probe.loadSignature(sigEl);
+    const canon = (probe as unknown as { getCanonSignedInfoXml(doc: unknown): string }).getCanonSignedInfoXml(doc);
+    const value = Buffer.from(String((probe as unknown as { signatureValue?: string }).signatureValue ?? "").replace(/\s+/g, ""), "base64");
+    const hash = sig.name.slice("rsa-".length);
+    const data = Buffer.from(canon, "utf8");
+    candidates = candidates.filter(([, cert]) => {
+      try {
+        return verifyRaw(hash, data, createPublicKey(cert), value);
+      } catch {
+        return false;
+      }
+    });
+    if (candidates.length === 0) return fail(problem, names);
+  } catch {
+    candidates = [...certs.entries()];
+  }
+  for (const [i, cert] of candidates) {
     try {
       const v = new SignedXml({ publicCert: cert, getCertFromKeyInfo: () => null });
       v.loadSignature(sigEl);

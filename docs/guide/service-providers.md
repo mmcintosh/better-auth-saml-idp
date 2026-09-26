@@ -115,7 +115,7 @@ const { data, error } = await authClient.saml2.idp.serviceProviders.create({
     entityId: "https://example.zoom.us",
     acsUrls: ["https://example.zoom.us/saml/SSO"],
     attributes: { email: "email", firstName: { field: "name", part: "first" } },
-    organization: { slug: "acme" },
+    organization: { id: "org_8f3…" }, // by id: slugs can be claimed by whoever creates them first
   },
 });
 if (error?.code === "INVALID_SERVICE_PROVIDER") console.log(error.issues);

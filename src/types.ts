@@ -56,10 +56,13 @@ export type AttributeSource =
   | { field: string; split?: string; part?: "first" | "last" }
   | { value: string | string[] }
   /**
-   * From the organization plugin: the user's organizations (slugs, names or ids), or their roles:
-   * in the SP's `organization` when it has one, else "slug:role" across all organizations.
+   * From the organization plugin: the user's organizations (slugs, names or ids), or their roles.
+   * Which organizations: those in `only` (ids or slugs) when set; otherwise the SP's own
+   * `organization` when it has a rule; otherwise all of the user's (roles then as "slug:role").
+   * Users can create organizations by default and name them anything ("Administrators"), so
+   * without a rule, set `only` (review 4, R4-1).
    */
-  | { organization: "slugs" | "names" | "ids" | "roles" };
+  | { organization: "slugs" | "names" | "ids" | "roles"; only?: string[] };
 export type AttributeMap = Record<string, AttributeSource>;
 
 export interface ServiceProviderConfig {
@@ -267,8 +270,8 @@ export interface SamlIdpOptions {
   events?: import("./events").SamlIdpEventHandlers;
   /**
    * Also record those events in the `samlIdpAuditEvent` table (D-038), kept `retentionDays`
-   * (default 90) and then swept. Refusals that identify neither an SP nor a user are not stored
-   * (anyone can generate them); they still reach `events.onDenied`.
+   * (default 90) and then swept. Refusals without a signed-in user are not stored (anyone can
+   * generate them); they still reach `events.onDenied`.
    */
   auditLog?: import("./events").AuditLogOptions;
   /**

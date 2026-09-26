@@ -1,7 +1,7 @@
 // SPEC §7 security requirements + ADDENDUM-01 R1/R2/R3, on the R5 host
 // (workerd: withCloudflare + Drizzle/D1; node: node:sqlite).
 import { SAML } from "@node-saml/node-saml";
-import { inject, describe, expect, it } from "vitest";
+import { inject, describe, expect, it, vi } from "vitest";
 import { SP_ACS, SP_ENTITY_ID } from "../support/config";
 import { AUTH_BASE, createHost, createHostDatabase, type HostOptions } from "../support/host";
 import {
@@ -473,10 +473,16 @@ describe("§7 inbound request validation", () => {
   });
 
   it("stops inflating a DEFLATE bomb early", async () => {
-    const { browser } = await host();
+    // A 400 alone would pass for any bad input: check it's the inflate cap that stopped it, and
+    // quickly (review 4).
+    const details: string[] = [];
+    const { browser } = await host({ saml: { events: { onDenied: (e) => void details.push(e.detail ?? "") } } });
     const bomb = await deflateRaw(`<a>${" ".repeat(5_000_000)}</a>`);
+    const t = performance.now();
     const res = await browser.fetch(await redirectUrl("", { deflated: bomb }));
+    expect(performance.now() - t).toBeLessThan(1000);
     expect(res.status).toBe(400);
+    await vi.waitFor(() => expect(details.join(" ")).toMatch(/inflated SAMLRequest exceeds 65536 bytes/));
   });
 
   it("rejects garbage base64", async () => {

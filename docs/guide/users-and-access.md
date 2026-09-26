@@ -82,7 +82,10 @@ attributes: {
 | `{ field, split }` | Split on the separator (1 to 8 characters); pieces are trimmed, empty ones dropped. |
 | `{ field, part }` | `"first"`: the first word; `"last"`: the rest. For SPs that want first and last name. |
 | `{ value }` | A string, or a non-empty array of strings. |
-| `{ organization }` | `"slugs"`, `"names"`, `"ids"` or `"roles"` from the [organization plugin](#organizations). |
+| `{ organization, only? }` | `"slugs"`, `"names"`, `"ids"` or `"roles"` from the [organization plugin](#organizations), limited to `only` (ids or slugs) or, with a rule, to the SP's organization. |
+
+> [!IMPORTANT]
+> **Map only fields users can't set themselves.** Better Auth's `user.additionalFields` default to `input: true`, so users can change them with `/update-user`, and the SP would trust whatever they chose. For any additional field an SP relies on (a department, a cost center, a role), set `input: false`. The plugin warns at startup, or on first use for stored SPs, when a map reads a user-writable field. The admin plugin's `role` is already `input: false`.
 
 Values that are missing, null, empty or objects are left out, rather than sending `"[object Object]"`; arrays are multi-valued. A field the user doesn't have is logged once per SP and field (`attributes for SP x: the user has no field "departmnt"`), so typos show up.
 
@@ -115,18 +118,27 @@ With Better Auth's **organization plugin** installed, SPs can be limited to orga
   id: "zoom",
   entityId: "…",
   acsUrls: ["…"],
-  organization: { slug: "acme", roles: ["admin", "member"] }, // members of "acme" with one of these roles
+  organization: { id: "org_8f3…", roles: ["admin", "member"] }, // members of that organization with one of these roles
   attributes: {
     email: "email",
-    groups: { organization: "slugs" },  // every organization the user belongs to
-    roles: { organization: "roles" },   // their roles in "acme"
+    groups: { organization: "slugs" },  // this SP's organization only (it has a rule)
+    roles: { organization: "roles" },   // their roles in it
+    partners: { organization: "slugs", only: ["org_8f3…", "org_2c1…"] }, // several, by id
   },
 }
 ```
 
+> [!WARNING]
+> **Users can create organizations.** The organization plugin lets any user create one by default (`allowUserToCreateOrganization`), choosing its name and slug. So a user can make an organization called "Administrators". What protects you:
+> - **Rules by `id`**, which nobody can choose. A rule by slug can be satisfied by whoever creates that slug first, if nobody has yet.
+> - **Scoped attributes.** With a rule, organization attributes cover only the SP's organization. Without a rule, set `only` to the organizations the SP may hear about, or every organization the user created goes to the SP.
+> - Or turn off user-created organizations: `organization({ allowUserToCreateOrganization: false })`.
+>
+> The plugin warns at startup, or on first use for stored SPs, when users can create organizations and an SP relies on something they could claim.
+
 - **`organization: { slug | id, roles? }`**: only members get in, and with `roles`, only members holding at least one of them. Multi-role members (`"member,admin"`) work. Otherwise: `ACCESS_DENIED`.
 - **Fails closed:** an SP with an `organization` rule refuses everyone if the organization plugin isn't installed.
-- **Attributes:** `{ organization: "roles" }` gives the roles in the SP's organization when it has a rule, else `"slug:role"` for every membership.
+- **Attributes:** `{ organization: "slugs" | "names" | "ids" | "roles" }` covers the organizations in `only` (ids or slugs) when set; otherwise the SP's own organization when it has a rule; otherwise every membership (then roles are `"slug:role"`).
 - **Stored SPs:** it's all JSON, so SPs in the registry can use it too.
 - Memberships are loaded once per assertion, through Better Auth's adapter by the plugin's model names, so renamed tables work.
 

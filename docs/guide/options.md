@@ -166,7 +166,7 @@ A function, or a map from attribute name to a source:
 | user field | `"email"`, `"role"` | The user's own property (core or additional field). |
 | `{ field, split?, part? }` | `{ field: "teams", split: "," }`, `{ field: "name", part: "first" }` | A field split into several values, and/or its first word (`"first"`) or the rest (`"last"`). |
 | `{ value }` | `{ value: "Acme" }`, `{ value: ["a", "b"] }` | A constant. |
-| `{ organization }` | `{ organization: "slugs" }` | `"slugs"`, `"names"`, `"ids"` of the user's organizations, or `"roles"` (in the SP's `organization` if it has one, else `"slug:role"`). |
+| `{ organization, only? }` | `{ organization: "slugs", only: ["org_1"] }` | `"slugs"`, `"names"`, `"ids"` or `"roles"` of the organizations in `only` (ids or slugs); without `only`, the SP's `organization` if it has one, else all of the user's (roles as `"slug:role"`). Users can create organizations, so prefer rules by id and set `only`. |
 
 Null, empty and object values are left out; dates become ISO 8601; arrays are multi-valued. A field the user doesn't have is logged once per SP. Attribute names are 1 to 256 characters; field names match `[A-Za-z_][A-Za-z0-9_]{0,63}`. See [Attributes](users-and-access.md#attributes).
 

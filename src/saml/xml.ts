@@ -26,6 +26,11 @@ function assertUniqueExpandedAttributes(xml: string): void {
   const bindings = new Map<string, string[]>();
   const n = xml.length;
   const isSpace = (c: number) => c === 0x20 || c === 0x09 || c === 0x0a || c === 0x0d;
+  // Characters no XML name may contain but that xmldom treats as separators (NUL, VT, FF, U+0080
+  // and the like, found by review 4's parser differential, R4-L7). Refused, so the scanner and
+  // the parsers can't split a tag into different attributes.
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: matching control characters is the point
+  const NOT_IN_NAME = /[\u0000-\u001f\u007f-\u009f\s]/;
   const skip = (from: number, close: string, what: string) => {
     const j = xml.indexOf(close, from);
     if (j < 0) throw new XmlParseError(`unterminated ${what}`);
@@ -44,7 +49,7 @@ function assertUniqueExpandedAttributes(xml: string): void {
       // Start tag: name, then name="value" / name='value' pairs, then ">" or "/>".
       let k = i + 1;
       while (k < n && !isSpace(xml.charCodeAt(k)) && xml[k] !== "/" && xml[k] !== ">") k++;
-      if (k === i + 1) throw new XmlParseError("malformed start tag");
+      if (k === i + 1 || NOT_IN_NAME.test(xml.slice(i + 1, k))) throw new XmlParseError("malformed start tag");
       const attrs: [string, string][] = [];
       let selfClosing = false;
       for (;;) {
@@ -60,7 +65,7 @@ function assertUniqueExpandedAttributes(xml: string): void {
         while (k < n && !isSpace(xml.charCodeAt(k)) && xml[k] !== "=" && xml[k] !== "/" && xml[k] !== ">" && xml[k] !== "<") k++;
         const name = xml.slice(nameStart, k);
         while (k < n && isSpace(xml.charCodeAt(k))) k++;
-        if (name === "" || xml[k] !== "=") throw new XmlParseError("malformed attribute");
+        if (name === "" || NOT_IN_NAME.test(name) || xml[k] !== "=") throw new XmlParseError("malformed attribute");
         k++;
         while (k < n && isSpace(xml.charCodeAt(k))) k++;
         const quote = xml[k];
@@ -69,6 +74,8 @@ function assertUniqueExpandedAttributes(xml: string): void {
         if (close < 0) throw new XmlParseError("unterminated attribute value");
         attrs.push([name, xml.slice(k + 1, close)]);
         k = close + 1;
+        // XML requires whitespace between attributes (and allows none before ">" or "/>").
+        if (k < n && !isSpace(xml.charCodeAt(k)) && xml[k] !== ">" && xml[k] !== "/") throw new XmlParseError("no whitespace between attributes");
       }
       pos = k + 1;
       const decl = new Map<string, string>();

@@ -68,7 +68,7 @@
     "provenance": true
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "description": "Unofficial Better Auth plugin: act as a SAML 2.0 Identity Provider (SP- and IdP-initiated SSO, encrypted assertions). Runs on Cloudflare Workers and Node. Includes a CLI.",
   "author": "Mark McIntosh",

@@ -52,7 +52,7 @@ FEATURES = [
 
 ROADMAP = [
  ("v1.0", "First npm release", "Ship what is built, safely.", [
-   ("Release engineering (done)", "dist build with type declarations, Biome lint, gitleaks, publint and Are the Types Wrong, clean-project install on Node and Workers, changelog; a CI-only release workflow publishing with npm provenance and a CycloneDX SBOM."),
+   ("Release engineering (done)", "dist build with type declarations, Biome lint, gitleaks, publint and Are the Types Wrong, changelog; a CI-only release workflow publishing with npm provenance and a CycloneDX SBOM."),
    ("Supply chain and project files (done)", "Every GitHub Action pinned by SHA with least-privilege tokens; CodeQL, a blocking runtime dependency audit, dependency review, OSV-Scanner, OpenSSF Scorecard and Dependabot. SECURITY.md, CONTRIBUTING.md, issue forms, and a versioning and support policy."),
    ("Fuzzing (done)", "Property-based tests (fast-check) of the signature verifier, every inbound parser and issuance. The verifier held; issuance had five kinds of characters that produced invalid or unverifiable assertions, all fixed (D-036)."),
    ("Live SP verification", "Done: Cloudflare Access, Okta and Auth0, live, with signed requests (Redirect and POST) and encrypted assertions (D-034, D-035). Next: AWS IAM Identity Center."),
@@ -71,7 +71,7 @@ ROADMAP = [
  ]),
  ("v1.2", "Operations at scale", "For hosts with many SPs or changing SPs.", [
    ("Single Logout (done)", "SP- and IdP-initiated, front-channel, propagated to every SP in the session; PartialLogout when one fails. Best effort by nature, as Shibboleth says."),
-   ("Database-backed SP registry and API (done)", "Add, change, disable and remove SPs at runtime without a redeploy; admin-gated, audited API."),
+   ("Database-backed SP registry and API (done)", "Add, change, disable and remove SPs at runtime without a redeploy; admin-gated API, every change logged with the acting user."),
    ("SP metadata URL with refresh (done)", "SP certificate rotation picked up automatically; certificates only, optional signature pinning."),
    ("Signed AuthnRequests over HTTP-POST (done)", "Enveloped XML signatures with XSW defences, pinned to the SP's certificates; node-saml interop; each defence mutation-tested."),
  ]),
@@ -91,7 +91,7 @@ ROADMAP = [
    ("Community Plugins listing", "An entry in Better Auth's Community Plugins at v1.0."),
  ]),
  ("Not planned", "Out of scope", "Deliberately left out.", [
-   ("Artifact binding", "None of the four modern open-source IdPs supports it; no target SP needs it."),
+   ("Artifact binding", "Of the products compared, only Keycloak supports it fully (Shibboleth and SimpleSAMLphp for responses); no target SP needs it."),
    ("Outbound SCIM", "Provisioning is a separate concern from SSO; a separate plugin if ever."),
    ("Admin UI", "Better Auth hosts build their own UI on the registry API."),
  ]),

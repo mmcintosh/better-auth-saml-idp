@@ -2,7 +2,7 @@
 
 [Guide](README.md) › Schema
 
-The plugin adds up to three tables. Only the first is always needed; the others exist only when their feature is enabled, so D1 hosts with `validateSchema` never need tables they don't use.
+The plugin adds up to four tables. Only the first is always needed; the others exist only when their feature is enabled, so D1 hosts with `validateSchema` never need tables they don't use.
 
 Create them with Better Auth's CLI, like any plugin's tables:
 
@@ -11,7 +11,7 @@ npx auth migrate     # Kysely adapters: create the tables
 npx auth generate    # Drizzle/Prisma: write the schema, then run your own migration
 ```
 
-On Cloudflare D1 with Drizzle, the example has ready-made migrations: [`examples/workers-hono/migrations/`](../../examples/workers-hono/migrations/) (`0001` core, `0002` replay key, `0003` registry, `0004` Single Logout).
+On Cloudflare D1 with Drizzle, the example has ready-made migrations: [`examples/workers-hono/migrations/`](../../examples/workers-hono/migrations/) (`0001` core, `0002` replay key, `0003` registry, `0004` Single Logout, `0005` audit log).
 
 Rename tables or columns with the [`schema` option](options.md#schema).
 

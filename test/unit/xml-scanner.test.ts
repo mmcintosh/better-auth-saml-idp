@@ -102,3 +102,19 @@ describe("xml scanner: never refuses a well-formed document", () => {
     );
   });
 });
+
+describe("xml scanner: tokenises tags as XML does (R4-L7)", () => {
+  // xmldom treats these as attribute separators; the scanner used to read them as part of the
+  // next name, so p:x and q:x (one namespace) escaped the duplicate check.
+  for (const [name, sep] of [["NUL", "\u0000"], ["VT", "\u000b"], ["FF", "\u000c"], ["U+0080", "\u0080"], ["U+0085", "\u0085"], ["NBSP", " "]] as const)
+    it(`${name} between attributes is refused`, () => {
+      expect(() => parseXmlStrict(`<a xmlns:p="u" xmlns:q="u" p:x="1"${sep}q:x="2"/>`)).toThrow();
+      expect(() => parseXmlStrict(`<a${sep}xmlns:p="u"/>`)).toThrow();
+    });
+  it("attributes need whitespace between them; none is needed before > or />", () => {
+    expect(() => parseXmlStrict(`<a x="1"y="2"/>`)).toThrow(/whitespace between attributes/);
+    expect(() => parseXmlStrict(`<a x="1"/>`)).not.toThrow();
+    expect(() => parseXmlStrict(`<a x="1"></a>`)).not.toThrow();
+    expect(() => parseXmlStrict(`<a x="1"\ty='2'\n/>`)).not.toThrow();
+  });
+});

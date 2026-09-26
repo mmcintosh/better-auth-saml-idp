@@ -9,6 +9,9 @@ const BINDING_POST = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
 const MAX_METADATA_BYTES = 512 * 1024;
 const SUPPORTED_NAMEID = new Set<string>(Object.values(NAMEID_FORMAT));
 
+/** Most signing (and encryption) certificates taken from one SP's metadata. */
+export const MAX_METADATA_CERTIFICATES = 10;
+
 export class SpMetadataError extends Error {
   constructor(message: string) {
     super(message);
@@ -98,10 +101,20 @@ export async function serviceProviderFromMetadata(
   const usable = formats.filter((f) => SUPPORTED_NAMEID.has(f) && f !== NAMEID_FORMAT.unspecified);
   for (const f of formats) if (!SUPPORTED_NAMEID.has(f)) warnings.push(`ignored unsupported NameIDFormat ${f}`);
 
-  const certsFor = (use: "signing" | "encryption") =>
-    children(sp, NS_MD, "KeyDescriptor")
-      .filter((k) => !k.getAttribute("use") || k.getAttribute("use") === use)
-      .flatMap((k) => descendants(k, NS_DS, "X509Certificate").map((c) => toPem(c.textContent ?? "")));
+  // At most MAX_METADATA_CERTIFICATES of each kind: SPs publish one or two, a few during a
+  // rotation. Every signing certificate is tried on every signed request, so a metadata host
+  // must not choose that count (review 4, R4-2).
+  const certsFor = (use: "signing" | "encryption") => {
+    const all = [
+      ...new Set(
+        children(sp, NS_MD, "KeyDescriptor")
+          .filter((k) => !k.getAttribute("use") || k.getAttribute("use") === use)
+          .flatMap((k) => descendants(k, NS_DS, "X509Certificate").map((c) => toPem(c.textContent ?? ""))),
+      ),
+    ];
+    if (all.length > MAX_METADATA_CERTIFICATES) warnings.push(`${all.length} ${use} certificates published; only the first ${MAX_METADATA_CERTIFICATES} are used`);
+    return all.slice(0, MAX_METADATA_CERTIFICATES);
+  };
   const signingCerts = certsFor("signing");
 
   // Single Logout endpoint (D-028): HTTP-Redirect preferred, else HTTP-POST.

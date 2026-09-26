@@ -2,6 +2,8 @@
 import type { BetterAuthPlugin } from "better-auth";
 import { mergeSchema } from "better-auth/db";
 import { initEndpoint } from "./endpoints/init";
+import { warnUserWritableFields } from "./attributes";
+import { warnClaimableOrganizations } from "./organizations";
 import { metadataEndpoint } from "./endpoints/metadata";
 import { resumeEndpoint } from "./endpoints/resume";
 import { ssoEndpoint } from "./endpoints/sso";
@@ -37,6 +39,10 @@ export const samlIdp = (options: SamlIdpOptions) => {
     id: "saml-idp",
     init(ctx) {
       for (const w of resolved.warnings) ctx.logger.warn(`[saml-idp] ${w}`);
+      for (const sp of resolved.serviceProviders) {
+        warnClaimableOrganizations(ctx.logger, ctx.options.plugins as any, sp);
+        warnUserWritableFields(ctx.logger, ctx.options.user as any, sp);
+      }
       if (!resolved.baseURL && !ctx.options.baseURL)
         ctx.logger.warn(
           "[saml-idp] no baseURL: the IdP's SSO URL (metadata, Destination check, resume links) follows the request's Host header. Set samlIdp({ baseURL }) or Better Auth's baseURL.",

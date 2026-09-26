@@ -18,6 +18,9 @@ import { authnRequestXml, Browser, readAutoPost, redirectUrl } from "../support/
 
 const KIND = process.env.ADAPTER_DB;
 const URL_ = process.env.ADAPTER_URL ?? "";
+// CI sets ADAPTER_REQUIRED: a job whose database variables went missing must fail, not skip
+// every test and go green (review 4).
+if (process.env.ADAPTER_REQUIRED && (!KIND || !URL_)) throw new Error("ADAPTER_REQUIRED is set, but ADAPTER_DB or ADAPTER_URL is empty");
 
 interface Db {
   database: unknown;
@@ -186,6 +189,21 @@ describe.skipIf(!KIND)(`adapter matrix: ${KIND}`, { timeout: 60_000 }, () => {
     // Exact match only, whatever the database's collation does with case.
     const other = await browser.fetch(await redirectUrl(authnRequestXml({ issuer: "https://stored.test/sp", acsUrl: sp.acsUrls[0] }).xml));
     expect(await code(other)).toBe("UNKNOWN_SERVICE_PROVIDER");
+  });
+
+  it("registry update/delete act only on the exact id, whatever the collation (MySQL's is case-insensitive; R4-L8)", async () => {
+    const browser = new Browser(auth);
+    const user = await browser.signUp();
+    const c = await ctx();
+    await c.adapter.update({ model: "user", where: [{ field: "id", value: user.id }], update: { role: "admin" } });
+    const post = (path: string, body: unknown) =>
+      browser.fetch(`${AUTH_BASE}/saml2/idp/service-providers${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const sp = { id: "casey", entityId: "https://casey.test/sp", acsUrls: ["https://casey.test/acs"] };
+    expect((await post("/create", { serviceProvider: sp })).status).toBe(200);
+    expect((await post("/update", { id: "CASEY", serviceProvider: { ...sp, id: "CASEY" } })).status).toBe(404);
+    expect((await post("/delete", { id: "CASEY" })).status).toBe(404);
+    const got = (await (await browser.fetch(`${AUTH_BASE}/saml2/idp/service-providers/get?id=casey`)).json()) as any;
+    expect(got.serviceProvider).toMatchObject({ id: "casey", valid: true });
   });
 
   it("logout participants: recorded, refreshed on a second assertion, listed, and cleared by logout", async () => {

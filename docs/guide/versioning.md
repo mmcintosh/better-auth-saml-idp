@@ -46,7 +46,7 @@ The plugin declares a bounded peer range on `better-auth`, currently `>=1.7.5 <1
 | Previous major | **Security fixes for 6 months** after the next major is released. |
 | Older | Nothing. |
 
-Node: the [active and maintenance LTS lines](https://nodejs.org/en/about/previous-releases). CI tests Node 22 and 24. A Node line that reaches end of life is dropped in the next major. (Node 20 reached end of life in April 2026. `engines` still says `>=20` until 1.0 settles it.)
+Node: the [active and maintenance LTS lines](https://nodejs.org/en/about/previous-releases). CI tests Node 22 and 24, and `engines` requires 22 or later. A Node line that reaches end of life is dropped in the next major.
 
 Cloudflare Workers: the `compatibility_date` in the [example](../../examples/workers-hono/wrangler.jsonc), or later.
 

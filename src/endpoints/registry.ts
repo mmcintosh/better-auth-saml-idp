@@ -1,5 +1,5 @@
 // Registry API (D-027): manage database-stored SPs at runtime. Mounted only when
-// `registry.canManage` is configured. Every route needs an authoritative (database-checked)
+// `registry.canManage` or `registry.permissions` is configured. Every route needs an authoritative (database-checked)
 // session of a non-impersonated user that canManage() approves; mutations keep Better Auth's
 // origin check (no skipOriginCheck) and are logged with the acting user.
 import type { GenericEndpointContext } from "better-auth";
@@ -9,7 +9,7 @@ import { SAML_IDP_ERROR_CODES } from "../errors";
 import { adminAllows, type SamlServiceProviderAction } from "../access";
 import { resolveStoredServiceProvider } from "../options";
 import { isEnabled, SP_MODEL, type StoredSpRow } from "../saml/sp-directory";
-import type { PluginState } from "./issue";
+import { isBanned, type PluginState } from "./issue";
 
 const MAX_CONFIG_BYTES = 64 * 1024;
 const MAX_LIST = 1000;
@@ -32,18 +32,22 @@ async function manager(ctx: GenericEndpointContext, state: PluginState, action: 
   if (!s || !reg || (!reg.canManage && !reg.permissions)) throw fail("FORBIDDEN", "REGISTRY_NOT_ALLOWED");
   // An admin acting as another user must not manage SPs under that identity.
   if (s.session.impersonatedBy) throw fail("FORBIDDEN", "REGISTRY_NOT_ALLOWED");
+  // Decide on the user as the database has it now, as issuance does: with sessions in secondary
+  // storage, the session's copy of the user can predate a ban or a demotion (R4-L3).
+  const user = (await ctx.context.internalAdapter.findUserById(s.user.id)) as Record<string, unknown> | null;
+  if (!user || isBanned(user, new Date())) throw fail("FORBIDDEN", "REGISTRY_NOT_ALLOWED");
   // Both checks, when both are configured, must allow.
-  if (reg.permissions && !adminAllows(ctx.context.options.plugins as any, s.user, action)) throw fail("FORBIDDEN", "REGISTRY_NOT_ALLOWED");
+  if (reg.permissions && !adminAllows(ctx.context.options.plugins as any, user as any, action)) throw fail("FORBIDDEN", "REGISTRY_NOT_ALLOWED");
   if (reg.canManage) {
     let ok = false;
     try {
-      ok = (await reg.canManage({ user: s.user, session: s.session })) === true;
+      ok = (await reg.canManage({ user: user as any, session: s.session })) === true;
     } catch (e) {
       ctx.context.logger.error("[saml-idp] registry.canManage threw", e);
     }
     if (!ok) throw fail("FORBIDDEN", "REGISTRY_NOT_ALLOWED");
   }
-  return s.user as { id: string };
+  return user as { id: string };
 }
 
 function view(row: StoredSpRow, state: PluginState) {
@@ -61,8 +65,18 @@ function view(row: StoredSpRow, state: PluginState) {
     enabled: isEnabled(row.enabled),
     // Invalid rows (edited by hand, or options tightened since) are listed with their issues and
     // are not used for sign-in.
-    valid: r?.serviceProvider !== undefined && !state.directory.inCode(row.spId, row.entityId),
-    issues: r?.issues ?? ["config is not valid JSON"],
+    // The same checks the directory applies when it loads a row (R4-L8): valid means used.
+    valid:
+      r?.serviceProvider !== undefined &&
+      r.serviceProvider.id === row.spId &&
+      r.serviceProvider.entityId === row.entityId &&
+      !state.directory.inCode(row.spId, row.entityId),
+    issues:
+      r === undefined
+        ? ["config is not valid JSON"]
+        : r.serviceProvider && (r.serviceProvider.id !== row.spId || r.serviceProvider.entityId !== row.entityId)
+          ? [...r.issues, "the id/entityId columns don't match the config (edited by hand?); not used for sign-in"]
+          : r.issues,
     config,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -78,8 +92,14 @@ function validate(state: PluginState, input: unknown) {
   return { config: r.config, warnings: r.warnings };
 }
 
-const findRow = async (ctx: GenericEndpointContext, id: string) =>
-  (await adapterOf(ctx).findOne({ model: SP_MODEL, where: [{ field: "spId", value: id }] })) as StoredSpRow | null;
+/**
+ * The row whose spId is exactly `id`. A case-insensitive collation (MySQL's default) would
+ * otherwise return "abc" for "ABC", and update or delete would act on that row (R4-L8).
+ */
+const findRow = async (ctx: GenericEndpointContext, id: string) => {
+  const row = (await adapterOf(ctx).findOne({ model: SP_MODEL, where: [{ field: "spId", value: id }] })) as StoredSpRow | null;
+  return row && row.spId === id ? row : null;
+};
 
 const spBody = z.record(z.string(), z.unknown());
 const idSchema = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);

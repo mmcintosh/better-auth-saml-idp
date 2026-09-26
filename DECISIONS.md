@@ -1046,3 +1046,61 @@ Hosts need to know what their IdP did: for audit trails, for SIEM, and for answe
 - running handlers outside Better Auth's background tasks fails a test.
 
 That last mutant first survived. The test handler recorded synchronously before its first `await`, so it recorded even without a background task. The handler now finishes after a delay, so only a task the host waits on can deliver it.
+
+## D-039: Third review ("review 4"), two independent reports (2026-09-26)
+
+**How it was run.** Two independent reviews of tag `review-3-baseline` (`c338731`) from [the brief](docs/review/brief.md), each with proof tests.
+- **Report A:** six parallel adversarial passes; 18 proof assertions.
+- **Report B:** its own branch, with failing tests `r4-1`…`r4-7` that pass once fixed.
+
+**Agreement:** six of B's seven security findings are also in A, found separately. Every proof reproduced at the baseline, and all of them pass now. A's are rewritten as regression tests in `test/review4/r4-*`; B's are kept as written in `test/review4/second-*`.
+
+**Findings and fixes** (A's numbering; B's in brackets)
+- **R4-1 (High) [B R4-4]: organizations are user-claimable.** The organization plugin lets any user create an organization by default, naming it anything, and the IdP matched rules by slug and sent every membership as `slugs`/`names`/`ids` attributes. A stranger could claim a slug nobody had created, and a member could create "Administrators".
+  - Fixes:
+    - With an SP rule, organization attributes now cover only the SP's organization.
+    - `only` (ids or slugs) is an explicit allow-list.
+    - A warning names claimable configurations (rules by slug, unscoped attributes) when users can create organizations.
+    - Docs and examples use ids.
+  - Mutation-checked: each part fails a test when removed.
+- **R4-2 (Medium) [B R4-5 Low]: revoked sessions still got assertions** with the cookie cache on and sessions only in secondary storage. The issuing endpoints read the cookie cache, and the pre-signing re-read covered only the database.
+  - Fixes:
+    - `getAuthoritativeSessionFromCtx` on `sso`, `resume` and `init`.
+    - The re-read goes to the database whenever it holds sessions (KV is eventually consistent, so the database stays authoritative), and otherwise to secondary storage.
+  - A test that revokes between the read and the signing pins the re-read on its own.
+  - The first version of this fix read KV even when the database held sessions, and two older tests (stale-KV revocation) caught it.
+- **R4-3 (Medium) [B R4-3]: the audit table grew from unauthenticated requests** that named a public SP. D-038's filter only dropped denials naming neither SP nor user. Fix: only denials with a signed-in user are stored.
+- **R4-4 (Medium) [B R4-2]: signed-POST verification cost ~200 ms per SP certificate** on a schema-valid 64 KiB message, and a metadata URL chose how many certificates there were. Fixes:
+  - protocol messages are capped at 200 elements and 1000 attributes right after parsing;
+  - the certificate is picked by checking the SignatureValue over SignedInfo, canonicalised once with xml-crypto's own code, before the one full verification;
+  - at most 10 certificates of each kind are taken from metadata.
+- **Low:**
+  - L1 [B R4-6]: signed AuthnRequests must carry `Destination`, as SLO required.
+  - L2 [B R4-7]: the Subject NameID is capped at 1024 characters and its Format at 256.
+  - L3: the registry re-reads the user and refuses banned users.
+  - L4: sign-out everywhere confirms same-site drive-bys. IdP-initiated sign-in keeps same-site navigations, by design.
+  - L5: `prompt=login` goes to the login page under ForceAuthn.
+  - L6: `logSafe` strips C1 controls, bidi overrides and invisible formatting characters.
+  - L7 [B R4-1]: the pre-scan tokenises tags as XML does: whitespace between attributes, and no control or Unicode space characters in names.
+  - L8: registry lookups are exact whatever the collation, and `view()` reports valid only for rows sign-in uses.
+  - L9: a warning when attribute maps read user-writable additional fields.
+  - L10: releases only from commits on `main`, in a gated `npm` environment; container images pinned by digest.
+- **Tests that couldn't fail now can:** the organization guard, the DEFLATE cap, SLO partial logout, and the adapter matrix, which now fails in CI when its database variables are missing.
+- **Fuzzing** now also covers the LogoutRequest, LogoutResponse and SP-metadata parsers, as the README claimed.
+- **Docs corrected:**
+  - Node 22+ (`engines` too);
+  - "mutation-checked when written", not an ongoing CI claim;
+  - "logged" instead of "audited" for registry changes;
+  - release tense;
+  - the adapter matrix's real scope;
+  - expired certificates warn rather than fail;
+  - four tables, migration `0005`;
+  - the npm name isn't published yet (don't `npx` it);
+  - the Artifact binding wording;
+  - samlify decryption is Node-only.
+
+**Open, for the maintainer:**
+- the API decisions before 1.0 (client namespace, `export type *`, `options.directory`, booleans vs enums, registry JSON shapes, `baseURL`);
+- registering the npm name;
+- a reproducible-build check for `wasm/xsd.wasm`;
+- repository settings: private vulnerability reporting, reviewers on the `npm` environment, branch protection.

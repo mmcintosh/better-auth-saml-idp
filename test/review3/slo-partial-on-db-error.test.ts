@@ -57,9 +57,10 @@ describe("Single Logout: participant read failure", () => {
     const res = await browser.fetch(redirectBindingUrl(SLO, "SAMLRequest", logoutRequestXml({ issuer: A.entityId, nameId: a.nameId, sessionIndex: a.sessionIndex }), "rs", spSigning(keys.sp.privateKey)));
     expect(res.status).toBe(302);
     const loc = new URL(res.headers.get("location")!);
-    if (`${loc.origin}${loc.pathname}` === B.slo) return; // propagation happened after all: fine
-    // Otherwise the IdP went straight to answering A: that answer must say PartialLogout,
-    // because B was never told.
+    // The participants couldn't be read, so nobody else can be told: the IdP answers A at once,
+    // and that answer must say PartialLogout. (No escape hatch for "propagated after all": the
+    // read failure is deterministic, and the hatch would let this test pass without checking
+    // anything; review 4.)
     expect(`${loc.origin}${loc.pathname}`).toBe(A.slo);
     const raw = parseRedirectQuery(loc.search.slice(1), "SAMLResponse");
     const xml = await decodeAuthnRequest(raw);

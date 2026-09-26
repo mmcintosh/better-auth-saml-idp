@@ -12,6 +12,10 @@ updates:
     ignore:
       - dependency-name: better-auth
       - dependency-name: "@better-auth/*"
+  # e2e container images, pinned by digest (R4-L10).
+  - package-ecosystem: docker-compose
+    directory: /e2e
+    schedule: { interval: weekly }
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }

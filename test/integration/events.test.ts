@@ -122,24 +122,28 @@ describe("events", () => {
 });
 
 describe("audit log", () => {
-  it("records issued assertions, denials with an SP or user, and logouts; not anonymous protocol noise", async () => {
+  it("records issued assertions, denials of signed-in users, and logouts; not anonymous denials", async () => {
     const { auth, rows } = await host({ saml: { auditLog: { enabled: true, retentionDays: 30 } } });
+    const anonymous = new Browser(auth);
+    await anonymous.fetch(await redirectUrl(authnRequestXml({ issuer: "https://nobody.test/sp" }).xml)); // no SP, no user
+    for (let i = 0; i < 5; i++) await anonymous.fetch(await redirectUrl(authnRequestXml({ isPassive: true }).xml)); // names the SP, no user (R4-3)
+    const unverified = new Browser(auth);
+    const refused = await unverified.signUp(undefined, { verified: false });
+    await unverified.fetch(await redirectUrl(authnRequestXml().xml)); // EMAIL_NOT_VERIFIED: a signed-in user, stored
     const browser = new Browser(auth);
-    await browser.fetch(await redirectUrl(authnRequestXml({ issuer: "https://nobody.test/sp" }).xml)); // not stored
-    await browser.fetch(await redirectUrl(authnRequestXml({ isPassive: true }).xml)); // stored: names the SP
     const user = await browser.signUp();
     await readAutoPost(await browser.fetch(await redirectUrl(authnRequestXml().xml)));
     await browser.fetch(`${AUTH_BASE}/saml2/idp/logout?returnTo=/`);
-    const mine = async () => (await rows()).filter((r) => r.userId === user.id || (r.spId === "test-sp" && r.code === "SAML_STATUS"));
+    const mine = async () => (await rows()).filter((r) => r.userId === user.id || r.userId === refused.id);
     await vi.waitFor(async () => expect((await mine()).map((r) => r.type)).toEqual(["denied", "assertion.issued", "logout"]));
-    const [passive, issued, logout] = await mine();
-    expect(passive).toMatchObject({ code: "SAML_STATUS", spId: "test-sp" });
+    const [denied, issued, logout] = await mine();
+    expect(denied).toMatchObject({ code: "EMAIL_NOT_VERIFIED", spId: "test-sp", userId: refused.id });
     expect(issued).toMatchObject({ spId: "test-sp", userId: user.id, code: null });
     expect(issued!.ipAddress).toMatch(/^10\./);
     expect(JSON.parse(issued!.details)).toMatchObject({ nameId: user.email, attributes: ["mail"], initiatedBy: "sp" });
     expect(logout).toMatchObject({ userId: user.id });
-    // The unknown-SP request named neither an SP nor a user: never stored.
-    expect((await rows()).filter((r) => r.code === "UNKNOWN_SERVICE_PROVIDER" && r.spId === null && r.userId === null)).toEqual([]);
+    // Denials without a user were never stored, whether or not they named an SP.
+    expect((await rows()).filter((r) => r.type === "denied" && r.userId === null)).toEqual([]);
     const days = (+new Date(issued!.expiresAt) - +new Date(issued!.at)) / 86_400_000;
     expect(Math.round(days)).toBe(30);
   });

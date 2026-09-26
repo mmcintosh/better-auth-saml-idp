@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "better-auth";
-import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
+import { createAuthEndpoint, getAuthoritativeSessionFromCtx } from "better-auth/api";
 import * as z from "zod";
 import { idpBaseURL, SSO_PATH } from "../saml/idp";
 import {
@@ -42,10 +42,14 @@ const params = z.object({
 });
 
 /** Where the browser goes to sign in, carrying the resume URL as `callbackURL`. */
-export function loginRedirectUrl(ctx: GenericEndpointContext, state: PluginState, rid: string): string {
+export function loginRedirectUrl(ctx: GenericEndpointContext, state: PluginState, rid: string, opts: { reauthenticate?: boolean } = {}): string {
   const base = idpBaseURL(state.options, ctx.context.baseURL);
   const login = new URL(state.options.loginPage, new URL(base).origin);
   login.searchParams.set("callbackURL", `${base}${RESUME_PATH}?rid=${rid}`);
+  // ForceAuthn: the page must ask for credentials even if the user is signed in, or the resume
+  // step refuses the old session with REAUTHENTICATION_REQUIRED. `prompt=login`, as in OpenID
+  // Connect, so the host's page can tell (R4-L5).
+  if (opts.reauthenticate) login.searchParams.set("prompt", "login");
   return login.toString();
 }
 
@@ -68,7 +72,8 @@ export async function bindingValue(ctx: GenericEndpointContext, create: boolean)
 
 /** Session check, IsPassive, or park the request and send the user to sign in. */
 async function proceed(ctx: GenericEndpointContext, state: PluginState, sp: ResolvedServiceProvider, req: ValidatedRequest) {
-  const session = await getSessionFromCtx(ctx);
+  // The session store, not the cookie cache: a revoked session must not get an assertion (R4-2).
+  const session = await getAuthoritativeSessionFromCtx(ctx);
   if (session && !req.forceAuthn) return issueResponse(ctx, state, sp, session as any, req);
   if (req.isPassive)
     return samlError(ctx, state, req, { code: "Responder", subCode: "NoPassive", message: "The user is not signed in at the identity provider" });
@@ -86,7 +91,7 @@ export async function parkForLogin(ctx: GenericEndpointContext, state: PluginSta
     { ...req, bindingHash: await sha256b64url(binding) },
     state.options.pendingRequestTtlSeconds,
   );
-  throw ctx.redirect(loginRedirectUrl(ctx, state, rid));
+  throw ctx.redirect(loginRedirectUrl(ctx, state, rid, { reauthenticate: req.forceAuthn }));
 }
 
 export const ssoEndpoint = (state: PluginState) =>
@@ -136,7 +141,10 @@ export const ssoEndpoint = (state: PluginState) =>
         sp = await state.directory.byEntityId(ctx.context.adapter as any, info.issuer, lookupLog(ctx));
         if (!sp) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", `issuer not registered (${info.issuer.length} chars)`);
         sp = await prepareSp(ctx, state, sp); // the SP's signing certificates may come from metadata
-        checkRequestSignature(raw, sp, { allowInsecureSha1: options.signing.allowInsecureSha1 }, xml);
+        const signed = checkRequestSignature(raw, sp, { allowInsecureSha1: options.signing.allowInsecureSha1 }, xml);
+        // A signed request must say where it was meant to go, or it can be replayed to another
+        // endpoint (Bindings §3.4.5.2 / §3.5.5.2; SLO already required it). R4-L1.
+        if (signed && info.destination === undefined) throw new SamlRequestError("INVALID_SAML_REQUEST", "a signed AuthnRequest must carry Destination");
         const acsUrl = resolveAcsUrl(sp, info.acsUrl);
         if (!acsUrl) return fail(ctx, state, "ACS_URL_NOT_ALLOWED", `SP ${sp.id}`, { spId: sp.id });
         req = {

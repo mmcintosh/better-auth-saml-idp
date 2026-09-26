@@ -8,6 +8,21 @@ The first npm release (1.0.0) waits for `better-auth-cloudflare` 0.4, which Work
 
 ### Security
 
+- **Third review (D-039), two independent reports:**
+  - organization attributes scoped to the SP's organization by default, with an `only` allow-list and a warning for claimable configurations;
+  - authoritative session reads before issuing;
+  - the audit log stores only denials of signed-in users;
+  - message size caps, and certificate selection before full verification;
+  - at most 10 certificates from metadata;
+  - signed requests need `Destination`;
+  - the Subject is bounded;
+  - the registry re-reads the user and requires an exact id;
+  - same-site confirmation for sign-out everywhere;
+  - `prompt=login` under ForceAuthn;
+  - safer log text;
+  - stricter XML tokenisation;
+  - a warning for user-writable mapped fields;
+  - gated, main-only releases.
 - **Hardening (D-037):** the pre-parse attribute scan in `parseXmlStrict` could take quadratic time on unterminated markup: 2.5 s for 64 KiB. It is now linear, and element nesting is capped at 100. This was not reachable in the default configuration, because libxml2 schema validation rejects such input first. It protects hosts that replace `schemaValidator`, and the CLI.
 
 ### Added

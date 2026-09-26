@@ -10,6 +10,29 @@ const BINDING_POST = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
 
 /** Maximum decoded AuthnRequest size. Real requests are well under 8 KiB. */
 export const MAX_REQUEST_BYTES = 64 * 1024;
+
+/**
+ * Most elements and attributes (namespace declarations included) an inbound protocol message may
+ * have. A signed AuthnRequest or LogoutRequest has about 15 elements. Without a cap, a
+ * schema-valid 64 KiB message made signature verification cost ~200 ms per SP certificate
+ * (xml-crypto re-parses, looks up IDs and canonicalises for each one; review 4, R4-4).
+ */
+export const MAX_MESSAGE_ELEMENTS = 200;
+export const MAX_MESSAGE_ATTRIBUTES = 1000;
+
+/** Refuse a parsed protocol message with more elements or attributes than any real one has. */
+export function checkMessageShape(doc: { documentElement: unknown }): void {
+  let elements = 0;
+  let attributes = 0;
+  const stack: any[] = [doc.documentElement];
+  while (stack.length) {
+    const el = stack.pop();
+    if (++elements > MAX_MESSAGE_ELEMENTS) throw invalid(`more than ${MAX_MESSAGE_ELEMENTS} elements`);
+    attributes += el.attributes?.length ?? 0;
+    if (attributes > MAX_MESSAGE_ATTRIBUTES) throw invalid(`more than ${MAX_MESSAGE_ATTRIBUTES} attributes`);
+    for (let c = el.firstChild; c; c = c.nextSibling) if (c.nodeType === 1) stack.push(c);
+  }
+}
 /** How old an AuthnRequest's IssueInstant may be (plus clock skew). */
 export const REQUEST_MAX_AGE_SECONDS = 300;
 
@@ -28,8 +51,10 @@ export const invalid = (detail: string) => new SamlRequestError("INVALID_SAML_RE
 
 /** Attacker-controlled text in debug logs: bounded length, no control characters. */
 export function logSafe(s: string, max = 120): string {
+  // C0 and C1 controls, and the Unicode bidi and invisible formatting characters that can make a
+  // log line or a SIEM view read differently from what it contains (R4-L6).
   // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping control characters is the point
-  const clean = s.replace(/[\u0000-\u001f\u007f]/g, "?");
+  const clean = s.replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g, "?");
   return clean.length > max ? `${clean.slice(0, max)}…` : clean;
 }
 
@@ -239,6 +264,7 @@ export async function parseAuthnRequest(
   } catch (e) {
     throw invalid(`not well-formed: ${logSafe((e as Error).message)}`);
   }
+  checkMessageShape(doc);
   const root = doc.documentElement;
   if (!root) throw invalid("no root element");
   if (root.namespaceURI !== NS_PROTOCOL || root.localName !== "AuthnRequest") throw invalid("root element is not samlp:AuthnRequest");
@@ -289,7 +315,13 @@ export async function parseAuthnRequest(
     if (child(subjectEl, NS_ASSERTION, "BaseID").length || child(subjectEl, NS_ASSERTION, "EncryptedID").length)
       throw invalid("Subject BaseID/EncryptedID is not supported");
     const nameIdEl = child(subjectEl, NS_ASSERTION, "NameID")[0];
-    if (nameIdEl) subject = { nameId: (nameIdEl.textContent ?? "").trim(), format: nameIdEl.getAttribute("Format")?.trim() || undefined };
+    if (nameIdEl) {
+      // Bounded like every other stored value: the Subject lands in the pending row (R4-L2).
+      const nameId = (nameIdEl.textContent ?? "").trim();
+      const format = nameIdEl.getAttribute("Format")?.trim() || undefined;
+      if (nameId.length > 1024 || (format?.length ?? 0) > 256) throw invalid("Subject NameID or Format too long");
+      subject = { nameId, format };
+    }
   }
 
   let requestedAuthnContext: RequestedAuthnContext | undefined;

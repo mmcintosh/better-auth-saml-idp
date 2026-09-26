@@ -79,10 +79,11 @@ Releases come only from CI ([release.yml](.github/workflows/release.yml)), so ev
 One-time setup:
 
 1. The first publish needs an npm automation token as the repository secret `NPM_TOKEN`. `publishConfig.provenance` stops local `npm publish`: publishing is CI-only.
-2. After that, configure **trusted publishing** on npmjs.com (package settings → Trusted publisher → GitHub Actions, workflow `release.yml`), then delete the token.
+2. After that, configure **trusted publishing** on npmjs.com (package settings → Trusted publisher → GitHub Actions, workflow `release.yml`, environment `npm`), then delete the token.
+3. In GitHub, **Settings → Environments → `npm`**: add yourself as a required reviewer, so every publish waits for an approval.
 
 Each release:
 
 1. Move `[Unreleased]` in CHANGELOG.md to `## [X.Y.Z] - YYYY-MM-DD`, set `version` in package.json (and remove `"private": true` for the first release), and commit.
 2. Optionally, run **Actions → Release → Run workflow** for a dry run: it tests, packs, and builds the SBOM without publishing.
-3. `git tag vX.Y.Z && git push origin vX.Y.Z`. The workflow checks that the tag matches package.json, publishes with provenance, and creates the GitHub release with the tarball and its CycloneDX SBOM.
+3. `git tag vX.Y.Z && git push origin vX.Y.Z`. The workflow checks that the tag matches package.json and that its commit is on `main`, tests and packs. After your approval in the `npm` environment, it publishes the tested tarball with provenance and creates the GitHub release with its CycloneDX SBOM.

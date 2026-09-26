@@ -25,7 +25,15 @@ function resolveSource(source: AttributeSource, user: SamlIdpUser, context: Attr
   if (typeof source === "string") return resolveSource({ field: source }, user, context, onMissing);
   if ("value" in source) return Array.isArray(source.value) ? [...source.value] : source.value;
   if ("organization" in source) {
-    const orgs = context.organizations;
+    const only = source.only;
+    // Scope: the `only` allow-list; else the SP's own organization when it has a rule (review 4:
+    // otherwise a member could create "Administrators" and send it); else every membership.
+    const orgs = only
+      ? context.organizations.filter((o) => only.includes(o.id) || only.includes(o.slug))
+      : context.organization
+        ? [context.organization]
+        : context.organizations;
+    const inScope = context.organization && (!only || orgs.includes(context.organization)) ? context.organization : undefined;
     switch (source.organization) {
       case "slugs":
         return nonEmpty(orgs.map((o) => o.slug));
@@ -35,7 +43,8 @@ function resolveSource(source: AttributeSource, user: SamlIdpUser, context: Attr
         return nonEmpty(orgs.map((o) => o.id));
       case "roles":
         // In the SP's organization when it has one; otherwise qualified by organization.
-        return context.organization ? nonEmpty(context.organization.roles) : nonEmpty(orgs.flatMap((o) => o.roles.map((r) => `${o.slug}:${r}`)));
+        if (context.organization) return inScope ? nonEmpty(inScope.roles) : undefined;
+        return nonEmpty(orgs.flatMap((o) => o.roles.map((r) => `${o.slug}:${r}`)));
     }
   }
   if (!Object.hasOwn(user, source.field)) {
@@ -54,6 +63,37 @@ function resolveSource(source: AttributeSource, user: SamlIdpUser, context: Attr
 }
 
 const NO_ORGS: AttributeContext = { organizations: [], organization: undefined };
+
+/**
+ * Mapped user fields that the user can set themselves (R4-L9): Better Auth's `additionalFields`
+ * default to `input: true`, so `/update-user` accepts them and the SP would receive whatever the
+ * user chose (a "department" or "role" the SP trusts). Core fields and `input: false` are fine.
+ */
+export function userWritableMappedFields(map: AttributeMap | undefined, additionalFields: Record<string, { input?: boolean; [key: string]: unknown }> | undefined): string[] {
+  const out = new Set<string>();
+  for (const source of Object.values(map ?? {})) {
+    const field = typeof source === "string" ? source : "field" in source ? source.field : undefined;
+    if (field !== undefined && Object.hasOwn(additionalFields ?? {}, field) && additionalFields?.[field]?.input !== false) out.add(field);
+  }
+  return [...out];
+}
+
+const warnedWritable = new Set<string>();
+
+/** Warn once per SP about user-writable mapped fields; at startup for code SPs, first use for stored ones. */
+export function warnUserWritableFields(
+  logger: { warn(message: string): void },
+  userOptions: { additionalFields?: Record<string, { input?: boolean; [key: string]: unknown }> } | undefined,
+  sp: { id: string; attributeMap?: AttributeMap },
+): void {
+  if (warnedWritable.has(sp.id)) return;
+  const fields = userWritableMappedFields(sp.attributeMap, userOptions?.additionalFields);
+  if (fields.length === 0) return;
+  warnedWritable.add(sp.id);
+  logger.warn(
+    `[saml-idp] SP ${sp.id}: attributes map user fields the user can change themselves (${fields.join(", ")}): set input: false on them in user.additionalFields if the SP trusts them.`,
+  );
+}
 
 /** Does this map read organization data (so issuance must load memberships)? */
 export const usesOrganizations = (map: AttributeMap | undefined) => Object.values(map ?? {}).some((s) => typeof s === "object" && "organization" in s);

@@ -78,7 +78,7 @@ Encrypt the assertion so only the SP can read it (the Response itself stays sign
 
 - **Order:** sign the assertion, encrypt that signed assertion into `<saml:EncryptedAssertion>`, then sign the Response. The SP decrypts, then verifies the assertion's signature.
 - **Fresh keys:** a new AES key and IV for every assertion. The key is wrapped with RSA-OAEP for the SP's certificate. RSA PKCS#1 v1.5 isn't offered.
-- **Interop:** decrypted by node-saml and samlify, and verified live with **Cloudflare Access**. `rsa-oaep-sha256` (`xmlenc11#rsa-oaep`) is available, but node-saml and samlify can't decrypt it.
+- **Interop:** decrypted by node-saml (Node and Workers) and samlify (Node), and verified live with **Cloudflare Access**. `rsa-oaep-sha256` (`xmlenc11#rsa-oaep`) is available, but node-saml and samlify can't decrypt it.
 - **Key rotation:** the SP's encryption certificate can come from its [metadata URL](service-providers.md#keeping-sp-certificates-current).
 - **Where the SP's certificate comes from:** usually its metadata (`use="encryption"`); `sp-from-metadata` returns it. Cloudflare Access only provides it through its API; see the [Cloudflare guide](../sp-cloudflare-access.md#5-encrypt-assertions-optional).
 

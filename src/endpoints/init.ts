@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "better-auth";
-import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
+import { createAuthEndpoint, getAuthoritativeSessionFromCtx } from "better-auth/api";
 import * as z from "zod";
 import { idpBaseURL } from "../saml/idp";
 import { confirmPage } from "../saml/post-form";
@@ -24,14 +24,19 @@ export function idpInitiatedRelayState(sp: ResolvedServiceProvider, requested: s
 }
 
 /**
- * Login-CSRF mitigation: a cross-site navigation that the user did not trigger (no
+ * Login- and logout-CSRF mitigation: a cross-site navigation that the user did not trigger (no
  * `Sec-Fetch-User: ?1`) gets a confirmation page instead of an assertion. Clicked links from a
  * portal, bookmarks and typed URLs pass. Browsers without Fetch Metadata send neither header
  * and pass, so this narrows the attack, it does not close it (docs/security.md).
  */
-export function isDriveByCrossSite(ctx: GenericEndpointContext): boolean {
+export function isDriveByCrossSite(ctx: GenericEndpointContext, opts: { sameSiteToo?: boolean } = {}): boolean {
   const headers = ctx.request?.headers ?? ctx.headers;
-  return headers?.get("sec-fetch-site") === "cross-site" && headers.get("sec-fetch-user") !== "?1";
+  // `sameSiteToo` (sign-out everywhere, R4-L4): a sibling subdomain, such as another app or user
+  // content on one, must not end every session without a click. IdP-initiated sign-in keeps
+  // same-site navigations: host apps redirect there, and the worst a drive-by can do is sign the
+  // user in as themselves.
+  const site = headers?.get("sec-fetch-site");
+  return (site === "cross-site" || (opts.sameSiteToo === true && site === "same-site")) && headers?.get("sec-fetch-user") !== "?1";
 }
 
 export const initEndpoint = (state: PluginState) =>
@@ -81,7 +86,8 @@ export const initEndpoint = (state: PluginState) =>
         subject: undefined,
         createdAt: Date.now(),
       };
-      const session = await getSessionFromCtx(ctx);
+      // The session store, not the cookie cache: a revoked session must not get an assertion (R4-2).
+      const session = await getAuthoritativeSessionFromCtx(ctx);
       if (session) return issueResponse(ctx, state, sp, session as any, req);
       return parkForLogin(ctx, state, req);
     },

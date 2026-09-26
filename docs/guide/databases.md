@@ -6,7 +6,7 @@ The plugin stores everything through Better Auth's database adapter, so it runs 
 
 ## What CI proves
 
-Every database-dependent behaviour runs against a real server in CI (`test/adapters`):
+The database-dependent behaviours run against a real server in CI (`test/adapters`); the full suite runs on SQLite (Node) and D1 (workerd):
 - a full sign-in;
 - replay protection under 10 concurrent identical requests, and the unique key enforced by the database itself (on MongoDB, from the very first insert);
 - single-use resume links under concurrent use;

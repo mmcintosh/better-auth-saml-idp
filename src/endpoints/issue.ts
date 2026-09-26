@@ -1,13 +1,15 @@
 import { createHmac } from "node:crypto";
 import type { GenericEndpointContext } from "better-auth";
+import { isStateful } from "better-auth/api";
 import { ERROR_STATUS, SAML_IDP_ERROR_CODES, type SamlIdpErrorCode } from "../errors";
+import { warnUserWritableFields } from "../attributes";
 import { emit } from "../events";
 import { autoPostResponse, errorPage } from "../saml/post-form";
 import { logSafe, type SamlStatus } from "../saml/request";
 import { buildSignedErrorResponse, buildSignedResponse, hasNonXmlChars, newSamlId } from "../saml/response";
 import type { SpMetadataCache } from "../saml/sp-metadata-refresh";
 import type { SpDirectory } from "../saml/sp-directory";
-import { hasOrganizationPlugin, loadMemberships, matchOrganization } from "../organizations";
+import { hasOrganizationPlugin, loadMemberships, matchOrganization, warnClaimableOrganizations } from "../organizations";
 import { recordParticipant, sessionIndexOf } from "../storage/participants";
 import { base64url, type ValidatedRequest } from "../storage/pending";
 import { NAMEID_FORMAT, type OrganizationMembership, type ResolvedSamlIdpOptions, type ResolvedServiceProvider, type SamlIdpUser } from "../types";
@@ -118,17 +120,24 @@ async function eligiblePrincipal(
   if (!user) return { code: "ACCOUNT_INACTIVE", detail: "user no longer exists" };
   if (isBanned(user, now)) return { code: "ACCOUNT_INACTIVE", detail: "user is banned" };
 
+  // Re-read the session from its authoritative store right before signing:
+  // - the database whenever it holds sessions, even with secondary storage in front: KV is
+  //   eventually consistent, so a revocation elsewhere may not have reached this location's copy;
+  // - otherwise secondary storage, the only record (R4-2: this case used to be skipped).
+  // Stateless hosts have no server-side record; their signed cookie is the session.
   const opts = ctx.context.options as { secondaryStorage?: unknown; session?: { storeSessionInDatabase?: boolean } };
   const sessionsInDatabase = !opts.secondaryStorage || opts.session?.storeSessionInDatabase === true;
   let impersonatedBy = session.session.impersonatedBy;
+  let current: { expiresAt: Date | string; impersonatedBy?: unknown } | null | undefined;
   if (sessionsInDatabase) {
-    const row = (await ctx.context.adapter.findOne({
-      model: "session",
-      where: [{ field: "token", value: session.session.token }],
-    })) as { expiresAt: Date | string; impersonatedBy?: unknown } | null;
-    if (!row) return { code: "ACCOUNT_INACTIVE", detail: "session no longer exists" };
-    if (new Date(row.expiresAt).getTime() <= now.getTime()) return { code: "ACCOUNT_INACTIVE", detail: "session expired" };
-    impersonatedBy = row.impersonatedBy;
+    current = (await ctx.context.adapter.findOne({ model: "session", where: [{ field: "token", value: session.session.token }] })) as typeof current;
+  } else if (isStateful(ctx)) {
+    current = ((await ctx.context.internalAdapter.findSession(session.session.token)) as { session: NonNullable<typeof current> } | null)?.session ?? null;
+  }
+  if (current !== undefined) {
+    if (!current) return { code: "ACCOUNT_INACTIVE", detail: "session no longer exists" };
+    if (new Date(current.expiresAt).getTime() <= now.getTime()) return { code: "ACCOUNT_INACTIVE", detail: "session expired" };
+    impersonatedBy = current.impersonatedBy;
   }
 
   const policy = state.options.accountPolicy;
@@ -169,6 +178,8 @@ export async function issueResponse(
   // Organization plugin (D-031): memberships for the SP's organization rule, attributes and
   // authorize(). An SP that requires an organization fails closed without the plugin.
   const orgPlugin = hasOrganizationPlugin(ctx.context.options.plugins as { id: string }[] | undefined);
+  if (orgPlugin) warnClaimableOrganizations(ctx.context.logger, ctx.context.options.plugins as any, sp);
+  warnUserWritableFields(ctx.context.logger, ctx.context.options.user as any, sp);
   if (sp.organization && !orgPlugin) return fail(ctx, state, "ACCESS_DENIED", `SP ${sp.id} requires an organization, but the organization plugin isn't installed`, who);
   let organizations: OrganizationMembership[] = [];
   if (orgPlugin) {

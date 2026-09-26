@@ -102,9 +102,10 @@ function clientIp(ctx: GenericEndpointContext): string | undefined {
 export function emit(ctx: GenericEndpointContext, options: Emitter, event: Omit<AssertionIssuedEvent, keyof EventBase> | Omit<DeniedEvent, keyof EventBase> | Omit<LogoutEvent, keyof EventBase>): void {
   const handler =
     event.type === "assertion.issued" ? options.events?.onAssertionIssued : event.type === "denied" ? options.events?.onDenied : options.events?.onLogout;
-  // Unauthenticated denials (no SP identified, no user) go to the handler but not the table:
-  // anyone can generate them, and the table shouldn't grow at an attacker's pace.
-  const audit = options.auditLog && !(event.type === "denied" && !event.spId && !event.userId);
+  // Denials without a signed-in user go to the handler but not the table: anyone can generate
+  // them, naming any SP (its entity ID is public), and the table mustn't grow at an attacker's
+  // pace (R4-3).
+  const audit = options.auditLog && !(event.type === "denied" && !event.userId);
   if (!handler && !audit) return;
   const userAgent = (ctx.request?.headers ?? ctx.headers)?.get("user-agent");
   const full = { ...event, at: new Date(), ipAddress: clientIp(ctx), userAgent: userAgent ? logSafe(userAgent, 300) : undefined } as SamlIdpEvent;
