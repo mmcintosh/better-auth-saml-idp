@@ -15,7 +15,7 @@ import { samlIdp } from "better-auth-saml-idp";
 
 samlIdp({
   entityId: "https://a.example.com/api/auth/saml2/idp",
-  baseURL: "https://a.example.com/api/auth",
+  baseURL: "https://a.example.com", // same value as Better Auth's baseURL
   loginPage: "/sign-in",
   signing: { privateKey: env.SAML_IDP_PRIVATE_KEY, certificate: env.SAML_IDP_CERT },
   serviceProviders: [
@@ -75,9 +75,34 @@ A single Better Auth app can use both plugins. Users sign in with their company'
 Okta ──SAML──> your app (sso plugin = SP)  ──SAML──> Zoom, HubSpot (saml-idp plugin = IdP)
 ```
 
-This works because the IdP plugin only needs a Better Auth session. However the user signed in (password, social, or SSO through `@better-auth/sso`), the [sign-in page contract](getting-started.md#5-return-users-from-your-sign-in-page) is the same: send the browser to `callbackURL` afterwards. With `@better-auth/sso`, pass that `callbackURL` to `signIn.sso`.
+This works because the IdP plugin only needs a Better Auth session. However the user signed in (password, social, or SSO through `@better-auth/sso`), the [sign-in page contract](getting-started.md#5-return-users-from-your-sign-in-page) is the same: send the browser to `callbackURL` afterwards. With `@better-auth/sso`, pass that `callbackURL` to `signIn.sso`:
 
-Keep in mind:
-- **Email verification:** the [account policy](users-and-access.md#account-policy) requires verified emails. Users created by `@better-auth/sso` have whatever `emailVerified` your SSO setup gives them. Make sure SSO-provisioned users are verified if your upstream IdP guarantees their addresses.
+```ts
+// On your login page, when the user picks "Sign in with your company":
+const callbackURL = new URLSearchParams(location.search).get("callbackURL") ?? "/";
+await authClient.signIn.sso({ providerId: "okta-acme", callbackURL });
+```
+
+Verified end to end in `test/interop/broker.test.ts`, on Node and workerd: an upstream SAML IdP → `@better-auth/sso` in the broker → this plugin in the same broker → a node-saml SP, with strict validation.
+
+**Email verification is the one thing to set up.** `@better-auth/sso` creates users with `emailVerified: false`. The [account policy](users-and-access.md#account-policy) requires verified emails, so by default the broker refuses to vouch for them (`EMAIL_NOT_VERIFIED`). That's the safe default: the broker shouldn't vouch for an address nobody checked. Mark users verified only for upstream IdPs you trust to assert real addresses, with `@better-auth/sso`'s `provisionUser`:
+
+```ts
+const trusted = new Set(["okta-acme"]); // upstream IdPs that only assert verified addresses
+sso({
+  provisionUser: async ({ user, provider }) => {
+    if (!trusted.has(provider.providerId)) return;
+    await (await auth.$context).internalAdapter.updateUser(user.id, { emailVerified: true });
+  },
+  // provisionUserOnEveryLogin: true, // to re-apply it for users created before this was set
+  // …
+});
+```
+
+Avoid the alternatives:
+- `@better-auth/sso`'s `trustEmailVerified` is deprecated, and governs account linking.
+- `accountPolicy: { requireEmailVerified: false }` stops checking *every* user, including password sign-ups.
+
+Also keep in mind:
 - **What the assertion claims:** `authnContextClassRef` should describe how users actually sign in. With an upstream IdP, that's what the upstream IdP guarantees.
 - **Organizations:** `@better-auth/sso`'s organization provisioning puts users into organizations, and this plugin's [`organization` rule](users-and-access.md#organizations) can then gate SPs on that membership. That's a clean way to give each customer's users access to only their tools.

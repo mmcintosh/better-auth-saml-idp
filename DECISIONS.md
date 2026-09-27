@@ -1347,3 +1347,22 @@ From the session-end review's section 5, to fit conexxus-auth's policy gate (`ca
   6. parking without `forceAuthn`;
   7. truthy values allowed.
 
+## D-045: Identity broker verified: `@better-auth/sso` upstream, this plugin downstream (2026-09-27)
+
+One Better Auth instance running both plugins, tested end to end in `test/interop/broker.test.ts` (Node and workerd):
+- the upstream IdP is this plugin on the test host;
+- the broker runs `@better-auth/sso`, with the upstream in `defaultSSO`, and `samlIdp` with its own key;
+- the downstream SP is node-saml, with signed Response and Assertion required and `InResponseTo` validated.
+
+The flow:
+1. The app's AuthnRequest reaches the broker, and the broker parks it.
+2. The login page's `signIn.sso({ callbackURL: <resume> })` goes upstream.
+3. The upstream Response reaches the broker's ACS, which creates the session and redirects to the resume URL.
+4. The broker issues to the app. node-saml validates it: the NameID is the upstream user's email, and the issuer is the broker.
+
+- **Finding:** `@better-auth/sso` creates users with `emailVerified: false`, and its `mapping.emailVerified` only applies with the deprecated `trustEmailVerified`. So the broker's default account policy refuses them (`EMAIL_NOT_VERIFIED`), as a test pins.
+  - Documented fix: `provisionUser` marks users verified for named, trusted providers only.
+  - Tested alternative: `requireEmailVerified: false`, documented as the broader choice.
+- **Test note:** node-saml requests `PasswordProtectedTransport` by default. The broker claims `unspecified`, since how the user authenticated was decided upstream. So the test app sets `disableRequestedAuthnContext`. A real broker should set `authnContextClassRef` to what its upstreams guarantee.
+- The guide page `docs/guide/better-auth-sso.md` described the broker before this test existed. It now carries the tested recipe.
+

@@ -116,7 +116,7 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 - [x] Auth0: live (Enterprise SAML connection), signed requests over both Redirect and **POST (XML signature)** verified with a certificate learned from Auth0's metadata URL, encrypted assertions, first/last name attributes ([guide](docs/sp-auth0.md))
 - [x] Salesforce: live (Developer Edition), signed requests required and verified (its ~300-character request IDs found a real bug, fixed), the NameID matched to the Federation ID, **Single Logout both ways**, SP stored in the D1 registry ([guide](docs/sp-salesforce.md))
 - [x] Keycloak 26.4 and SimpleSAMLphp 2.5: real Chromium over HTTPS, in CI
-- [x] node-saml, samlify and `@better-auth/sso`: in CI, on Node and workerd
+- [x] node-saml, samlify and `@better-auth/sso`: in CI, on Node and workerd, including an **identity broker** (`@better-auth/sso` upstream and this plugin downstream in one Better Auth, [guide](docs/guide/better-auth-sso.md#one-app-both-roles-an-identity-broker))
 - [x] SAMLtool: Response validation
 - [ ] AWS IAM Identity Center: next, live
 
