@@ -53,7 +53,7 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 - [x] **Release engineering**: dist build with type declarations, Biome lint, gitleaks, publint and Are the Types Wrong, changelog; a CI-only release workflow publishing with npm provenance and a CycloneDX SBOM.
 - [x] **Supply chain and project files**: Every GitHub Action pinned by SHA with least-privilege tokens; CodeQL, a blocking runtime dependency audit, dependency review, OSV-Scanner, OpenSSF Scorecard and Dependabot. SECURITY.md, CONTRIBUTING.md, issue forms, and a versioning and support policy.
 - [x] **Fuzzing**: Property-based tests (fast-check) of the signature verifier, every inbound parser and issuance. The verifier held; issuance had five kinds of characters that produced invalid or unverifiable assertions, all fixed (D-036).
-- [ ] **Live SP verification**: Done: Cloudflare Access, Okta and Auth0, live, with signed requests (Redirect and POST) and encrypted assertions (D-034, D-035). Next: AWS IAM Identity Center.
+- [ ] **Live SP verification**: Done: Cloudflare Access, Okta, Auth0 and Salesforce, live, with signed requests (Redirect and POST), encrypted assertions and Single Logout (D-034, D-035, D-042). Next: AWS IAM Identity Center.
 - [x] **Observability hooks**: onAssertionIssued, onDenied and onLogout callbacks, run in the background (waitUntil on Workers) and isolated from the flow, plus an optional audit-log table with retention that doesn't store anonymous noise (D-038).
 - [ ] **better-auth-cloudflare 0.4**: Replace the vendored build once 0.4 is on npm (the README requires it for Workers users).
 - [x] **Key rotation guide**: docs/key-rotation.md: add next certificate, switch, retire. Rehearsed live with Cloudflare Access with zero downtime.
