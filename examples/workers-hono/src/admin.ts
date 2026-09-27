@@ -61,6 +61,18 @@ export function registerAdmin(app: Hono<{ Bindings: Env }>, authFor: (c: C) => A
     new Response(c.env.SAML_IDP_CERT, { headers: { "content-type": "application/x-pem-file", "content-disposition": 'attachment; filename="idp.crt"' } }),
   );
 
+  // The same metadata, as a named .xml file for SP setup forms that want an upload (Salesforce,
+  // AWS). The plugin's own URL stays extension-less: SPs fetch it, and its content type says XML.
+  app.get("/admin/idp-metadata.xml", (c: C) =>
+    withCf(c, async () => {
+      const res = await authFor(c).handler(new Request(new URL("/api/auth/saml2/idp/metadata", c.req.url)));
+      if (!res.ok) return res;
+      return new Response(await res.text(), {
+        headers: { "content-type": "application/samlmetadata+xml; charset=utf-8", "content-disposition": 'attachment; filename="idp-metadata.xml"' },
+      });
+    }),
+  );
+
   // Turn an SP's metadata XML into a config the page can review and save.
   app.post("/admin/api/from-metadata", (c: C) =>
     withCf(c, async () => {
@@ -131,7 +143,8 @@ ul.issues{margin:.2rem 0;padding-left:1.1rem}.pill{font-size:.8em;border-radius:
 <main>
 <section><h2>This identity provider</h2><p class="muted">What service providers ask for when you set them up.</p>
 <table>${d.idpRows}</table>
-<p><a class="btn" href="/api/auth/saml2/idp/metadata">Open metadata XML</a> <a class="btn" href="/admin/idp.crt">Download certificate (.crt)</a></p></section>
+<p><a class="btn" href="/admin/idp-metadata.xml">Download metadata (.xml)</a> <a class="btn" href="/admin/idp.crt">Download certificate (.crt)</a> <a class="btn" href="/api/auth/saml2/idp/metadata" target="_blank" rel="noopener">View metadata</a></p>
+<p class="muted">SPs that fetch metadata by URL use the Metadata address above; the download is for SP forms that want a file.</p></section>
 
 <section><h2>Service providers</h2>
 <p class="muted">From code (<code>SAML_SERVICE_PROVIDERS</code>, read-only here) and from the database registry (editable).</p>
