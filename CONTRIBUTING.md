@@ -79,7 +79,7 @@ Releases come only from CI ([release.yml](.github/workflows/release.yml)), so ev
 One-time setup (done 2026-09-27):
 
 1. The name was claimed with a placeholder `0.0.1`, published by hand. npm can't trust-publish a package that doesn't exist yet. There is no npm token in this repository, and none is needed.
-2. **Trusted publishing** on npmjs.com: package settings → Trusted publishing → GitHub Actions, user `mmcintosh`, repository `better-auth-saml-idp`, workflow `release.yml`, environment `npm`. The workflow authenticates with GitHub's short-lived OIDC identity.
+2. **Trusted publishing** on npmjs.com: package settings → Trusted publishing → GitHub Actions, user `mmcintosh`, repository `better-auth-saml-idp`, workflow `release.yml`, environment `npm`, with **"allow npm publish" left unchecked**: the workflow can only *stage* a version (`npm stage publish`), authenticating with GitHub's short-lived OIDC identity.
 3. GitHub **Settings → Environments → `npm`**: the maintainer is a required reviewer, and only `v*` tags may deploy, so every publish waits for an approval.
 4. `publishConfig.provenance` stops local `npm publish`: publishing is CI-only.
 
@@ -87,4 +87,5 @@ Each release:
 
 1. Move `[Unreleased]` in CHANGELOG.md to `## [X.Y.Z] - YYYY-MM-DD`, set `version` in package.json (and remove `"private": true` for the first release), and commit.
 2. Optionally, run **Actions → Release → Run workflow** for a dry run: it tests, packs, and builds the SBOM without publishing.
-3. `git tag vX.Y.Z && git push origin vX.Y.Z`. The workflow checks that the tag matches package.json and that its commit is on `main`, tests and packs. After your approval in the `npm` environment, it publishes the tested tarball with provenance and creates the GitHub release with its CycloneDX SBOM.
+3. `git tag vX.Y.Z && git push origin vX.Y.Z`. The workflow checks that the tag matches package.json and that its commit is on `main`, tests and packs. After your approval in the `npm` environment, it **stages** the tested tarball with provenance and creates the GitHub release with its CycloneDX SBOM.
+4. Approve the staged version on npmjs.com (Staged packages, with your security key) or with `npm stage approve <id>`. Only then is it installable; npm's malware scan must finish first.
