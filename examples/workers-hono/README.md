@@ -47,6 +47,21 @@ Every SP gets NameID = the user's email, plus the attributes `email`, `name`, `f
 
 Optional per-SP keys passed through: `nameIdFormat`, `requestSignatures`, `spCertificates`, and for IdP-initiated SSO `allowIdpInitiated`, `idpInitiatedRelayState` and `allowedRelayStates`. SPs with `"allowIdpInitiated": true` are listed under **Apps** on the home page, each linking to `/api/auth/saml2/idp/init?sp=<id>`.
 
+## Admin page
+
+`/admin` is a reference admin page for the IdP, built only on the plugin's public API. Copy it into your own app (`src/admin.ts`); the plugin itself ships no UI, like `@better-auth/sso`. It has:
+- this IdP's details for SP setup forms (entity ID, SSO/SLO URLs, metadata, the certificate as a download, with its expiry);
+- the SPs from code and from the database registry, with their status, issues and warnings;
+- adding an SP by pasting its metadata XML, then reviewing the JSON before saving;
+- editing, enabling or disabling, and deleting stored SPs, plus a test sign-in button for SPs that allow IdP-initiated SSO;
+- recent audit events (sign-ins, denials, logouts, sessions ended).
+
+Only emails listed in `SAML_REGISTRY_ADMINS` (comma-separated, a variable) with a verified address can open it or use the registry API:
+
+```jsonc
+"vars": { "SAML_REGISTRY_ADMINS": "you@example.com" }
+```
+
 ## Deploy
 
 ```sh
