@@ -277,7 +277,7 @@ export async function parseAuthnRequest(
 
   // xs:ID: whitespace-collapsed, so " _abc" and "_abc" are the same ID (and one replay key).
   const id = (root.getAttribute("ID") ?? "").trim();
-  if (!id || id.length > 256) throw invalid("missing or oversized ID");
+  if (!id || id.length > MAX_SAML_ID_LENGTH) throw invalid("missing or oversized ID");
 
   const rawInstant = (root.getAttribute("IssueInstant") ?? "").trim();
   if (!DATETIME_WITH_ZONE.test(rawInstant)) throw invalid("IssueInstant must be an xs:dateTime with a time zone");
@@ -382,6 +382,13 @@ export function authnContextStatus(info: AuthnRequestInfo, ours: string): SamlSt
 // ---------------------------------------------------------------------------------------
 // Signatures
 // ---------------------------------------------------------------------------------------
+
+/**
+ * Longest request ID accepted. xs:ID has no limit; Salesforce's are about 300 characters (found
+ * live, D-042), so 256 was too tight. The ID is stored as text, and replay detection keys on a
+ * fixed-length hash of it, so this only bounds work and storage.
+ */
+export const MAX_SAML_ID_LENGTH = 1024;
 
 const REDIRECT_SIG_ALGS: Record<string, { hash: string; sha1: boolean }> = {
   "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256": { hash: "sha256", sha1: false },

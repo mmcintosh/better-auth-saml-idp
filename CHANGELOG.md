@@ -6,6 +6,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 The first npm release (1.0.0) waits for `better-auth-cloudflare` 0.4, which Workers users need.
 
+### Fixed
+
+- **Salesforce sign-in** (D-042): request IDs up to 1024 characters are accepted (was 256). Salesforce's are about 300, so every SP-initiated Salesforce sign-in failed with `INVALID_SAML_REQUEST`.
+
 ### Changed
 
 - **`samlIdp({ baseURL })` takes the same value as Better Auth's `baseURL`** (API decision 6, D-040). A bare origin (`https://auth.example.com`) now gets `basePath` added, as Better Auth does; before, it produced wrong URLs in metadata. Full URLs (`…/api/auth`) work as before. If both are pinned and disagree, a warning is logged.

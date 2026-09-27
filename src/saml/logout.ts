@@ -4,7 +4,7 @@ import { sign as cryptoSign } from "node:crypto";
 import { deflateRawSync } from "node:zlib";
 import type { ResolvedSamlIdpOptions } from "../types";
 import { SIGNATURE_ALGORITHM_URI } from "./idp";
-import { checkMessageShape, child, DATETIME_WITH_ZONE, invalid, logSafe, MAX_REQUEST_BYTES, NS_ASSERTION, NS_PROTOCOL, REQUEST_MAX_AGE_SECONDS } from "./request";
+import { checkMessageShape, child, DATETIME_WITH_ZONE, invalid, logSafe, MAX_REQUEST_BYTES, MAX_SAML_ID_LENGTH, NS_ASSERTION, NS_PROTOCOL, REQUEST_MAX_AGE_SECONDS } from "./request";
 import { escapeXml, newSamlId, signElement } from "./response";
 import { precheckXml, type SchemaValidator } from "./validator";
 import { parseXmlStrict } from "./xml";
@@ -53,7 +53,7 @@ async function parseMessage(xml: string, rootName: "LogoutRequest" | "LogoutResp
   const issuer = (issuers[0].textContent ?? "").trim();
   if (!issuer) throw invalid("empty Issuer");
   const id = (root.getAttribute("ID") ?? "").trim();
-  if (!id || id.length > 256) throw invalid("missing or oversized ID");
+  if (!id || id.length > MAX_SAML_ID_LENGTH) throw invalid("missing or oversized ID");
   const rawInstant = (root.getAttribute("IssueInstant") ?? "").trim();
   if (!DATETIME_WITH_ZONE.test(rawInstant)) throw invalid("IssueInstant must be an xs:dateTime with a time zone");
   const instant = new Date(rawInstant).getTime();

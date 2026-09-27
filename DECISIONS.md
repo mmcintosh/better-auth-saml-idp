@@ -1256,5 +1256,10 @@ A free Salesforce Developer Edition org (My Domain `orgfarm-63501b2853-dev-ed.de
   - the maintainer then signed in from the My Domain login button in a private window and landed in Salesforce, with the Federation ID set to the demo account's email.
 
   That exercises Salesforce's signed Redirect request, verified with a certificate from the registry, and our signed Response and Assertion accepted by a strict commercial SP.
-- **Not covered:** Single Logout. Salesforce's downloaded metadata had no `SingleLogoutService`, so logout wasn't registered.
+- **A real interop bug, found live and fixed:** Salesforce's AuthnRequest IDs are about 300 characters (296 in the captured request), and the parser capped `ID` at 256. So the SP-initiated button failed with `INVALID_SAML_REQUEST`. The first successful sign-in didn't go through that path.
+  - xs:ID has no length limit. The cap is now `MAX_SAML_ID_LENGTH = 1024`, for AuthnRequests and LogoutRequests.
+  - The ID is stored as text, which is unbounded on every Better Auth dialect: `text` on MySQL, because the field has no index. Replay detection keys on a fixed-length hash of it.
+  - `test/integration/long-request-id.test.ts` replays the captured Salesforce ID end to end (`InResponseTo` echoed), checks the 1024 and 1025 boundary, and checks LogoutRequests. Three of its tests fail against the old cap.
+  - The cap had no test at all before, which is how it slipped through three reviews.
+- **Single Logout:** Salesforce's downloaded metadata had no `SingleLogoutService` because "SAML Enabled" and Single Logout weren't saved yet. Its logout endpoint (`/services/auth/sp/saml2/logout`, from the SSO settings' Endpoints) was added to the registry row by hand. SP-initiated logout from Salesforce ended the demo session.
 
