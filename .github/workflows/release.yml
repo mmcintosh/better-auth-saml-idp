@@ -81,8 +81,9 @@ jobs:
         with: { node-version: 24, registry-url: "https://registry.npmjs.org" }
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with: { name: release, path: out }
-      - run: npm publish out/*.tgz --provenance --access public
-        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
+      # Trusted publishing (OIDC): npm trusts this repo, workflow and environment, so there is no
+      # token anywhere. Needs npm >= 11.5.1 (Node 24 ships it); provenance is automatic.
+      - run: npm --version && npm publish out/*.tgz --provenance --access public
       - env: { GH_TOKEN: "${{ github.token }}", VERSION: "${{ needs.package.outputs.version }}" }
         run: |
           awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {on=1; next} on && /^## \[/ {exit} on' CHANGELOG.md > notes.md

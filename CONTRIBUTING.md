@@ -76,11 +76,12 @@ CI runs the full matrix, including the adapter matrix, e2e, CodeQL and a depende
 
 Releases come only from CI ([release.yml](.github/workflows/release.yml)), so every npm version carries provenance and the tested tarball is the published one.
 
-One-time setup:
+One-time setup (done 2026-09-27):
 
-1. The first publish needs an npm automation token as the repository secret `NPM_TOKEN`. `publishConfig.provenance` stops local `npm publish`: publishing is CI-only.
-2. After that, configure **trusted publishing** on npmjs.com (package settings → Trusted publisher → GitHub Actions, workflow `release.yml`, environment `npm`), then delete the token.
-3. In GitHub, **Settings → Environments → `npm`**: add yourself as a required reviewer, so every publish waits for an approval.
+1. The name was claimed with a placeholder `0.0.1`, published by hand. npm can't trust-publish a package that doesn't exist yet. There is no npm token in this repository, and none is needed.
+2. **Trusted publishing** on npmjs.com: package settings → Trusted publishing → GitHub Actions, user `mmcintosh`, repository `better-auth-saml-idp`, workflow `release.yml`, environment `npm`. The workflow authenticates with GitHub's short-lived OIDC identity.
+3. GitHub **Settings → Environments → `npm`**: the maintainer is a required reviewer, and only `v*` tags may deploy, so every publish waits for an approval.
+4. `publishConfig.provenance` stops local `npm publish`: publishing is CI-only.
 
 Each release:
 
