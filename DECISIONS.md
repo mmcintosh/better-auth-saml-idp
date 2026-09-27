@@ -1261,5 +1261,13 @@ A free Salesforce Developer Edition org (My Domain `orgfarm-63501b2853-dev-ed.de
   - The ID is stored as text, which is unbounded on every Better Auth dialect: `text` on MySQL, because the field has no index. Replay detection keys on a fixed-length hash of it.
   - `test/integration/long-request-id.test.ts` replays the captured Salesforce ID end to end (`InResponseTo` echoed), checks the 1024 and 1025 boundary, and checks LogoutRequests. Three of its tests fail against the old cap.
   - The cap had no test at all before, which is how it slipped through three reviews.
-- **Single Logout:** Salesforce's downloaded metadata had no `SingleLogoutService` because "SAML Enabled" and Single Logout weren't saved yet. Its logout endpoint (`/services/auth/sp/saml2/logout`, from the SSO settings' Endpoints) was added to the registry row by hand. SP-initiated logout from Salesforce ended the demo session.
+- **Single Logout, verified both ways** (Workers logs captured with `wrangler tail`):
+  - The logout endpoint (`/services/auth/sp/saml2/logout`, from the SSO settings' Endpoints) was added to the registry row by hand. The downloaded metadata had none, because Single Logout wasn't saved in Salesforce yet.
+  - **IdP-initiated** (`/saml2/idp/logout`): our signed LogoutRequest went to Salesforce, Salesforce answered at `/slo` with a LogoutResponse, and the Salesforce session was gone.
+  - **SP-initiated** (Log Out in Salesforce): Salesforce's signed LogoutRequest reached `/slo`, was verified against its registered certificate, and ended the demo session.
+  - An earlier "SP-initiated" attempt was *not* counted. At the time, the login button wasn't enabled and the ID bug was still live, so that session never came from SAML.
+- **Salesforce-side traps hit on the way** (now in the guide):
+  - "SAML Enabled" wasn't saved, so the IdP didn't appear in My Domain's Authentication Configuration;
+  - "Single Logout Enabled" was off, so Salesforce said "We are unable to log you out";
+  - the Federation ID wasn't set, so the SAML Assertion Validator passed every check but said "Unable to map the subject to a Salesforce user".
 
