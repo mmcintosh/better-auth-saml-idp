@@ -8,11 +8,11 @@ import type { BetterAuthPluginDBSchema } from "better-auth/db";
  * "serial" or "uuid", which ignore forced ids), so replay protection never depends on it.
  * Hosts' hand-written schemas should also add UNIQUE(spId, requestId) (see README).
  */
-export function samlIdpSchema(opts: { registry?: boolean; singleLogout?: boolean; auditLog?: boolean } = {}) {
+export function samlIdpSchema(opts: { registry?: boolean; sessionTracking?: boolean; auditLog?: boolean } = {}) {
   return {
     ...(opts.registry ? registrySchema() : {}),
     ...(opts.auditLog ? auditSchema() : {}),
-    ...(opts.singleLogout ? logoutSchema() : {}),
+    ...(opts.sessionTracking ? logoutSchema() : {}),
     samlIdpSeenRequest: {
       fields: {
         key: { type: "string", required: true, unique: true, input: false },
@@ -86,6 +86,10 @@ function logoutSchema() {
       fields: {
         key: { type: "string", required: true, unique: true, input: false },
         sessionKey: { type: "string", required: true, input: false, index: true },
+        // D-043: find a user's SPs after the session is gone; set when the session ended
+        // without Single Logout. Optional so rows from before the upgrade stay valid.
+        userId: { type: "string", required: false, input: false, index: true },
+        endedAt: { type: "date", required: false, input: false },
         spId: { type: "string", required: true, input: false },
         nameId: { type: "string", required: true, input: false },
         nameIdFormat: { type: "string", required: true, input: false },

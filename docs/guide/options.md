@@ -34,8 +34,9 @@ Every option `samlIdp()` accepts. Options are validated when `samlIdp()` is call
 | `accountPolicy` | `object` | strict | Who may receive assertions. See [`accountPolicy`](#accountpolicy). |
 | `registry` | `object` | off | The database-backed SP registry and its API. See [`registry`](#registry). |
 | `singleLogout` | `object` | off | SAML Single Logout. See [`singleLogout`](#singlelogout). |
-| `events` | `object` | none | `{ onAssertionIssued?, onDenied?, onLogout? }` callbacks. They run in the background and can't affect the flow. See [Observability](observability.md). |
+| `events` | `object` | none | `{ onAssertionIssued?, onDenied?, onLogout?, onSessionEnded? }` callbacks. They run in the background and can't affect the flow. See [Observability](observability.md). |
 | `auditLog` | `object` | off | `{ enabled, retentionDays? }`: also record events in the `samlIdpAuditEvent` table. See [`auditLog`](#auditlog). |
+| `sessionNotOnOrAfter` | `false \| "idp-session" \| { maxSeconds }` | `false` | `SessionNotOnOrAfter` on assertions: when the SP should end its session. `"idp-session"`: the IdP session's expiry. `{ maxSeconds }` (60 to 30 days): that long after issuance, never past the IdP session. Each SP can override it. See [Single Logout](single-logout.md#when-the-session-ends-without-the-browser). |
 | `signMetadata` | `boolean` | `false` | Sign the IdP metadata document (enveloped signature with the active key). For SPs and federations that verify metadata. |
 | `schema` | `object` | none | Rename the plugin's tables and columns. See [`schema`](#schema). |
 | `schemaValidator` | `{ validate(xml, kind) }` | libxml2 (WASM) | Replace the XSD validator every inbound message goes through. You shouldn't need this. |
@@ -121,6 +122,7 @@ The same options apply to SPs in `serviceProviders` and to SPs stored in the reg
 | `metadata` | `object` | none | Keep the SP's certificates current from its metadata URL. See [`metadata`](#metadata). |
 | `encryption` | `object` | none | Encrypt assertions to this SP. See [`encryption`](#encryption). |
 | `sign` | `"both" \| "response" \| "assertion"` | `signing.sign` | Per-SP override. |
+| `sessionNotOnOrAfter` | as the server option | the server option | Per-SP override. |
 | `allowIdpInitiated` | `boolean` | `false` | Accept `/saml2/idp/init?sp=<id>` for this SP. See [IdP-initiated SSO](flows.md#idp-initiated-sso). |
 | `idpInitiatedRelayState` | `string` | none | RelayState sent with IdP-initiated Responses. Needs `allowIdpInitiated`. |
 | `allowedRelayStates` | `string[]` | `[]` | RelayState values a caller of `/init` may choose, matched exactly. Anything else is replaced by `idpInitiatedRelayState`. Needs `allowIdpInitiated`. |

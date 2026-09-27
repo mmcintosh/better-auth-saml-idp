@@ -13,7 +13,7 @@ import { idpBaseURL } from "../saml/idp";
 import { buildLogoutRequest, buildLogoutResponse, parseLogoutRequest, parseLogoutResponse, redirectBindingUrl, signedPostMessage, SLO_PATH } from "../saml/logout";
 import { autoPostResponse, confirmPage } from "../saml/post-form";
 import { checkRelayState, decodeAuthnRequest, isSigned, parseRedirectQuery, type RawAuthnRequest, SamlRequestError, verifyMessageSignature } from "../saml/request";
-import { forgetParticipants, listParticipants, type Participant, sessionIndexOf } from "../storage/participants";
+import { forgetParticipants, listParticipants, markEndingBySlo, type Participant, sessionIndexOf } from "../storage/participants";
 import { newOpaqueToken } from "../storage/pending";
 import { recordRequestId } from "../storage/seen";
 import { sweepExpired } from "../storage/sweep";
@@ -94,6 +94,8 @@ async function participantsOf(ctx: GenericEndpointContext, sessionId: string): P
 async function endSession(ctx: GenericEndpointContext, session: { session: { id: string; token: string } }): Promise<{ participants: Participant[]; partial: boolean }> {
   const adapter = ctx.context.adapter as any;
   const { participants, partial } = await participantsOf(ctx, session.session.id);
+  // The session-delete hook must not report these SPs as "not told" (D-043): they're next.
+  markEndingBySlo(session.session.id);
   await ctx.context.internalAdapter.deleteSession(session.session.token);
   deleteSessionCookie(ctx);
   await forgetParticipants(adapter, session.session.id).catch((e) => ctx.context.logger.warn("[saml-idp] could not clear logout participants", e));

@@ -23,7 +23,7 @@ samlIdp({
 ```
 
 This adds:
-- the `samlIdpSessionParticipant` table ([schema](schema.md#samlidpsessionparticipant-with-singlelogoutenabled); D1 migration `0004`);
+- the `samlIdpSessionParticipant` table ([schema](schema.md#samlidpsessionparticipant-with-singlelogoutenabled-or-eventsonsessionended); D1 migration `0004`);
 - the `/saml2/idp/slo` endpoint, for SPs' LogoutRequests and LogoutResponses over both bindings;
 - the `/saml2/idp/logout` endpoint, for IdP-initiated logout;
 - `SingleLogoutService` in the IdP metadata.
@@ -66,7 +66,7 @@ authClient.samlIdp.signOutEverywhere({ returnTo: "/" });
 
 The IdP ends its session, notifies every participant in turn, then redirects to `returnTo`. That must be a same-origin path or an origin in Better Auth's `trustedOrigins` (otherwise `INVALID_RETURN_TO`). Without a session, it just redirects. A cross-site drive-by (not a click) gets a confirmation page first, so other sites can't silently sign your users out everywhere.
 
-Better Auth's own `/sign-out` only ends the IdP session. Use `signOutEverywhere` where you want SPs signed out too.
+Better Auth's own `/sign-out` only ends the IdP session: the SPs aren't sent a LogoutRequest. With `events.onSessionEnded` set, it's reported (`reason: "signed-out"`, see below). Use `signOutEverywhere` where you want SPs signed out too.
 
 ## Authentication of LogoutRequests
 
@@ -94,6 +94,41 @@ Give SPs that use SLO a certificate. For certificate-less SPs, anyone can make t
 | `LOGOUT_STATE_NOT_FOUND` | An unknown, used or expired logout step. |
 | `INVALID_RETURN_TO` | `returnTo` isn't same-origin or trusted. |
 | `INTERNAL_ERROR` | At sign-in: the participant couldn't be recorded, so no assertion is issued (a later logout couldn't reach the SP). |
+
+## When the session ends without the browser
+
+Sessions also end without Single Logout: an admin revokes or disables a user, a factor change signs out every session, the user signs out through Better Auth's `/sign-out`, or the session expires. There's no browser to carry LogoutRequests then, and most SaaS SPs accept logout only through the browser.
+
+**What's guaranteed:** no new assertion. Every assertion re-reads the session and the user from the database just before signing, so a deleted session or a banned user gets nothing more.
+
+**What isn't:** the SPs' own sessions carry on until they end them.
+
+To act on that, set `events.onSessionEnded`:
+
+```ts
+samlIdp({
+  // …
+  events: {
+    onSessionEnded: async (e) => {
+      // e.reason: "revoked" | "signed-out" | "expired"
+      for (const p of e.participants) {
+        // p.spId, p.entityId, p.nameId, p.nameIdFormat, p.sessionIndex: call the SP's
+        // session API or SCIM, or record it for an admin to see.
+      }
+    },
+  },
+});
+```
+
+- **When it fires:** for every session deleted with SAML participants, whoever deleted it: your own admin code included, since it doesn't depend on a request. It doesn't fire for sessions our own Single Logout ends, because those SPs are told.
+- **Needs sessions in the database.** Better Auth deletes sessions that live only in `secondaryStorage` without database hooks. The plugin warns at startup then; set `session.storeSessionInDatabase: true`. better-auth-cloudflare with geolocation tracking already does.
+- **Works without Single Logout.** `onSessionEnded` alone turns on participant tracking (the `samlIdpSessionParticipant` table).
+- **Audit log:** `revoked` and `signed-out` are recorded when SPs were left signed in; `expired` never is.
+- **Retry or list later:** the rows are kept, marked ended, until they expire. `auth.api.samlIdpListSessionParticipants({ body: { userId } })` returns a user's SP sessions, live or ended. It's server-only, with no URL.
+
+Also consider `sessionNotOnOrAfter` (a server option, and per SP). It tells SPs up front when to end their session: `"idp-session"` for the IdP session's end, or `{ maxSeconds }`. Shibboleth and SimpleSAMLphp honour it; many SaaS SPs don't, and Slack is documented to ignore it.
+
+Which SPs accept a logout without a browser (the SAML SOAP binding): Shibboleth SP and SimpleSAMLphp. Okta and Salesforce accept logout only through the browser; AWS IAM Identity Center, Google Workspace and Slack take no IdP-initiated logout. The plugin doesn't send SOAP logout yet (DECISIONS D-043, and the [design review](../review/session-end-review.md)).
 
 ## Limits
 

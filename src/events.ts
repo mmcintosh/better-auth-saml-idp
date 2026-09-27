@@ -67,12 +67,44 @@ export interface LogoutEvent extends EventBase {
   notifying: string[];
 }
 
-export type SamlIdpEvent = AssertionIssuedEvent | DeniedEvent | LogoutEvent;
+/**
+ * An IdP session ended *without* Single Logout (D-043): an admin revoked or disabled it, the user
+ * signed out through Better Auth's own `/sign-out`, a factor change ended it, or it expired. The
+ * SPs listed received assertions in that session and were **not** sent a LogoutRequest; their
+ * own sessions carry on until they end them. Act on them yourself (SCIM, an SP's session API),
+ * or record them. The same list stays available from `auth.api.samlIdpListSessionParticipants`
+ * until the rows expire.
+ */
+export interface SessionEndedEvent extends EventBase {
+  type: "session.ended";
+  userId: string;
+  sessionId: string;
+  /**
+   * "signed-out": Better Auth's `/sign-out`. "expired": the session had passed its expiry.
+   * "revoked": anything else (admin actions, revoke-sessions, a factor change, a direct delete).
+   */
+  reason: "revoked" | "signed-out" | "expired";
+  participants: {
+    spId: string;
+    /** The SP's entity ID, if it is still configured. */
+    entityId?: string;
+    nameId: string;
+    nameIdFormat: string;
+    sessionIndex: string;
+  }[];
+}
+
+export type SamlIdpEvent = AssertionIssuedEvent | DeniedEvent | LogoutEvent | SessionEndedEvent;
 
 export interface SamlIdpEventHandlers {
   onAssertionIssued?: (event: AssertionIssuedEvent) => void | Promise<void>;
   onDenied?: (event: DeniedEvent) => void | Promise<void>;
   onLogout?: (event: LogoutEvent) => void | Promise<void>;
+  /**
+   * A session ended without Single Logout (D-043). Setting it also turns on the participant
+   * tracking it needs (the `samlIdpSessionParticipant` table), even without `singleLogout`.
+   */
+  onSessionEnded?: (event: SessionEndedEvent) => void | Promise<void>;
 }
 
 export interface AuditLogOptions {
@@ -98,34 +130,69 @@ function clientIp(ctx: GenericEndpointContext): string | undefined {
   return undefined;
 }
 
+type EventInput =
+  | Omit<AssertionIssuedEvent, keyof EventBase>
+  | Omit<DeniedEvent, keyof EventBase>
+  | Omit<LogoutEvent, keyof EventBase>
+  | Omit<SessionEndedEvent, keyof EventBase>;
+
+const HANDLER = {
+  "assertion.issued": "onAssertionIssued",
+  denied: "onDenied",
+  logout: "onLogout",
+  "session.ended": "onSessionEnded",
+} as const satisfies Record<SamlIdpEvent["type"], keyof SamlIdpEventHandlers>;
+
+/** What delivery needs: the pieces of Better Auth's context, with or without a request. */
+type Sink = {
+  logger: { error(message: string, ...args: unknown[]): void };
+  adapter: { create(a: { model: string; data: Record<string, unknown> }): Promise<unknown> };
+  runInBackground(p: Promise<unknown>): void;
+};
+
 /** Fill in the request fields and hand the event to its handler and the audit log, in the background. */
-export function emit(ctx: GenericEndpointContext, options: Emitter, event: Omit<AssertionIssuedEvent, keyof EventBase> | Omit<DeniedEvent, keyof EventBase> | Omit<LogoutEvent, keyof EventBase>): void {
-  const handler =
-    event.type === "assertion.issued" ? options.events?.onAssertionIssued : event.type === "denied" ? options.events?.onDenied : options.events?.onLogout;
+export function emit(ctx: GenericEndpointContext, options: Emitter, event: EventInput): void {
+  const userAgent = (ctx.request?.headers ?? ctx.headers)?.get("user-agent");
+  deliver(ctx.context as unknown as Sink, options, { ...event, at: new Date(), ipAddress: clientIp(ctx), userAgent: userAgent ? logSafe(userAgent, 300) : undefined } as SamlIdpEvent);
+}
+
+/**
+ * The same, outside a request: a database hook run from a host's own code (an admin page) has no
+ * endpoint context, so the event has no IP or user agent (D-043).
+ */
+export function emitWithoutRequest(sink: Sink, options: Emitter, event: EventInput): void {
+  deliver(sink, options, { ...event, at: new Date() } as SamlIdpEvent);
+}
+
+function deliver(sink: Sink, options: Emitter, full: SamlIdpEvent): void {
+  const name = HANDLER[full.type];
+  const handler = options.events?.[name] as ((e: SamlIdpEvent) => unknown) | undefined;
   // Denials without a signed-in user go to the handler but not the table: anyone can generate
   // them, naming any SP (its entity ID is public), and the table mustn't grow at an attacker's
-  // pace (R4-3).
-  const audit = options.auditLog && !(event.type === "denied" && !event.userId);
+  // pace (R4-3). Session ends are stored only when SPs were left signed in, and never for expiry
+  // (every expired session would write a row).
+  const audit =
+    options.auditLog &&
+    !(full.type === "denied" && !full.userId) &&
+    !(full.type === "session.ended" && (full.reason === "expired" || full.participants.length === 0));
   if (!handler && !audit) return;
-  const userAgent = (ctx.request?.headers ?? ctx.headers)?.get("user-agent");
-  const full = { ...event, at: new Date(), ipAddress: clientIp(ctx), userAgent: userAgent ? logSafe(userAgent, 300) : undefined } as SamlIdpEvent;
   const run = async () => {
     if (handler) {
       try {
-        await (handler as (e: SamlIdpEvent) => unknown)(full);
+        await handler(full);
       } catch (e) {
-        ctx.context.logger.error(`[saml-idp] events.on${full.type === "assertion.issued" ? "AssertionIssued" : full.type === "denied" ? "Denied" : "Logout"} threw`, e);
+        sink.logger.error(`[saml-idp] events.${name} threw`, e);
       }
     }
     if (audit && options.auditLog) {
       try {
-        await ctx.context.adapter.create({ model: AUDIT_MODEL, data: auditRow(full, options.auditLog.retentionDays) });
+        await sink.adapter.create({ model: AUDIT_MODEL, data: auditRow(full, options.auditLog.retentionDays) });
       } catch (e) {
-        ctx.context.logger.error(`[saml-idp] could not write the audit log (${full.type})`, e);
+        sink.logger.error(`[saml-idp] could not write the audit log (${full.type})`, e);
       }
     }
   };
-  ctx.context.runInBackground(run());
+  sink.runInBackground(run());
 }
 
 /** The table row: indexed columns for querying, the rest of the event as JSON. */

@@ -77,15 +77,17 @@ export const samlIdpServiceProviders = sqliteTable("saml_idp_service_providers",
 ```
 </details>
 
-## `samlIdpSessionParticipant` (with `singleLogout.enabled`)
+## `samlIdpSessionParticipant` (with `singleLogout.enabled` or `events.onSessionEnded`)
 
-Which SPs received an assertion in which session, so logout can reach them all. See [Single Logout](single-logout.md).
+Which SPs received an assertion in which session, so logout can reach them all, and so a session that ends without logout can name them ([When the session ends without the browser](single-logout.md#when-the-session-ends-without-the-browser)). D1 migration `0007` adds `userId` and `endedAt` to existing tables.
 
 | Field | Type | Key | Description |
 |---|---|---|---|
 | `id` | string | primary | Row id. |
 | `key` | string | **unique** | `sha256(sessionKey, spId)`: one row per SP per session. |
 | `sessionKey` | string | index | A hash of the Better Auth session id (never the id or token itself). |
+| `userId` | string, optional | index | The user, so their SPs can be found after the session is gone. Empty on rows from before `0007`. |
+| `endedAt` | date, optional | | Set when the session ended without Single Logout; the row is kept until `expiresAt`. |
 | `spId` | string | | The SP's `id`. |
 | `nameId` | string | | The NameID this SP was given (refreshed on each assertion; transient NameIDs change). |
 | `nameIdFormat` | string | | Its format. |
@@ -101,13 +103,19 @@ export const samlIdpSessionParticipants = sqliteTable(
     id: text("id").primaryKey(),
     key: text("key").notNull().unique(),
     sessionKey: text("session_key").notNull(),
+    userId: text("user_id"),
+    endedAt: integer("ended_at", { mode: "timestamp_ms" }),
     spId: text("sp_id").notNull(),
     nameId: text("name_id").notNull(),
     nameIdFormat: text("name_id_format").notNull(),
     sessionIndex: text("session_index").notNull(),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
   },
-  (t) => [index("saml_idp_session_participants_session_idx").on(t.sessionKey), index("saml_idp_session_participants_expires_idx").on(t.expiresAt)],
+  (t) => [
+    index("saml_idp_session_participants_session_idx").on(t.sessionKey),
+    index("saml_idp_session_participants_expires_idx").on(t.expiresAt),
+    index("saml_idp_session_participants_user_idx").on(t.userId),
+  ],
 );
 ```
 </details>

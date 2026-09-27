@@ -1271,3 +1271,50 @@ A free Salesforce Developer Edition org (My Domain `orgfarm-63501b2853-dev-ed.de
   - "Single Logout Enabled" was off, so Salesforce said "We are unable to log you out";
   - the Federation ID wasn't set, so the SAML Assertion Validator passed every check but said "Unable to map the subject to a Salesforce user".
 
+## D-043: Sessions that end without Single Logout (2026-09-27)
+
+From the fresh-eyes design review (`docs/review/session-end-review.md`), for the conexxus-auth merge: an admin disable or a factor change deletes sessions with no browser, so SPs can't be told through the front channel.
+
+- **Already guaranteed (verified in code, pinned by a test):** no new assertion once the session or user is gone. Issuance re-reads both from the database.
+- **New: `events.onSessionEnded`.** A `session.delete` database hook marks the session's participant rows ended, and emits `session.ended`:
+  - `{ userId, sessionId, reason: "revoked" | "signed-out" | "expired", participants: [{ spId, entityId?, nameId, nameIdFormat, sessionIndex }] }`.
+  - It uses the `AuthContext` captured in `init`, never the hook's context. That context is undefined outside endpoints, which is exactly the admin-page case; the oauth-provider's own logout hook bails out there.
+  - The plugin's own Single Logout marks the session first, so its SPs, which are about to be told, aren't reported.
+  - The hook is an observer: errors are logged and never block the delete.
+  - Nothing is emitted for sessions with no participants.
+  - Audit: `revoked` and `signed-out` rows only; `expired` never.
+- **Found while building, missed by the review:** Better Auth deletes sessions stored only in `secondaryStorage` without database hooks (`internal-adapter.mjs` `deleteSession`). The plugin warns at startup in that setup. better-auth-cloudflare forces database sessions when geolocation tracking is on, and both conexxus-auth and the example keep sessions in D1.
+- **Tracking:** `sessionTracking = singleLogout.enabled || events.onSessionEnded`. `onSessionEnded` alone records participants, so hosts without SLO get the event.
+- **Schema:** participant rows gain `userId` (indexed) and `endedAt`. D1 migration `0007` (test D1: `0006`). Ended rows stay until `expiresAt`. SLO ignores them. `sso` and `init` sweep them too when tracking is on.
+- **`auth.api.samlIdpListSessionParticipants({ body: { userId } })`** lists a user's SP sessions, live or ended. It's `createAuthEndpoint.serverOnly`: no URL.
+  - Checked: in Better Auth 1.7, `metadata.SERVER_ONLY` only hides a route from OpenAPI; a pathed endpoint would still have been routable.
+  - The results are filtered by an exact `userId` match, as `findRow` is (R4-L8).
+- **`sessionNotOnOrAfter`:** `false | "idp-session" | { maxSeconds }`, global and per SP (code and stored), default `false`. The value is `min(session expiry, now + maxSeconds)`. It's schema-valid on the AuthnStatement.
+- **Deferred:** SOAP back-channel SLO. Only Shibboleth SP and SimpleSAMLphp accept it; build it when a named SP needs it.
+- **Tests** (`test/integration/session-ended.test.ts`, both runtimes):
+  - an out-of-band `deleteUserSessions` with no request, with both SPs, NameIDs and SessionIndexes, and no assertion afterwards;
+  - ended rows kept and listed per user, isolated between users;
+  - the listing not reachable by URL;
+  - SLO not double-reporting;
+  - `/sign-out` giving `signed-out`, audited;
+  - an expired session giving `expired`, not audited;
+  - a failing read not blocking the delete;
+  - tracking without SLO;
+  - the storage warning, and no warning when geolocation forces database sessions;
+  - no event without participants;
+  - SLO skipping ended rows;
+  - `sessionNotOnOrAfter`: absent, `"idp-session"`, `maxSeconds` (capped, XSD-valid), a per-SP override, and stored-SP validation.
+- **Mutation proof:** twelve mutations, each caught:
+  1. the hook ignoring the SLO marker;
+  2. SLO not marking;
+  3. no `signed-out`;
+  4. no `expired`;
+  5. auditing `expired`;
+  6. no try in the hook;
+  7. SLO reading ended rows;
+  8. tracking ignoring `onSessionEnded`;
+  9. no cap at the session end;
+  10. no per-SP override;
+  11. `userId` not recorded;
+  12. no storage warning.
+

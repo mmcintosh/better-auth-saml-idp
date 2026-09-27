@@ -17,7 +17,9 @@ import { SpDirectory } from "./saml/sp-directory";
 import { registryEndpoints } from "./endpoints/registry";
 import { logoutEndpoint, sloEndpoint } from "./endpoints/slo";
 import { SLO_PATH } from "./saml/logout";
-import { extendParticipants } from "./storage/participants";
+import { consumeEndingBySlo, endParticipants, extendParticipants } from "./storage/participants";
+import { emitWithoutRequest } from "./events";
+import { listSessionParticipantsEndpoint } from "./endpoints/participants";
 import type { SamlIdpOptions } from "./types";
 
 export { SAML_IDP_ERROR_CODES } from "./errors";
@@ -41,6 +43,7 @@ export type {
   SamlAttributeValue,
   SamlIdpOptions,
   SamlIdpUser,
+  SessionLimit,
   SchemaKind,
   SchemaValidationResult,
   SchemaValidator,
@@ -54,7 +57,7 @@ export type {
 } from "./types";
 export type { SamlIdpErrorCode } from "./errors";
 export type { StoredServiceProviderConfig } from "./options";
-export type { AssertionIssuedEvent, AuditLogOptions, DeniedEvent, LogoutEvent, SamlIdpEvent, SamlIdpEventHandlers } from "./events";
+export type { AssertionIssuedEvent, AuditLogOptions, DeniedEvent, LogoutEvent, SamlIdpEvent, SamlIdpEventHandlers, SessionEndedEvent } from "./events";
 
 export const samlIdp = (options: SamlIdpOptions) => {
   const resolved = resolveOptions(options);
@@ -88,19 +91,49 @@ export const samlIdp = (options: SamlIdpOptions) => {
         ctx.logger.warn(
           "[saml-idp] no baseURL: the IdP's SSO URL (metadata, Destination check, resume links) follows the request's Host header. Set samlIdp({ baseURL }) or Better Auth's baseURL.",
         );
-      // Logout participants live as long as the session: when Better Auth extends a session,
-      // extend its participant rows, so the expiry sweep can't drop SPs a later logout must
-      // reach (review 2, R2-SLO-1).
-      const options = resolved.singleLogout
+      // Session hooks use this init context, never the hook's: a host deleting sessions from its
+      // own code (an admin page) runs them outside any endpoint, where the hook context is
+      // undefined (D-043).
+      if (resolved.sessionTracking && ctx.options.secondaryStorage && !ctx.options.session?.storeSessionInDatabase)
+        ctx.logger.warn(
+          "[saml-idp] sessions live only in secondaryStorage, so Better Auth deletes them without database hooks: events.onSessionEnded won't fire. Set session.storeSessionInDatabase: true to get it.",
+        );
+      const sink = { logger: ctx.logger, adapter: ctx.adapter as any, runInBackground: (p: Promise<unknown>) => ctx.runInBackground(p) };
+      const options = resolved.sessionTracking
         ? {
             databaseHooks: {
               session: {
+                // Participants live as long as the session: when Better Auth extends a session,
+                // extend its participant rows, so the expiry sweep can't drop SPs a later logout
+                // must reach (review 2, R2-SLO-1).
                 update: {
-                  after: async (session: { id?: string; expiresAt?: Date | string }, hookCtx: { context: { adapter: unknown } } | null | undefined) => {
-                    if (!session?.id || !session.expiresAt || !hookCtx) return;
-                    await extendParticipants(hookCtx.context.adapter as any, session.id, new Date(session.expiresAt)).catch((e) =>
+                  after: async (session: { id?: string; expiresAt?: Date | string }) => {
+                    if (!session?.id || !session.expiresAt) return;
+                    await extendParticipants(ctx.adapter as any, session.id, new Date(session.expiresAt)).catch((e) =>
                       ctx.logger.warn("[saml-idp] could not extend logout participants with the session", e),
                     );
+                  },
+                },
+                // A session ended without our Single Logout (D-043): keep its participants (as
+                // ended) and say which SPs weren't told. An observer: nothing here can stop or
+                // fail the delete.
+                delete: {
+                  after: async (session: { id?: string; userId?: string; expiresAt?: Date | string }, hookCtx: { path?: string } | null | undefined) => {
+                    try {
+                      if (!session?.id || consumeEndingBySlo(session.id)) return;
+                      const now = new Date();
+                      const ended = await endParticipants(ctx.adapter as any, session.id, now);
+                      if (ended.length === 0) return;
+                      const reason =
+                        session.expiresAt && new Date(session.expiresAt).getTime() <= now.getTime() ? "expired" : hookCtx?.path === "/sign-out" ? "signed-out" : "revoked";
+                      const log = { error: (m: string) => ctx.logger.error(m) };
+                      const participants = await Promise.all(
+                        ended.map(async (p) => ({ ...p, entityId: (await directory.byId(ctx.adapter as any, p.spId, log))?.entityId })),
+                      );
+                      emitWithoutRequest(sink, resolved, { type: "session.ended", userId: String(session.userId ?? ""), sessionId: session.id, reason, participants });
+                    } catch (e) {
+                      ctx.logger.error("[saml-idp] could not record the end of a session's SAML participants", e);
+                    }
                   },
                 },
               },
@@ -123,10 +156,11 @@ export const samlIdp = (options: SamlIdpOptions) => {
       samlIdpInitiatedSignOn: initEndpoint(state),
       ...(resolved.registry?.canManage || resolved.registry?.permissions ? registryEndpoints(state) : {}),
       ...(resolved.singleLogout ? { samlIdpSingleLogout: sloEndpoint(state), samlIdpLogout: logoutEndpoint(state) } : {}),
+      ...(resolved.sessionTracking ? { samlIdpListSessionParticipants: listSessionParticipantsEndpoint(state) } : {}),
     },
     // A fresh schema object per plugin: mergeSchema mutates its first argument, so a shared
     // module-level object would leak one instance's renames into every other (finding #10).
-    schema: mergeSchema(samlIdpSchema({ registry: resolved.registry !== undefined, singleLogout: resolved.singleLogout, auditLog: resolved.auditLog !== undefined }), resolved.schema),
+    schema: mergeSchema(samlIdpSchema({ registry: resolved.registry !== undefined, sessionTracking: resolved.sessionTracking, auditLog: resolved.auditLog !== undefined }), resolved.schema),
     $ERROR_CODES: SAML_IDP_ERROR_CODES,
     // No `options` (API decision 3): by convention it holds a plugin's configuration, and ours
     // includes the signing key; the internal SP directory isn't public either.

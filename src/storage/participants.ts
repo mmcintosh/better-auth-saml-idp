@@ -35,28 +35,87 @@ export const sessionKeyOf = (sessionId: string) => sha256b64url(`saml-idp:slo\u0
 export const sessionIndexOf = (secret: string, sessionId: string, spId: string) =>
   `_${base64url(new Uint8Array(createHmac("sha256", secret).update(`saml-idp:session\u0000${sessionId}\u0000${spId}`).digest())).slice(0, 32)}`;
 
-/** Record (or refresh: transient NameIDs change per assertion) that `p.spId` got an assertion. */
-export async function recordParticipant(adapter: Adapter, sessionId: string, p: Participant, expiresAt: Date): Promise<void> {
+/**
+ * Record (or refresh: transient NameIDs change per assertion) that `p.spId` got an assertion.
+ * `userId` lets the host find a user's SPs after the session is gone (session.ended, D-043).
+ */
+export async function recordParticipant(adapter: Adapter, sessionId: string, userId: string, p: Participant, expiresAt: Date): Promise<void> {
   const sessionKey = await sessionKeyOf(sessionId);
   const key = await sha256b64url(`saml-idp:participant\u0000${sessionKey}\u0000${p.spId}`);
   try {
-    await adapter.create({ model: PARTICIPANT_MODEL, data: { key, sessionKey, ...p, expiresAt } });
+    await adapter.create({ model: PARTICIPANT_MODEL, data: { key, sessionKey, userId, ...p, expiresAt } });
   } catch (e) {
     if (!(await adapter.findOne({ model: PARTICIPANT_MODEL, where: [{ field: "key", value: key }] }))) throw e;
-    await adapter.update({ model: PARTICIPANT_MODEL, where: [{ field: "key", value: key }], update: { nameId: p.nameId, nameIdFormat: p.nameIdFormat, sessionIndex: p.sessionIndex, expiresAt } });
+    await adapter.update({ model: PARTICIPANT_MODEL, where: [{ field: "key", value: key }], update: { userId, nameId: p.nameId, nameIdFormat: p.nameIdFormat, sessionIndex: p.sessionIndex, expiresAt } });
   }
 }
 
 export const MAX_PARTICIPANTS = 200;
 
-/** `truncated`: more than MAX_PARTICIPANTS rows exist (logout then reports PartialLogout). */
+type ParticipantRow = Participant & { userId?: string | null; endedAt?: Date | string | null; expiresAt: Date | string };
+
+/**
+ * A live session's participants, for Single Logout. `truncated`: more than MAX_PARTICIPANTS rows
+ * exist (logout then reports PartialLogout). Rows of an already ended session are skipped.
+ */
 export async function listParticipants(adapter: Adapter, sessionId: string): Promise<{ participants: Participant[]; truncated: boolean }> {
   const sessionKey = await sessionKeyOf(sessionId);
-  const rows = (await adapter.findMany({ model: PARTICIPANT_MODEL, where: [{ field: "sessionKey", value: sessionKey }], limit: MAX_PARTICIPANTS + 1 })) as Participant[];
+  const all = (await adapter.findMany({ model: PARTICIPANT_MODEL, where: [{ field: "sessionKey", value: sessionKey }], limit: MAX_PARTICIPANTS + 1 })) as ParticipantRow[];
+  const rows = all.filter((r) => !r.endedAt);
   return {
     participants: rows.slice(0, MAX_PARTICIPANTS).map(({ spId, nameId, nameIdFormat, sessionIndex }) => ({ spId, nameId, nameIdFormat, sessionIndex })),
     truncated: rows.length > MAX_PARTICIPANTS,
   };
+}
+
+/**
+ * The session ended without Single Logout (D-043): mark its participant rows ended (kept until
+ * they expire, so the host can still find and act on them) and return them.
+ */
+export async function endParticipants(adapter: Adapter, sessionId: string, endedAt: Date): Promise<Participant[]> {
+  const sessionKey = await sessionKeyOf(sessionId);
+  const rows = ((await adapter.findMany({ model: PARTICIPANT_MODEL, where: [{ field: "sessionKey", value: sessionKey }], limit: MAX_PARTICIPANTS })) as ParticipantRow[]).filter(
+    (r) => !r.endedAt,
+  );
+  if (rows.length) await adapter.updateMany({ model: PARTICIPANT_MODEL, where: [{ field: "sessionKey", value: sessionKey }], update: { endedAt } });
+  return rows.map(({ spId, nameId, nameIdFormat, sessionIndex }) => ({ spId, nameId, nameIdFormat, sessionIndex }));
+}
+
+export interface UserParticipant extends Participant {
+  /** When the session ended without Single Logout; null while it is live. */
+  endedAt: Date | null;
+  expiresAt: Date;
+}
+
+/** A user's SP sessions, live or ended but not yet expired (for the host's retry, D-043). */
+export async function listUserParticipants(adapter: Adapter, userId: string, now = new Date()): Promise<UserParticipant[]> {
+  const rows = (await adapter.findMany({ model: PARTICIPANT_MODEL, where: [{ field: "userId", value: userId }], limit: MAX_PARTICIPANTS })) as ParticipantRow[];
+  return rows
+    // Exact match, as findRow does (R4-L8): a case-insensitive collation must not widen it.
+    .filter((r) => r.userId === userId && new Date(r.expiresAt).getTime() > now.getTime())
+    .map(({ spId, nameId, nameIdFormat, sessionIndex, endedAt, expiresAt }) => ({
+      spId,
+      nameId,
+      nameIdFormat,
+      sessionIndex,
+      endedAt: endedAt ? new Date(endedAt) : null,
+      expiresAt: new Date(expiresAt),
+    }));
+}
+
+/**
+ * Session ids being ended by the plugin's own Single Logout, whose SPs are about to be told. The
+ * session-delete hook skips them (it would otherwise report "not told" mid-chain). Entries are
+ * consumed by the hook, and pruned after a minute in case it never runs.
+ */
+const endingBySlo = new Map<string, number>();
+export function markEndingBySlo(sessionId: string): void {
+  const now = Date.now();
+  for (const [id, at] of endingBySlo) if (now - at > 60_000) endingBySlo.delete(id);
+  endingBySlo.set(sessionId, now);
+}
+export function consumeEndingBySlo(sessionId: string): boolean {
+  return endingBySlo.delete(sessionId);
 }
 
 export async function forgetParticipants(adapter: Adapter, sessionId: string): Promise<void> {

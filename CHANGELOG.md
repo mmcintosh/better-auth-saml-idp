@@ -49,6 +49,8 @@ The first npm release (1.0.0) waits for `better-auth-cloudflare` 0.4, which Work
 
 ### Added
 
+- **`events.onSessionEnded`** (D-043): when a session ends *without* Single Logout (an admin revoke or disable, a factor change, `/sign-out`, expiry), the event names the SPs that weren't told, with NameID and SessionIndex, even when the delete runs outside a request. Participant rows gain `userId` and `endedAt` (D1 migration `0007`). They're kept until expiry and listed by the server-only `auth.api.samlIdpListSessionParticipants`.
+- **`sessionNotOnOrAfter`** (D-043), global and per SP: tell SPs when to end their session (`"idp-session"` or `{ maxSeconds }`). Off by default.
 - **NameID from a user field** (D-041): `nameId: { field: "employeeId" }`, for code and stored SPs. Only fields users can't set themselves (`id`, `email`, or `input: false`) are accepted, so nobody can claim another user's identity at an SP.
 - **Observability** ([guide](docs/guide/observability.md)): `events.onAssertionIssued`, `onDenied` and `onLogout` callbacks, which run in the background and can't affect the flow, and an optional `auditLog` table (`samlIdpAuditEvent`, D1 migration `0005`) with retention.
 - **Supply chain:**

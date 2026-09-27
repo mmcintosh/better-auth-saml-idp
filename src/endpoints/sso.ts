@@ -114,7 +114,7 @@ export const ssoEndpoint = (state: PluginState) =>
     },
     async (ctx) => {
       const { options } = state;
-      await sweepExpired(ctx.context.adapter as any, (what, e) => ctx.context.logger.warn(`[saml-idp] cleanup of expired ${what} failed`, e), Date.now(), { auditLog: state.options.auditLog !== undefined });
+      await sweepExpired(ctx.context.adapter as any, (what, e) => ctx.context.logger.warn(`[saml-idp] cleanup of expired ${what} failed`, e), Date.now(), { participants: state.options.sessionTracking, auditLog: state.options.auditLog !== undefined });
       const isPost = ctx.request?.method === "POST";
 
       // HTTP-POST binding, second leg: the same-site GET re-entry (see the 303 below).

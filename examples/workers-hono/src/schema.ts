@@ -114,20 +114,26 @@ export const samlIdpServiceProviders = sqliteTable("saml_idp_service_providers",
   updatedBy: text("updated_by"),
 });
 
-/** Single Logout participants (only needed with `singleLogout.enabled`; D-028). */
+/** Which SPs got assertions in which session: for Single Logout (D-028) and `events.onSessionEnded` (D-043). */
 export const samlIdpSessionParticipants = sqliteTable(
   "saml_idp_session_participants",
   {
     id: text("id").primaryKey(),
     key: text("key").notNull().unique(), // hash(sessionKey, spId)
     sessionKey: text("session_key").notNull(),
+    userId: text("user_id"), // D-043, migration 0006/0007
+    endedAt: integer("ended_at", { mode: "timestamp_ms" }),
     spId: text("sp_id").notNull(),
     nameId: text("name_id").notNull(),
     nameIdFormat: text("name_id_format").notNull(),
     sessionIndex: text("session_index").notNull(),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
   },
-  (t) => [index("saml_idp_session_participants_session_idx").on(t.sessionKey), index("saml_idp_session_participants_expires_idx").on(t.expiresAt)],
+  (t) => [
+    index("saml_idp_session_participants_session_idx").on(t.sessionKey),
+    index("saml_idp_session_participants_expires_idx").on(t.expiresAt),
+    index("saml_idp_session_participants_user_idx").on(t.userId),
+  ],
 );
 
 /** Audit log (only needed with `auditLog.enabled`; D-038). */

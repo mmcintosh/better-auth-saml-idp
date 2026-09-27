@@ -199,6 +199,8 @@ export interface ServiceProviderConfig {
    * ("sign-then-encrypt"), as `sign` says. Omit to send plaintext assertions.
    */
   encryption?: ServiceProviderEncryptionConfig;
+  /** Override the global `sessionNotOnOrAfter` for this SP. */
+  sessionNotOnOrAfter?: SessionLimit;
 }
 
 export interface ServiceProviderEncryptionConfig {
@@ -232,6 +234,9 @@ export interface SigningConfig {
   /** Which parts of the SAML Response to sign. Default `"both"`. */
   sign?: SignedParts;
 }
+
+/** See `SamlIdpOptions.sessionNotOnOrAfter`. */
+export type SessionLimit = false | "idp-session" | { maxSeconds: number };
 
 /** NameID from a user field; see `ServiceProviderConfig.nameId`. */
 export interface NameIdSource {
@@ -365,6 +370,14 @@ export interface SamlIdpOptions {
    * Default false. Useful for SPs and federations that verify metadata signatures.
    */
   signMetadata?: boolean;
+  /**
+   * Tell SPs when to end their own session: `SessionNotOnOrAfter` on the AuthnStatement (Core
+   * §2.7.2), a bound for when the IdP session ends without the SP being told (D-043). `false`
+   * (default): not sent. `"idp-session"`: the IdP session's expiry. `{ maxSeconds }`: that long
+   * after issuance, but never past the IdP session's expiry. SPs that honour it (Shibboleth,
+   * SimpleSAMLphp) sign the user out then; many SaaS SPs ignore it. Each SP can override it.
+   */
+  sessionNotOnOrAfter?: SessionLimit;
   /** Validator run on every inbound SAML message. Default: `libxml2Validator()`. */
   schemaValidator?: SchemaValidator;
 }
@@ -397,6 +410,8 @@ export interface ResolvedServiceProvider {
   sign: SignedParts;
   /** Present when assertions to this SP are encrypted; the certificate is parsed at startup. */
   encryption?: import("./saml/encrypt").AssertionEncryption;
+  /** Effective `sessionNotOnOrAfter` (per-SP override, else the global setting). */
+  sessionNotOnOrAfter: SessionLimit;
 }
 
 export interface ResolvedSamlIdpOptions {
@@ -419,6 +434,9 @@ export interface ResolvedSamlIdpOptions {
   schema: SamlIdpOptions["schema"];
   signMetadata: boolean;
   singleLogout: boolean;
+  sessionNotOnOrAfter: SessionLimit;
+  /** Record which SPs got assertions in which session: with Single Logout, or for `onSessionEnded` (D-043). */
+  sessionTracking: boolean;
   events: import("./events").SamlIdpEventHandlers | undefined;
   auditLog: { retentionDays: number } | undefined;
   registry: { canManage: NonNullable<SamlIdpOptions["registry"]>["canManage"]; permissions: boolean; cacheMs: number; authorize: ResolvedServiceProvider["authorize"] | undefined } | undefined;

@@ -11,6 +11,7 @@ import type {
   SamlIdpUser,
   AttributeSource,
   SignedParts,
+  SessionLimit,
 } from "./types";
 
 export const NAMEID_EMAIL = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress";
@@ -118,6 +119,7 @@ const serviceProviderShape = z.object({
       })
       .strict()
       .optional(),
+    sessionNotOnOrAfter: z.union([z.literal(false), z.literal("idp-session"), z.object({ maxSeconds: z.number().int().min(60).max(30 * 86400) }).strict()]).optional(),
     encryption: z
       .object({
         certificate: pem("CERTIFICATE"),
@@ -276,12 +278,14 @@ const optionsSchema = z
       .strict()
       .optional(),
     signMetadata: z.boolean().optional(),
+    sessionNotOnOrAfter: z.union([z.literal(false), z.literal("idp-session"), z.object({ maxSeconds: z.number().int().min(60).max(30 * 86400) }).strict()]).optional(),
     singleLogout: z.object({ enabled: z.boolean() }).strict().optional(),
     events: z
       .object({
         onAssertionIssued: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onAssertionIssued"]>>().optional(),
         onDenied: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onDenied"]>>().optional(),
         onLogout: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onLogout"]>>().optional(),
+        onSessionEnded: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onSessionEnded"]>>().optional(),
       })
       .strict()
       .optional(),
@@ -396,6 +400,7 @@ type ParsedServiceProvider = z.infer<typeof serviceProviderSchema> | StoredServi
 
 interface SpDefaults {
   sign: SignedParts;
+  sessionNotOnOrAfter: SessionLimit;
   relayStateMaxBytes: number;
   authorize?: ResolvedServiceProvider["authorize"];
 }
@@ -476,6 +481,7 @@ function resolveServiceProvider(sp: ParsedServiceProvider, path: string, d: SpDe
     allowedRelayStates: sp.allowedRelayStates ?? [],
     authorize: ("authorize" in sp ? sp.authorize : undefined) ?? d.authorize ?? (() => true),
     sign: sp.sign ?? d.sign,
+    sessionNotOnOrAfter: sp.sessionNotOnOrAfter ?? d.sessionNotOnOrAfter,
     ...(encryption ? { encryption } : {}),
   };
 }
@@ -496,7 +502,7 @@ export function resolveStoredServiceProvider(
   const serviceProvider = resolveServiceProvider(
     parsed.data,
     "serviceProvider",
-    { sign: options.signing.sign, relayStateMaxBytes: options.relayStateMaxBytes, authorize },
+    { sign: options.signing.sign, sessionNotOnOrAfter: options.sessionNotOnOrAfter, relayStateMaxBytes: options.relayStateMaxBytes, authorize },
     issues,
     warnings,
   );
@@ -533,6 +539,7 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
 
   const spDefaults: SpDefaults = {
     sign: o.signing.sign ?? "both",
+    sessionNotOnOrAfter: o.sessionNotOnOrAfter ?? false,
     relayStateMaxBytes: o.relayStateMaxBytes ?? RELAY_STATE_HARD_CAP,
   };
   const serviceProviders = o.serviceProviders.map((sp, i) => resolveServiceProvider(sp, `serviceProviders.${i}`, spDefaults, issues, warnings));
@@ -572,7 +579,9 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
     schemaValidator: o.schemaValidator ?? defaultSchemaValidator(),
     schema: o.schema,
     signMetadata: o.signMetadata ?? false,
+    sessionNotOnOrAfter: o.sessionNotOnOrAfter ?? false,
     singleLogout: o.singleLogout?.enabled ?? false,
+    sessionTracking: (o.singleLogout?.enabled ?? false) || o.events?.onSessionEnded !== undefined,
     events: o.events,
     auditLog: o.auditLog?.enabled ? { retentionDays: o.auditLog.retentionDays ?? 90 } : undefined,
     registry: o.registry?.enabled

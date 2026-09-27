@@ -162,6 +162,13 @@ function defaultNameId(ctx: GenericEndpointContext, sp: ResolvedServiceProvider,
   return user.email;
 }
 
+/** `SessionNotOnOrAfter` for this SP (D-043): never past the IdP session's own expiry. */
+export function sessionEnd(limit: ResolvedServiceProvider["sessionNotOnOrAfter"], sessionExpiresAt: Date, now: Date): Date | undefined {
+  if (limit === false) return undefined;
+  if (limit === "idp-session") return sessionExpiresAt;
+  return new Date(Math.min(sessionExpiresAt.getTime(), now.getTime() + limit.maxSeconds * 1000));
+}
+
 /** The public, read-only view of an SP that callbacks receive (not the internal resolved form). */
 export function serviceProviderInfo(sp: ResolvedServiceProvider): ServiceProviderInfo {
   return Object.freeze({
@@ -258,16 +265,18 @@ export async function issueResponse(
     attributes,
     authnInstant: new Date(session.session.createdAt),
     sessionIndex,
+    sessionNotOnOrAfter: sessionEnd(sp.sessionNotOnOrAfter, new Date(session.session.expiresAt), now),
     now,
   }, sp.sign, sp.encryption);
   ctx.context.logger.info(
     `[saml-idp] issued ${signed.encrypted ? "encrypted " : ""}assertion ${signed.assertionId} for SP ${sp.id} (user ${user.id})`,
   );
-  if (state.options.singleLogout) {
-    // Logout must be able to reach this SP later (D-028). If it can't be recorded, don't issue:
-    // a later logout would skip this SP and still report Success (review 3, R3-2).
+  if (state.options.sessionTracking) {
+    // Logout must be able to reach this SP later (D-028), and a session that ends without it
+    // must be able to name it (D-043). If it can't be recorded, don't issue: a later logout
+    // would skip this SP and still report Success (review 3, R3-2).
     try {
-      await recordParticipant(ctx.context.adapter as any, session.session.id, { spId: sp.id, nameId, nameIdFormat: sp.nameIdFormat, sessionIndex }, new Date(session.session.expiresAt));
+      await recordParticipant(ctx.context.adapter as any, session.session.id, user.id, { spId: sp.id, nameId, nameIdFormat: sp.nameIdFormat, sessionIndex }, new Date(session.session.expiresAt));
     } catch (e) {
       ctx.context.logger.error(`[saml-idp] could not record SP ${sp.id} as a logout participant; not issuing`, e);
       return fail(ctx, state, "INTERNAL_ERROR", "logout participant not recorded", who);
