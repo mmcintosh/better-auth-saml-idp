@@ -499,8 +499,8 @@ samlIdp({
 
 | Method | Path | |
 |---|---|---|
-| GET | `/saml-idp/service-providers` | List SPs, code and stored, with any validation issues |
-| GET | `/saml-idp/service-providers/get?id=` | One stored SP |
+| GET | `/saml-idp/service-providers` | List SPs, code and stored, each a `ServiceProviderRecord` with any issues and warnings |
+| GET | `/saml-idp/service-providers/get?id=` | One SP, code or stored |
 | POST | `/saml-idp/service-providers/create` | `{ serviceProvider, enabled? }` |
 | POST | `/saml-idp/service-providers/update` | `{ id, serviceProvider, enabled? }`: full replacement; the id can't change |
 | POST | `/saml-idp/service-providers/delete` | `{ id }` |

@@ -12,7 +12,7 @@ type _ResolvedOptions = Pkg.ResolvedSamlIdpOptions;
 // @ts-expect-error internal
 type _ResolvedSp = Pkg.ResolvedServiceProvider;
 // And these must stay exported.
-type _Public = [Pkg.SamlIdpOptions, Pkg.ServiceProviderConfig, Pkg.StoredServiceProviderConfig, Pkg.ServiceProviderInfo, Pkg.SamlIdpErrorCode, Pkg.SamlIdpEventHandlers];
+type _Public = [Pkg.SamlIdpOptions, Pkg.ServiceProviderConfig, Pkg.StoredServiceProviderConfig, Pkg.ServiceProviderInfo, Pkg.ServiceProviderRecord, Pkg.RequestSignaturePolicy, Pkg.SignedParts, Pkg.SamlIdpErrorCode, Pkg.SamlIdpEventHandlers];
 
 describe("public API: authorize() receives a read-only ServiceProviderInfo", () => {
   it("exactly the public fields, frozen", async () => {

@@ -100,11 +100,26 @@ The API is mounted when `canManage` or `permissions` is set. Every call needs a 
 
 | Method | Path | Body / query | Returns |
 |---|---|---|---|
-| GET | `/saml-idp/service-providers` | | `{ serviceProviders: [...] }`: code SPs (`source: "code"`) and stored SPs (`source: "database"`, with `config`, `enabled`, `valid`, `issues`, timestamps, `updatedBy`) |
-| GET | `/saml-idp/service-providers/get` | `?id=` | `{ serviceProvider }` |
-| POST | `/saml-idp/service-providers/create` | `{ serviceProvider, enabled? }` | `{ serviceProvider, warnings }` |
-| POST | `/saml-idp/service-providers/update` | `{ id, serviceProvider, enabled? }` (full replacement; `id` can't change) | `{ serviceProvider, warnings }` |
-| POST | `/saml-idp/service-providers/delete` | `{ id }` | `{ deleted }` |
+| GET | `/saml-idp/service-providers` | | `{ serviceProviders: ServiceProviderRecord[] }`: code SPs first, then stored ones |
+| GET | `/saml-idp/service-providers/get` | `?id=` | `{ serviceProvider: ServiceProviderRecord }`: a stored SP, or a code SP |
+| POST | `/saml-idp/service-providers/create` | `{ serviceProvider, enabled? }` | `{ serviceProvider: ServiceProviderRecord }` |
+| POST | `/saml-idp/service-providers/update` | `{ id, serviceProvider, enabled? }` (full replacement; `id` can't change) | `{ serviceProvider: ServiceProviderRecord }` |
+| POST | `/saml-idp/service-providers/delete` | `{ id }` | `{ deleted: id }` |
+
+Every route returns SPs in one shape, `ServiceProviderRecord` (exported):
+
+| Field | Code SPs | Stored SPs |
+|---|---|---|
+| `id`, `entityId` | ✓ | ✓ |
+| `source` | `"code"` | `"database"` |
+| `enabled` | `true` | as stored |
+| `valid` | `true` (checked at startup) | whether sign-in uses it |
+| `issues` | `[]` | why it isn't used, if it isn't |
+| `warnings` | `[]` (logged at startup) | accepted, but worth a look (e.g. unpinned metadata) |
+| `config` | `null` (code may hold functions) | the stored JSON |
+| `createdAt`, `updatedAt`, `updatedBy` | `null` | when, and which user, last saved it |
+
+Create and update answer with what they wrote, so a successful call always returns the record.
 
 With the [client plugin](options.md#client-plugin):
 

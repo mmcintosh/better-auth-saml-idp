@@ -9,6 +9,7 @@ import { SAML_IDP_ERROR_CODES } from "../errors";
 import { adminAllows, type SamlServiceProviderAction } from "../access";
 import { resolveStoredServiceProvider } from "../options";
 import { isEnabled, SP_MODEL, type StoredSpRow } from "../saml/sp-directory";
+import type { ResolvedServiceProvider, ServiceProviderRecord } from "../types";
 import { isBanned, type PluginState } from "./issue";
 
 const MAX_CONFIG_BYTES = 64 * 1024;
@@ -50,33 +51,49 @@ async function manager(ctx: GenericEndpointContext, state: PluginState, action: 
   return user as { id: string };
 }
 
-function view(row: StoredSpRow, state: PluginState) {
-  let config: unknown;
+const codeRecord = (sp: ResolvedServiceProvider): ServiceProviderRecord => ({
+  id: sp.id,
+  entityId: sp.entityId,
+  source: "code",
+  enabled: true,
+  valid: true,
+  issues: [],
+  warnings: [],
+  config: null,
+  createdAt: null,
+  updatedAt: null,
+  updatedBy: null,
+});
+
+/**
+ * A stored row as a record. Invalid rows (edited by hand, or options tightened since) are
+ * returned with their issues and are not used for sign-in: the same checks the directory
+ * applies when it loads a row (R4-L8), so `valid` means used.
+ */
+function view(row: StoredSpRow, state: PluginState): ServiceProviderRecord {
+  let parsed: unknown;
   try {
-    config = JSON.parse(row.config);
+    parsed = JSON.parse(row.config);
   } catch {
-    config = null;
+    parsed = undefined;
   }
+  const config = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
   const r = config === null ? undefined : resolveStoredServiceProvider(config, state.options);
+  const issues =
+    r === undefined
+      ? ["config is not a JSON object"]
+      : r.serviceProvider && (r.serviceProvider.id !== row.spId || r.serviceProvider.entityId !== row.entityId)
+        ? [...r.issues, "the id/entityId columns don't match the config (edited by hand?); not used for sign-in"]
+        : [...r.issues];
+  if (state.directory.inCode(row.spId, row.entityId)) issues.push("an SP in code has the same id or entityId; the code one is used");
   return {
     id: row.spId,
     entityId: row.entityId,
-    source: "database" as const,
+    source: "database",
     enabled: isEnabled(row.enabled),
-    // Invalid rows (edited by hand, or options tightened since) are listed with their issues and
-    // are not used for sign-in.
-    // The same checks the directory applies when it loads a row (R4-L8): valid means used.
-    valid:
-      r?.serviceProvider !== undefined &&
-      r.serviceProvider.id === row.spId &&
-      r.serviceProvider.entityId === row.entityId &&
-      !state.directory.inCode(row.spId, row.entityId),
-    issues:
-      r === undefined
-        ? ["config is not valid JSON"]
-        : r.serviceProvider && (r.serviceProvider.id !== row.spId || r.serviceProvider.entityId !== row.entityId)
-          ? [...r.issues, "the id/entityId columns don't match the config (edited by hand?); not used for sign-in"]
-          : r.issues,
+    valid: r?.serviceProvider !== undefined && issues.length === 0,
+    issues,
+    warnings: r?.warnings ?? [],
     config,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -89,7 +106,7 @@ function validate(state: PluginState, input: unknown) {
   const r = resolveStoredServiceProvider(input, state.options);
   if (!r.serviceProvider || !r.config) throw fail("BAD_REQUEST", "INVALID_SERVICE_PROVIDER", { issues: r.issues });
   if (state.directory.inCode(r.config.id, r.config.entityId)) throw fail("CONFLICT", "SERVICE_PROVIDER_IN_CODE");
-  return { config: r.config, warnings: r.warnings };
+  return r.config;
 }
 
 /**
@@ -114,12 +131,8 @@ export function registryEndpoints(state: PluginState) {
       async (ctx) => {
         await manager(ctx, state, "list");
         const rows = (await adapterOf(ctx).findMany({ model: SP_MODEL, limit: MAX_LIST, sortBy: { field: "spId", direction: "asc" } })) as StoredSpRow[];
-        return ctx.json({
-          serviceProviders: [
-            ...state.directory.codeSps().map((sp) => ({ id: sp.id, entityId: sp.entityId, source: "code" as const, enabled: true, valid: true })),
-            ...rows.map((r) => view(r, state)),
-          ],
-        });
+        const serviceProviders: ServiceProviderRecord[] = [...state.directory.codeSps().map(codeRecord), ...rows.map((r) => view(r, state))];
+        return ctx.json({ serviceProviders });
       },
     ),
 
@@ -128,9 +141,12 @@ export function registryEndpoints(state: PluginState) {
       { method: "GET", use: [sensitiveSessionMiddleware], query: z.object({ id: idSchema }) },
       async (ctx) => {
         await manager(ctx, state, "read");
+        // A stored row first: one that clashes with a code SP is only reachable here.
         const row = await findRow(ctx, ctx.query.id);
-        if (!row) throw fail("NOT_FOUND", "SERVICE_PROVIDER_NOT_FOUND");
-        return ctx.json({ serviceProvider: view(row, state) });
+        const inCode = state.directory.codeSps().find((sp) => sp.id === ctx.query.id);
+        const serviceProvider: ServiceProviderRecord | undefined = row ? view(row, state) : inCode && codeRecord(inCode);
+        if (!serviceProvider) throw fail("NOT_FOUND", "SERVICE_PROVIDER_NOT_FOUND");
+        return ctx.json({ serviceProvider });
       },
     ),
 
@@ -139,7 +155,7 @@ export function registryEndpoints(state: PluginState) {
       { method: "POST", use: [sensitiveSessionMiddleware], body: z.object({ serviceProvider: spBody, enabled: z.boolean().optional() }) },
       async (ctx) => {
         const user = await manager(ctx, state, "create");
-        const { config, warnings } = validate(state, ctx.body.serviceProvider);
+        const config = validate(state, ctx.body.serviceProvider);
         const now = new Date();
         const data = { spId: config.id, entityId: config.entityId, config: JSON.stringify(config), enabled: ctx.body.enabled ?? true, createdAt: now, updatedAt: now, updatedBy: user.id };
         try {
@@ -153,8 +169,9 @@ export function registryEndpoints(state: PluginState) {
         }
         state.directory.invalidate();
         audit(ctx, `user ${user.id} created SP ${config.id} (${config.entityId})${data.enabled ? "" : ", disabled"}`);
-        const row = await findRow(ctx, config.id);
-        return ctx.json({ serviceProvider: row ? view(row, state) : null, warnings });
+        // What was written, not a re-read: a read can miss (replicas, case-folding collations).
+        const serviceProvider = view({ id: "", ...data }, state);
+        return ctx.json({ serviceProvider });
       },
     ),
 
@@ -167,7 +184,7 @@ export function registryEndpoints(state: PluginState) {
         if (!row) throw fail("NOT_FOUND", "SERVICE_PROVIDER_NOT_FOUND");
         if (ctx.body.serviceProvider.id !== ctx.body.id)
           throw fail("BAD_REQUEST", "INVALID_SERVICE_PROVIDER", { issues: ["serviceProvider.id: can't be changed (delete and re-create instead)"] });
-        const { config, warnings } = validate(state, ctx.body.serviceProvider);
+        const config = validate(state, ctx.body.serviceProvider);
         const update = {
           entityId: config.entityId,
           config: JSON.stringify(config),
@@ -184,8 +201,8 @@ export function registryEndpoints(state: PluginState) {
         }
         state.directory.invalidate();
         audit(ctx, `user ${user.id} updated SP ${row.spId} (${config.entityId})${update.enabled ? "" : ", disabled"}`);
-        const fresh = await findRow(ctx, row.spId);
-        return ctx.json({ serviceProvider: fresh ? view(fresh, state) : null, warnings });
+        const serviceProvider = view({ ...row, ...update }, state);
+        return ctx.json({ serviceProvider });
       },
     ),
 

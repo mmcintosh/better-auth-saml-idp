@@ -8,6 +8,10 @@ The first npm release (1.0.0) waits for `better-auth-cloudflare` 0.4, which Work
 
 ### Changed
 
+- **One record shape for the registry API** (API decision 5, D-040): list, get, create and update all return `ServiceProviderRecord`, which is exported, for code and stored SPs alike.
+  - `warnings` moved inside the record. Create and update now return `{ serviceProvider }`, never `null`.
+  - Get also finds code SPs.
+  - A stored row that clashes with a code SP says so in `issues`.
 - **Option shapes say what they do** (API decision 4, D-040). Configurations and stored registry rows need these renames (the example ships migration `0006`):
   - `signResponse` / `signAssertion` → `sign: "both" | "response" | "assertion"`, globally (`signing.sign`) and per SP.
   - `requireSignedAuthnRequests` → `requestSignatures: "require" | "verify-if-signed" | "ignore"`. The default is `"verify-if-signed"` with certificates or a metadata URL, otherwise `"ignore"`.

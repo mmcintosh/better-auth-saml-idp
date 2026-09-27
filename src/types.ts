@@ -41,6 +41,31 @@ export interface ServiceProviderInfo {
   readonly organization: Readonly<{ slug?: string; id?: string; roles?: readonly string[] }> | undefined;
 }
 
+/**
+ * One SP as the registry API returns it (API decision 5): every route uses this shape, for SPs
+ * in code and in the database alike.
+ */
+export interface ServiceProviderRecord {
+  id: string;
+  entityId: string;
+  /** `"code"`: from `serviceProviders` (read-only here). `"database"`: managed by this API. */
+  source: "code" | "database";
+  enabled: boolean;
+  /** Used for sign-in. False when `issues` is non-empty. Always true for code SPs (checked at startup). */
+  valid: boolean;
+  /** Why a stored SP isn't used for sign-in. */
+  issues: string[];
+  /** Accepted but worth a look (e.g. unpinned metadata). Code SPs' warnings are logged at startup instead. */
+  warnings: string[];
+  /** The stored JSON as saved (for SPs that aren't `valid`, possibly not a valid config). `null` for code SPs, which may hold functions. */
+  config: Record<string, unknown> | null;
+  /** Database SPs only; `null` for code SPs. */
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  /** The user who last saved it. */
+  updatedBy: string | null;
+}
+
 export interface AuthorizeContext {
   user: SamlIdpUser;
   session: Session;

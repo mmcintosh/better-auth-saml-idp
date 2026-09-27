@@ -45,6 +45,7 @@ export type {
   ServiceProviderConfig,
   ServiceProviderEncryptionConfig,
   ServiceProviderInfo,
+  ServiceProviderRecord,
   SignatureAlgorithm,
   SignedParts,
   SigningConfig,

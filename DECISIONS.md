@@ -1168,3 +1168,30 @@ After 1.0, anything public is a semver promise. Review 4 listed six choices that
   8. drop the `"verify-if-signed"` needs-certificates check;
   9. advertise `WantAuthnRequestsSigned` for any non-ignore policy (caught after adding the lenient-metadata case);
   10. stop importing `AuthnRequestsSigned="true"` as `"require"`.
+
+**5. One record shape for the registry API (`ServiceProviderRecord`).**
+- **Before:**
+  - The list returned five fields for code SPs and eleven for stored ones.
+  - Get returned 404 for a code SP that the list had just shown.
+  - Create and update returned `{ serviceProvider, warnings }`, with `warnings` outside the record, so a stored SP's warnings were visible only at the moment it was saved.
+  - Create and update re-read the row after writing it, and returned `serviceProvider: null` with a 200 if that read missed (a read replica, or a case-folding collation).
+  - A stored row that clashed with a code SP was reported `valid: false` with an empty `issues` list.
+- **Now:**
+  - Every route returns `ServiceProviderRecord` (exported), with the same eleven keys for both sources. Code SPs have `config: null`, `issues: []`, `warnings: []` and `null` timestamps.
+  - `warnings` is part of the record, recomputed from the stored config on every read.
+  - Create and update build the record from what they wrote, with no read-back.
+  - Get falls back to code SPs, checking the stored row first because a clashing row is only reachable there. A clash is reported as an issue.
+  - Delete still returns `{ deleted: id }`.
+- **Rejected:** keeping the per-route shapes and documenting them. That leaves every client handling four shapes and a null that means "saved, but we can't show you".
+- **Tests:** `registry.test.ts` ("one record shape on every route"):
+  - the exact keys, from list (both sources), get, create and update;
+  - get of a code SP;
+  - warnings kept in the record;
+  - the clash issue;
+  - create and update returning the record while every read-back of the row misses. This fails against the old code, which returned `null`.
+- **Mutation proof:** five mutations, each caught:
+  1. drop `issues`/`warnings` from code records;
+  2. get ignoring code SPs;
+  3. empty `warnings`;
+  4. drop the clash issue;
+  5. update overwriting `createdAt`.

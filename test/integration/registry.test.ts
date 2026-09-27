@@ -251,3 +251,78 @@ describe("SP registry: storage and caching", () => {
     expect(Object.keys(plugin.schema)).toEqual(["samlIdpSeenRequest"]);
   });
 });
+
+describe("SP registry: one record shape on every route (API decision 5)", () => {
+  const KEYS = ["config", "createdAt", "enabled", "entityId", "id", "issues", "source", "updatedAt", "updatedBy", "valid", "warnings"];
+  const keysOf = (o: Record<string, unknown>) => Object.keys(o).sort();
+
+  it("list (code and stored), get, create and update all return the same record", async () => {
+    const { auth } = await host();
+    const { browser, user } = await admin(auth);
+    const created = await json(await api(browser, "/create", { serviceProvider: stored() }));
+    expect(Object.keys(created)).toEqual(["serviceProvider"]); // no top-level warnings any more
+    expect(keysOf(created.serviceProvider)).toEqual(KEYS);
+    expect(created.serviceProvider).toMatchObject({ id: SP_ID, source: "database", valid: true, issues: [], warnings: [], updatedBy: user.id });
+    expect(created.serviceProvider.config).toMatchObject(stored());
+
+    const updated = await json(await api(browser, "/update", { id: SP_ID, serviceProvider: stored({ acsUrls: ["https://stored.test/acs2"] }), enabled: false }));
+    expect(Object.keys(updated)).toEqual(["serviceProvider"]);
+    expect(updated.serviceProvider).toMatchObject({ id: SP_ID, enabled: false, config: { acsUrls: ["https://stored.test/acs2"] } });
+    expect(updated.serviceProvider.createdAt).toBe(created.serviceProvider.createdAt); // kept from the row
+    expect(keysOf(updated.serviceProvider)).toEqual(KEYS);
+
+    const list = (await json(await api(browser, ""))).serviceProviders;
+    for (const r of list) expect(keysOf(r)).toEqual(KEYS);
+    expect(list.find((r: any) => r.id === SP_ID)).toEqual(updated.serviceProvider);
+    expect(list.find((r: any) => r.id === "code-sp")).toEqual({
+      id: "code-sp", entityId: SP_ENTITY_ID, source: "code", enabled: true, valid: true, issues: [], warnings: [], config: null, createdAt: null, updatedAt: null, updatedBy: null,
+    });
+  });
+
+  it("create and update answer with what they wrote, even if reading it back would miss", async () => {
+    const { auth } = await host();
+    const { browser } = await admin(auth);
+    const ctx = await auth.$context;
+    const findOne = ctx.adapter.findOne.bind(ctx.adapter);
+    // A lagging read replica, say: the row isn't visible yet.
+    ctx.adapter.findOne = async (args: any) => (args.model === "samlIdpServiceProvider" && args.where?.[0]?.value === SP_ID ? null : findOne(args));
+    const created = await json(await api(browser, "/create", { serviceProvider: stored() }));
+    expect(created.serviceProvider).toMatchObject({ id: SP_ID, valid: true });
+    ctx.adapter.findOne = findOne;
+    await api(browser, `/get?id=${SP_ID}`); // visible again
+    let spReads = 0; // update's own lookup sees the row; any later read of it misses
+    ctx.adapter.findOne = async (args: any) => (args.model === "samlIdpServiceProvider" && spReads++ > 0 ? null : findOne(args));
+    const updated = await json(await api(browser, "/update", { id: SP_ID, serviceProvider: stored({ acsUrls: ["https://stored.test/acs3"] }) }));
+    ctx.adapter.findOne = findOne;
+    expect(updated.serviceProvider).toMatchObject({ id: SP_ID, config: { acsUrls: ["https://stored.test/acs3"] } });
+  });
+
+  it("get finds code SPs too, as the list shows them", async () => {
+    const { auth } = await host();
+    const { browser } = await admin(auth);
+    const res = await api(browser, "/get?id=code-sp");
+    expect(res.status).toBe(200);
+    expect((await json(res)).serviceProvider).toMatchObject({ id: "code-sp", source: "code", config: null });
+  });
+
+  it("warnings travel inside the record", async () => {
+    const { auth } = await host();
+    const { browser } = await admin(auth);
+    const r = (await json(await api(browser, "/create", { serviceProvider: stored({ metadata: { url: "https://stored.test/md.xml" } }) }))).serviceProvider;
+    expect(r.valid).toBe(true);
+    expect(r.warnings.join(" ")).toMatch(/isn't pinned/);
+    expect((await json(await api(browser, `/get?id=${SP_ID}`))).serviceProvider.warnings).toEqual(r.warnings);
+  });
+
+  it("a stored row that clashes with a code SP says why it isn't used", async () => {
+    const { auth } = await host();
+    const { browser } = await admin(auth);
+    await api(browser, "/create", { serviceProvider: stored() });
+    const ctx = await auth.$context;
+    // Only possible by hand: the API refuses it (SERVICE_PROVIDER_IN_CODE).
+    await ctx.adapter.update({ model: "samlIdpServiceProvider", where: [{ field: "spId", value: SP_ID }], update: { entityId: SP_ENTITY_ID, config: JSON.stringify(stored({ entityId: SP_ENTITY_ID })) } });
+    const r = (await json(await api(browser, `/get?id=${SP_ID}`))).serviceProvider;
+    expect(r).toMatchObject({ source: "database", valid: false });
+    expect(r.issues).toEqual(["an SP in code has the same id or entityId; the code one is used"]);
+  });
+});
