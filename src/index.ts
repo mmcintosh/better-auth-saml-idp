@@ -9,7 +9,7 @@ import { resumeEndpoint } from "./endpoints/resume";
 import { ssoEndpoint } from "./endpoints/sso";
 import { SAML_IDP_ERROR_CODES } from "./errors";
 import { resolveOptions } from "./options";
-import { idpCache, SSO_PATH } from "./saml/idp";
+import { idpCache, SSO_PATH, withBasePath } from "./saml/idp";
 import { samlIdpSchema } from "./schema";
 import { SpMetadataCache } from "./saml/sp-metadata-refresh";
 import { SpDirectory } from "./saml/sp-directory";
@@ -67,6 +67,14 @@ export const samlIdp = (options: SamlIdpOptions) => {
       for (const sp of resolved.serviceProviders) {
         warnClaimableOrganizations(ctx.logger, ctx.options.plugins as any, sp);
         warnUserWritableFields(ctx.logger, ctx.options.user as any, sp);
+      }
+      if (resolved.baseURL) {
+        // Same rule as Better Auth's own baseURL, so the same value can go in both (decision 6).
+        resolved.baseURL = withBasePath(resolved.baseURL, ctx.options.basePath);
+        if (typeof ctx.baseURL === "string" && ctx.baseURL && ctx.baseURL.replace(/\/+$/, "") !== resolved.baseURL)
+          ctx.logger.warn(
+            `[saml-idp] samlIdp baseURL resolves to ${resolved.baseURL} but Better Auth's is ${ctx.baseURL}: the IdP's metadata and Destination check use ${resolved.baseURL}. Usually both should be the same; or leave samlIdp's unset.`,
+          );
       }
       if (!resolved.baseURL && !ctx.options.baseURL)
         ctx.logger.warn(

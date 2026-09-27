@@ -39,7 +39,7 @@ export const auth = betterAuth({
   plugins: [
     samlIdp({
       entityId: "https://auth.example.com/api/auth/saml2/idp",
-      baseURL: "https://auth.example.com/api/auth",
+      baseURL: "https://auth.example.com",
       loginPage: "/sign-in",
       signing: {
         privateKey: process.env.SAML_IDP_PRIVATE_KEY!,
@@ -52,7 +52,7 @@ export const auth = betterAuth({
 ```
 
 - `entityId` is the IdP's permanent name. SPs pin it, so pick it once. The URL form above is conventional, but it's only an identifier.
-- `baseURL` pins the URLs the IdP puts in its metadata and checks in requests. Always set it in production.
+- `baseURL` pins the URLs the IdP puts in its metadata and checks in requests. It takes the same value as Better Auth's `baseURL`: the site's origin, with `basePath` (`/api/auth`) added for you. If Better Auth's `baseURL` is already set, you can leave this one out. In production, set at least one of the two.
 - `loginPage` is your existing sign-in page; see step 5.
 
 Every option is in the [options reference](options.md).

@@ -1195,3 +1195,22 @@ After 1.0, anything public is a semver promise. Review 4 listed six choices that
   3. empty `warnings`;
   4. drop the clash issue;
   5. update overwriting `createdAt`.
+
+**6. `samlIdp({ baseURL })` follows Better Auth's `baseURL` rule.**
+- **Before:** the plugin's `baseURL` had to be the full auth base URL (`https://auth.example.com/api/auth`), while Better Auth's `baseURL` is the origin (`https://auth.example.com`), with `basePath` added. A host pasting the same value into both got metadata advertising `https://auth.example.com/saml2/idp/sso`, a URL that doesn't exist, and `Destination` checks against it. Nothing warned.
+- **Now:**
+  - At `init`, the plugin applies Better Auth's own `withPath` rule, including a custom `basePath`: a bare origin gets `basePath` appended, and a URL with a path is used as it is. The same value works in both places, and existing full-URL values keep working, so nothing breaks.
+  - If both are pinned and resolve differently, a startup warning names both; the plugin's value is used.
+  - `check-config` shows the resolved URL.
+- **Rejected:**
+  - Removing the option and always using Better Auth's: hosts that let Better Auth's `baseURL` follow the request (several hosts) could no longer pin the IdP's URLs.
+  - Renaming it (`authBaseURL`): the trap would remain for anyone who guesses the meaning from Better Auth.
+- **Tests:** `test/integration/base-url.test.ts`:
+  - the rule's cases;
+  - metadata from an origin value, a custom `basePath`, and the old full-URL form;
+  - the mismatch warning.
+- **Mutation proof:** four mutations, each caught:
+  1. no rule at `init`;
+  2. ignoring the custom `basePath`;
+  3. dropping the warning;
+  4. always appending `basePath`.

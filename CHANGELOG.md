@@ -8,6 +8,7 @@ The first npm release (1.0.0) waits for `better-auth-cloudflare` 0.4, which Work
 
 ### Changed
 
+- **`samlIdp({ baseURL })` takes the same value as Better Auth's `baseURL`** (API decision 6, D-040). A bare origin (`https://auth.example.com`) now gets `basePath` added, as Better Auth does; before, it produced wrong URLs in metadata. Full URLs (`…/api/auth`) work as before. If both are pinned and disagree, a warning is logged.
 - **One record shape for the registry API** (API decision 5, D-040): list, get, create and update all return `ServiceProviderRecord`, which is exported, for code and stored SPs alike.
   - `warnings` moved inside the record. Create and update now return `{ serviceProvider }`, never `null`.
   - Get also finds code SPs.

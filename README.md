@@ -250,7 +250,7 @@ export const createAuth = (env: Env, cf: IncomingRequestCfProperties) =>
         plugins: [
           samlIdp({
             entityId: "https://auth.example.com/api/auth/saml2/idp",
-            baseURL: "https://auth.example.com/api/auth", // pin the IdP's own URLs
+            baseURL: "https://auth.example.com", // pin the IdP's own URLs (same value as Better Auth's baseURL)
             loginPage: "/sign-in",
             // What your sign-in guarantees; matched against SPs' RequestedAuthnContext.
             authnContextClassRef: "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport",
@@ -297,7 +297,7 @@ npx better-auth-saml-idp smoke https://auth.example.com --sp <SP entity ID>
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `entityId` | string | (required) | The IdP entity ID, usually `https://<host>/<basePath>/saml2/idp` |
-| `baseURL` | string | request host | Pins the IdP's own URLs (metadata, Destination check, resume links). **Strongly recommended** |
+| `baseURL` | string | Better Auth's `baseURL`, else request host | Pins the IdP's own URLs (metadata, Destination check, resume links). Same value and rule as Better Auth's `baseURL` (`basePath` is added to a bare origin). **Pin one of the two** |
 | `loginPage` | string | (required) | Path or absolute URL of your sign-in page; it receives `callbackURL` |
 | `signing.privateKey` / `.certificate` | PEM | (required) | RSA ≥ 2048 key and its certificate |
 | `signing.additionalCertificates` | PEM[] | `[]` | Published but not used to sign (rotation) |

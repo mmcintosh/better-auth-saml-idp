@@ -246,9 +246,10 @@ export interface SamlIdpOptions {
   /** The IdP entity ID, usually `https://<host>/<basePath>/saml2/idp`. */
   entityId: string;
   /**
-   * The Better Auth base URL the IdP's own URLs (SSO endpoint in metadata, resume URL,
-   * expected `Destination`) are built from, e.g. `https://auth.example.com/api/auth`.
-   * Strongly recommended: without it they follow the request's Host header.
+   * Where the IdP's own URLs (SSO endpoint in metadata, resume URL, expected `Destination`)
+   * come from. Same value and rule as Better Auth's `baseURL`: a bare origin
+   * (`https://auth.example.com`) gets `basePath` added; a URL with a path is used as it is.
+   * Default: Better Auth's base URL. Pin this or Better Auth's, or URLs follow the Host header.
    */
   baseURL?: string;
   /** Where unauthenticated users are sent. Path on this origin, or an absolute URL. */

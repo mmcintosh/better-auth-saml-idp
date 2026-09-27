@@ -45,6 +45,18 @@ export function createIdp(options: ResolvedSamlIdpOptions, baseURL: string): Idp
   });
 }
 
+/**
+ * Better Auth's rule for `baseURL` (API decision 6): a URL with no path is the site's origin
+ * and gets `basePath` (default `/api/auth`) appended; a URL with a path is used as it is. So
+ * `samlIdp({ baseURL })` takes the same value as `betterAuth({ baseURL })`.
+ */
+export function withBasePath(url: string, basePath: string | undefined = "/api/auth"): string {
+  const trimmed = url.replace(/\/+$/, "");
+  if (new URL(url).pathname.replace(/\/+$/, "") !== "") return trimmed;
+  if (!basePath || basePath === "/") return trimmed;
+  return `${trimmed}${basePath.startsWith("/") ? basePath : `/${basePath}`}`.replace(/\/+$/, "");
+}
+
 /** The Better Auth base URL the IdP's own URLs use: the pinned option, else the request's. */
 export function idpBaseURL(options: ResolvedSamlIdpOptions, requestBaseURL: string): string {
   return (options.baseURL ?? requestBaseURL).replace(/\/+$/, "");

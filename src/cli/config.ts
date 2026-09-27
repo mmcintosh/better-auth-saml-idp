@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { resolveOptions, SamlIdpConfigError } from "../options";
+import { withBasePath } from "../saml/idp";
 import { serviceProviderFromMetadata, SpMetadataError } from "../saml/sp-metadata";
 import type { SamlIdpOptions, SignedParts } from "../types";
 import { certFromBase64, certSummary, checkCert, describeCert, fetchText, httpsOnly, readInput, Report, UsageError } from "./util";
@@ -61,7 +62,11 @@ export async function checkConfig(path: string | undefined): Promise<Report> {
   for (const w of o.warnings) report.warn(w);
   report.section("IdP", {
     "Entity ID": o.entityId,
-    "Base URL": o.baseURL ?? "(not pinned: follows the request's Host header)",
+    "Base URL": o.baseURL
+      ? withBasePath(o.baseURL) === o.baseURL
+        ? o.baseURL
+        : `${withBasePath(o.baseURL)} (basePath /api/auth added, as Better Auth does; a different basePath is applied at runtime)`
+      : "(not pinned: Better Auth's baseURL, else the request's Host header)",
     "Login page": o.loginPage,
     Signing: `${o.signing.signatureAlgorithm}/${o.signing.digestAlgorithm}; signs ${SIGNS[o.signing.sign]}`,
     "Signed metadata": o.signMetadata,
