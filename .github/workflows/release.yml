@@ -86,8 +86,16 @@ jobs:
       # goes live after a maintainer approves it on npmjs.com (or `npm stage approve`) with 2FA,
       # so a compromised GitHub account alone can't publish. `npm stage` needs npm >= 11.15.
       - run: npm install -g npm@11.20.0 && npm --version
-      - run: npm stage publish out/*.tgz --provenance --access public
-      - env: { GH_TOKEN: "${{ github.token }}", VERSION: "${{ needs.package.outputs.version }}" }
+      # Pre-releases (X.Y.Z-rc.N) go to the `next` dist-tag, so a plain install never gets one;
+      # npm refuses a pre-release without an explicit tag anyway.
+      - id: tag
+        env: { VERSION: "${{ needs.package.outputs.version }}" }
+        run: case "$VERSION" in *-*) echo "tag=next" >> "$GITHUB_OUTPUT" ;; *) echo "tag=latest" >> "$GITHUB_OUTPUT" ;; esac
+      - run: npm stage publish out/*.tgz --provenance --access public --tag "$TAG"
+        env: { TAG: "${{ steps.tag.outputs.tag }}" }
+      - env: { GH_TOKEN: "${{ github.token }}", VERSION: "${{ needs.package.outputs.version }}", TAG: "${{ steps.tag.outputs.tag }}" }
         run: |
           awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {on=1; next} on && /^## \[/ {exit} on' CHANGELOG.md > notes.md
-          gh release create "v$VERSION" out/* --title "v$VERSION" --notes-file notes.md --verify-tag
+          [ -s notes.md ] || { echo "::error::CHANGELOG.md has no ## [$VERSION] section"; exit 1; }
+          pre=""; [ "$TAG" = next ] && pre="--prerelease"
+          gh release create "v$VERSION" out/* --title "v$VERSION" --notes-file notes.md --verify-tag $pre

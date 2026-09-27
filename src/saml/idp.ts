@@ -14,11 +14,30 @@ export const SSO_PATH = "/saml2/idp/sso";
 
 export type Idp = ReturnType<typeof samlify.IdentityProvider>;
 
+/**
+ * samlify warns on the console whenever an IdP has no SingleLogoutService. Without
+ * `singleLogout` we deliberately advertise none, so that one message is noise for every host.
+ * Construction is synchronous, so the filter can't swallow anyone else's warnings.
+ */
+const SAMLIFY_NO_SLO = "missing endpoint of SingleLogoutService";
+function quietly<T>(build: () => T): T {
+  const warn = console.warn;
+  console.warn = (...args: unknown[]) => {
+    if (typeof args[0] === "string" && args[0].includes(SAMLIFY_NO_SLO)) return;
+    warn(...args);
+  };
+  try {
+    return build();
+  } finally {
+    console.warn = warn;
+  }
+}
+
 /** Builds the samlify IdentityProvider for a given Better Auth base URL. */
 export function createIdp(options: ResolvedSamlIdpOptions, baseURL: string): Idp {
   const ssoUrl = `${baseURL.replace(/\/+$/, "")}${SSO_PATH}`;
   const nameIdFormats = [...new Set(options.serviceProviders.map((sp) => sp.nameIdFormat))];
-  return samlify.IdentityProvider({
+  return quietly(() => samlify.IdentityProvider({
     entityID: options.entityId,
     privateKey: options.signing.privateKey,
     signingCert: [options.signing.certificate, ...options.signing.additionalCertificates],
@@ -42,7 +61,7 @@ export function createIdp(options: ResolvedSamlIdpOptions, baseURL: string): Idp
           ],
         }
       : {}),
-  });
+  }));
 }
 
 /**
