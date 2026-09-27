@@ -36,6 +36,7 @@ export type {
   AttributeMap,
   AttributeSource,
   AuthorizeContext,
+  AuthorizeResult,
   DigestAlgorithm,
   NameIdSource,
   OrganizationMembership,

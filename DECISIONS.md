@@ -1318,3 +1318,32 @@ From the fresh-eyes design review (`docs/review/session-end-review.md`), for the
   11. `userId` not recorded;
   12. no storage warning.
 
+## D-044: `authorize` can give a reason and ask for re-authentication (2026-09-27)
+
+From the session-end review's section 5, to fit conexxus-auth's policy gate (`canUseClient` → `{ allow } | { allow: false, reason, reauthenticate? }`). It lands before 1.0 because it widens a public return type. That's additive: `true` still works.
+
+- **Return type:** `AuthorizeResult = boolean | { allow: true } | { allow: false; reason?; reauthenticate? }`. Only `true` and `{ allow: true }` allow. Truthy non-`true` values and malformed objects deny, as before.
+- **`reason`:** appended to the denial detail. It's log-safe here, for the info line, and again in `fail()`, for events and logs.
+- **`session`:** `authorize` now receives the session row re-read just before signing: the same read that proves the session still exists. So host fields such as `mfaCompletedAt` are current.
+- **`reauthenticate: true`:**
+  - IsPassive gets `Responder/NoPassive` to the ACS.
+  - If this request already forced a fresh sign-in and the new session is still refused (`request.forceAuthn && session.createdAt >= request.createdAt`), the result is `ACCESS_DENIED`, with no loop. That matches conexxus's "no loops" rule.
+  - Otherwise the request is re-parked with `forceAuthn: true, createdAt: now`, and the user goes to the login page with `prompt=login` (the existing ForceAuthn path). Resume refuses any session older than that (`REAUTHENTICATION_REQUIRED`), then `authorize` runs again.
+- **Not done:** an SP `label` in `ServiceProviderInfo`. `id` serves as the label. Also not done: an opt-in to send the denial to the SP as `RequestDenied`.
+- **Tests:**
+  - `{ allow: true }`;
+  - a reason in the event (with a newline);
+  - reauthenticate going to login with `prompt=login`, the stale return refused, and the reason logged on one line;
+  - a fresh sign-in completing the original request (`InResponseTo`);
+  - the loop guard;
+  - IsPassive giving NoPassive;
+  - malformed verdicts denying.
+- **Mutation proof:** seven mutations, each caught:
+  1. `{ allow: true }` rejected;
+  2. no reason;
+  3. no `logSafe`. This survived until the log-line test was added: `fail()` sanitises events, but not the info log;
+  4. no loop guard;
+  5. no IsPassive branch;
+  6. parking without `forceAuthn`;
+  7. truthy values allowed.
+

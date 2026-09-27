@@ -71,7 +71,7 @@ SPs stored in the database, managed at runtime. See [Service providers › Regis
 | `canManage` | `({ user, session }) => boolean \| Promise<boolean>` | none | Who may use the HTTP API. Must return exactly `true`; a throw denies. |
 | `permissions` | `boolean` | `false` | Check each API action (`list`, `read`, `create`, `update`, `delete` on `samlServiceProvider`) against the admin plugin's access control. See [Organizations and permissions](users-and-access.md#registry-permissions). With `canManage` too, both must allow. |
 | `cacheSeconds` | `number` | `60` | How long each isolate caches a stored SP, and a miss. 0 to 3600. Other isolates see changes within this window. |
-| `authorize` | `(ctx) => boolean \| Promise<boolean>` | allow | `authorize` for stored SPs (functions can't be stored). |
+| `authorize` | `(ctx) => AuthorizeResult` | allow | `authorize` for stored SPs (functions can't be stored). |
 
 The API is mounted only when `canManage` or `permissions` is set.
 
@@ -115,7 +115,7 @@ The same options apply to SPs in `serviceProviders` and to SPs stored in the reg
 | `nameIdFormat` | `string` | `emailAddress` | `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`, `…:2.0:nameid-format:persistent`, `…:2.0:nameid-format:transient` or `…:1.1:nameid-format:unspecified` (NAMEID_FORMAT exports these). See [NameID](users-and-access.md#nameid). |
 | `nameId` | `(user) => string` or `{ field }` | per format | Custom NameID value. A function works for code SPs only. `{ field: "employeeId" }` works for stored SPs too and sends that user field: only `"id"`, `"email"`, or an additional or plugin field with `input: false`, because a field users can edit would let them claim someone else's identity at the SP. That's refused at startup, when saving to the registry, and at sign-in. A user with no value in the field is denied (`ACCESS_DENIED`). |
 | `attributes` | map or `(user, { organizations, organization }) => Record<string, string \| string[]>` | none | The `<AttributeStatement>`. See [`attributes`](#attributes). |
-| `authorize` | `({ user, session, serviceProvider, organizations }) => boolean \| Promise<boolean>` | allow | Decide per user and SP. Anything but `true`, or a throw, is `ACCESS_DENIED` (code SPs only). |
+| `authorize` | `({ user, session, serviceProvider, organizations }) => AuthorizeResult` | allow | Decide per user and SP: `true`, `{ allow: true }`, or `{ allow: false, reason?, reauthenticate? }` (see [`authorize`](users-and-access.md#authorize)). Anything else, or a throw, is `ACCESS_DENIED` (code SPs only). |
 | `organization` | `{ slug?, id?, roles? }` | none | Only members of this organization, with one of `roles` if given. See [`organization`](#organization). |
 | `requestSignatures` | `"require" \| "verify-if-signed" \| "ignore"` | `"verify-if-signed"` with `spCertificates` or `metadata`, else `"ignore"` | Signatures on this SP's requests. `"require"`: unsigned requests are refused. `"verify-if-signed"`: an unsigned AuthnRequest is accepted, a signed one must verify. `"ignore"`: nothing is checked. Except with `"ignore"`, logout messages must always be signed. `"require"` and `"verify-if-signed"` need `spCertificates` or `metadata.url`; `"ignore"` can't be combined with `spCertificates`. |
 | `spCertificates` | PEM `string \| string[]` | none | The SP's signing certificates. Any of them may have signed (SPs rotate keys; Cloudflare Access publishes two). Parsed and checked (RSA) at startup. |

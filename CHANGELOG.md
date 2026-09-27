@@ -49,6 +49,7 @@ The first npm release (1.0.0) waits for `better-auth-cloudflare` 0.4, which Work
 
 ### Added
 
+- **`authorize` can explain and ask for re-authentication** (D-044): return `{ allow: false, reason?, reauthenticate? }`. The reason goes to the `denied` event. `reauthenticate` sends the user back to sign in (`prompt=login`) and asks again, with `NoPassive` for passive requests and no loops. `authorize` now gets the session as re-read just before signing.
 - **`events.onSessionEnded`** (D-043): when a session ends *without* Single Logout (an admin revoke or disable, a factor change, `/sign-out`, expiry), the event names the SPs that weren't told, with NameID and SessionIndex, even when the delete runs outside a request. Participant rows gain `userId` and `endedAt` (D1 migration `0007`). They're kept until expiry and listed by the server-only `auth.api.samlIdpListSessionParticipants`.
 - **`sessionNotOnOrAfter`** (D-043), global and per SP: tell SPs when to end their session (`"idp-session"` or `{ maxSeconds }`). Off by default.
 - **NameID from a user field** (D-041): `nameId: { field: "employeeId" }`, for code and stored SPs. Only fields users can't set themselves (`id`, `email`, or `input: false`) are accepted, so nobody can claim another user's identity at an SP.

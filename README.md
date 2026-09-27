@@ -329,7 +329,7 @@ npx better-auth-saml-idp smoke https://auth.example.com --sp <SP entity ID>
 | `nameIdFormat` | string | `emailAddress` | Or `persistent`, `transient` |
 | `nameId` | function or `{ field }` | per format | Custom NameID value; `{ field }` works for stored SPs too, and only takes fields users can't set |
 | `attributes` | map or function | none | [Attributes](#attributes) |
-| `authorize` | function | allow | Decide per user and SP (gets `organizations`); a denial issues no assertion |
+| `authorize` | function | allow | Decide per user and SP (gets `organizations` and the re-read session); `true`, or `{ allow: false, reason?, reauthenticate? }` to deny or send the user to sign in again |
 | `organization` | object | none | `{ slug \| id, roles? }`: [members only](#organizations-and-permissions) |
 | `requestSignatures` | `"require"` / `"verify-if-signed"` / `"ignore"` | `"verify-if-signed"` with certificates, else `"ignore"` | Signatures on the SP's requests (Redirect or POST) |
 | `spCertificates` | PEM or PEM[] | none | The SP's signing certificates (several during its rotation) |

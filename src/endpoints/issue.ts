@@ -12,7 +12,9 @@ import type { SpDirectory } from "../saml/sp-directory";
 import { hasOrganizationPlugin, loadMemberships, matchOrganization, warnClaimableOrganizations } from "../organizations";
 import { recordParticipant, sessionIndexOf } from "../storage/participants";
 import { base64url, type ValidatedRequest } from "../storage/pending";
-import { NAMEID_FORMAT, type OrganizationMembership, type ResolvedSamlIdpOptions, type ResolvedServiceProvider, type SamlIdpUser, type ServiceProviderInfo } from "../types";
+import { type AuthorizeResult, NAMEID_FORMAT, type OrganizationMembership, type ResolvedSamlIdpOptions, type ResolvedServiceProvider, type SamlIdpUser, type ServiceProviderInfo } from "../types";
+// A cycle (sso imports this module), fine for functions used at call time.
+import { parkForLogin } from "./sso";
 import { nameIdFieldProblem } from "../nameid";
 
 /** A mapped field the user object lacks: warn once per SP and field (typo, or a field not in the schema). */
@@ -116,7 +118,7 @@ async function eligiblePrincipal(
   state: PluginState,
   session: SessionWithUser,
   now: Date,
-): Promise<{ user: SamlIdpUser } | Refusal> {
+): Promise<{ user: SamlIdpUser; session: Record<string, unknown> } | Refusal> {
   const user = (await ctx.context.internalAdapter.findUserById(session.user.id)) as SamlIdpUser | null;
   if (!user) return { code: "ACCOUNT_INACTIVE", detail: "user no longer exists" };
   if (isBanned(user, now)) return { code: "ACCOUNT_INACTIVE", detail: "user is banned" };
@@ -129,7 +131,7 @@ async function eligiblePrincipal(
   const opts = ctx.context.options as { secondaryStorage?: unknown; session?: { storeSessionInDatabase?: boolean } };
   const sessionsInDatabase = !opts.secondaryStorage || opts.session?.storeSessionInDatabase === true;
   let impersonatedBy = session.session.impersonatedBy;
-  let current: { expiresAt: Date | string; impersonatedBy?: unknown } | null | undefined;
+  let current: ({ expiresAt: Date | string; impersonatedBy?: unknown } & Record<string, unknown>) | null | undefined;
   if (sessionsInDatabase) {
     current = (await ctx.context.adapter.findOne({ model: "session", where: [{ field: "token", value: session.session.token }] })) as typeof current;
   } else if (isStateful(ctx)) {
@@ -145,7 +147,9 @@ async function eligiblePrincipal(
   if (policy.requireEmailVerified && !truthy(user.emailVerified)) return { code: "EMAIL_NOT_VERIFIED", detail: `user ${user.id}` };
   if (!policy.allowImpersonatedSessions && impersonatedBy) return { code: "SESSION_NOT_ALLOWED", detail: "impersonated session" };
   if (!policy.allowAnonymousUsers && truthy(user.isAnonymous)) return { code: "SESSION_NOT_ALLOWED", detail: "anonymous user" };
-  return { user };
+  // authorize() sees the row this read just proved exists (with host fields such as an MFA time),
+  // not the copy from the start of the request.
+  return { user, session: (current ?? session.session) as Record<string, unknown> };
 }
 
 /**
@@ -212,14 +216,30 @@ export async function issueResponse(
   const organization = sp.organization ? matchOrganization(organizations, sp.organization) : undefined;
   if (sp.organization && !organization) return fail(ctx, state, "ACCESS_DENIED", `user ${user.id} is not a member of SP ${sp.id}'s organization (with an allowed role)`, who);
 
-  let allowed = false;
+  let verdict: AuthorizeResult = false;
   try {
-    allowed = await sp.authorize({ user, session: session.session as any, serviceProvider: serviceProviderInfo(sp), organizations });
+    verdict = await sp.authorize({ user, session: principal.session as any, serviceProvider: serviceProviderInfo(sp), organizations });
   } catch (e) {
     ctx.context.logger.error(`[saml-idp] authorize() threw for SP ${sp.id}`, e);
-    allowed = false;
+    verdict = false;
   }
-  if (allowed !== true) return fail(ctx, state, "ACCESS_DENIED", `authorize() denied user ${user.id} for SP ${sp.id}`, who);
+  const allowed = verdict === true || (typeof verdict === "object" && verdict !== null && verdict.allow === true);
+  if (!allowed) {
+    const denial = typeof verdict === "object" && verdict !== null && verdict.allow === false ? verdict : undefined;
+    const why = `authorize() denied user ${user.id} for SP ${sp.id}${denial?.reason ? `: ${logSafe(String(denial.reason), 200)}` : ""}`;
+    if (denial?.reauthenticate === true) {
+      if (request.isPassive)
+        return samlError(ctx, state, request, { code: "Responder", subCode: "NoPassive", message: "The identity provider requires the user to sign in again" }, user.id);
+      // Loop guard: this request already made the user sign in again, and the fresh session
+      // is still refused. Deny instead of sending them round once more.
+      const freshForThis = request.forceAuthn && new Date(session.session.createdAt).getTime() >= request.createdAt;
+      if (freshForThis) return fail(ctx, state, "ACCESS_DENIED", `${why} (still after signing in again)`, who);
+      ctx.context.logger.info(`[saml-idp] ${why}; asking the user to sign in again`);
+      // Park the request as a ForceAuthn one: resume only accepts a session created after now.
+      return parkForLogin(ctx, state, { ...request, forceAuthn: true, createdAt: now.getTime() });
+    }
+    return fail(ctx, state, "ACCESS_DENIED", why, who);
+  }
 
   // Re-checked here, not only at startup/registry save: a field can become user-writable later.
   const fieldProblem = sp.nameIdField === undefined ? undefined : nameIdFieldProblem(sp.nameIdField, ctx.context.options as any);

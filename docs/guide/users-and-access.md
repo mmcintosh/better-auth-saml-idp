@@ -156,7 +156,24 @@ The last word, per SP (code SPs; stored SPs use `registry.authorize`):
 }
 ```
 
-Anything other than exactly `true` is `ACCESS_DENIED`, and so is a throw (logged). It runs on the freshly re-read user. `serviceProvider` is a read-only `ServiceProviderInfo`: `id`, `entityId`, `acsUrls`, `nameIdFormat` and the `organization` rule.
+It returns `true` or `{ allow: true }` to issue. Anything else is `ACCESS_DENIED`, and so is a throw (logged). It runs on the freshly re-read user, and `session` is the session row as just re-read from the database, including your own additional fields (an MFA timestamp, for example). `serviceProvider` is a read-only `ServiceProviderInfo`: `id`, `entityId`, `acsUrls`, `nameIdFormat` and the `organization` rule.
+
+To say more than no, return `{ allow: false, reason?, reauthenticate? }`:
+
+```ts
+authorize: async ({ user, session }) => {
+  if (user.status !== "active") return { allow: false, reason: "account not active" };
+  const mfaAge = Date.now() - new Date(session.mfaCompletedAt ?? 0).getTime();
+  if (mfaAge > 12 * 3600_000) return { allow: false, reason: "MFA older than 12 h", reauthenticate: true };
+  return true;
+},
+```
+
+- **`reason`** goes into the `denied` event's `detail` and the log, never to the user.
+- **`reauthenticate: true`** sends the user back to your login page with `prompt=login`, the same as an SP's ForceAuthn. The pending request is kept, only a session created after that moment is accepted, and `authorize` runs again on it.
+  - If the SP asked for no interaction (`IsPassive`), the SP gets a `NoPassive` status instead.
+  - If the user already signed in again for this request and is still refused, it's a plain `ACCESS_DENIED`: no loop.
+  - Your login page must honour `prompt=login`, and ask for credentials (and the second factor) even when signed in.
 
 ## Registry permissions
 

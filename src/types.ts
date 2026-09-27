@@ -66,6 +66,16 @@ export interface ServiceProviderRecord {
   updatedBy: string | null;
 }
 
+/**
+ * What `authorize` returns. `true` or `{ allow: true }` issues the assertion; anything else denies.
+ * - `reason` (log-safe text) goes into the `denied` event's `detail` and the log, never to the user.
+ * - `reauthenticate: true` sends the user back to your login page (`prompt=login`) to sign in
+ *   again, then asks `authorize` once more with the new session, e.g. when your policy needs a
+ *   recent MFA. If the SP asked for no interaction (IsPassive), the SP gets `NoPassive`
+ *   instead; if the user already signed in again for this request, it's a plain denial (no loop).
+ */
+export type AuthorizeResult = boolean | { allow: true } | { allow: false; reason?: string; reauthenticate?: boolean };
+
 export interface AuthorizeContext {
   user: SamlIdpUser;
   session: Session;
@@ -168,7 +178,7 @@ export interface ServiceProviderConfig {
    */
   allowedRelayStates?: string[];
   /** Decide whether this user may use this SP. Denial issues no assertion. */
-  authorize?: (ctx: AuthorizeContext) => boolean | Promise<boolean>;
+  authorize?: (ctx: AuthorizeContext) => AuthorizeResult | Promise<AuthorizeResult>;
   /**
    * Keep this SP's certificates current from its metadata URL (D-026). Only certificates are
    * taken from it: signing certificates (added to `spCertificates`) and, when `encryption` is on,
@@ -363,7 +373,7 @@ export interface SamlIdpOptions {
     /** How long an isolate caches a stored SP, and a miss. Default 60 s; 0 to 3600. */
     cacheSeconds?: number;
     /** `authorize` for stored SPs (functions can't be stored). Default: allow. */
-    authorize?: (ctx: AuthorizeContext) => boolean | Promise<boolean>;
+    authorize?: (ctx: AuthorizeContext) => AuthorizeResult | Promise<AuthorizeResult>;
   };
   /**
    * Sign the IdP metadata document (enveloped XML signature with the active signing key).
@@ -405,7 +415,7 @@ export interface ResolvedServiceProvider {
   allowIdpInitiated: boolean;
   idpInitiatedRelayState: string | undefined;
   allowedRelayStates: string[];
-  authorize: (ctx: AuthorizeContext) => boolean | Promise<boolean>;
+  authorize: (ctx: AuthorizeContext) => AuthorizeResult | Promise<AuthorizeResult>;
   /** Effective signing for this SP (per-SP override, else the global setting). */
   sign: SignedParts;
   /** Present when assertions to this SP are encrypted; the certificate is parsed at startup. */
