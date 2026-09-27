@@ -43,7 +43,7 @@ FEATURES = [
  ("Identity and access", "Per-SP access control", row(("y","authorize() hook, deny = no assertion"),("y",""),("p","via authproc filters"),("p","via conditional flows"),("y","per project"),("y","policy bindings"),("u",""),("p","routing only"),("y","app assignment"),("y","app assignment"),("y","per OU or group"),("u","")), "test/integration/security.test.ts"),
  ("Identity and access", "MFA and step-up for SAML", row(("p","host's Better Auth 2FA; no step-up mapping yet"),("y",""),("p","via modules"),("y",""),("p","MFA, no step-up"),("p","ForceAuthn step-up"),("p","MFA, no step-up"),("n","delegated upstream"),("y","Conditional Access (P1)"),("y","policies"),("u",""),("p","")), ""),
  ("Operations", "Register an SP from its metadata XML or URL", row(("y","XML import (helper and CLI, also from a URL); certificates refreshed from the metadata URL, entity ID and ACS URLs pinned"),("y","file, URL, MDQ"),("p","converter, refresh add-on"),("y","XML import, URL for certificates"),("y","the only way"),("p","file import"),("n",""),("n",""),("p","fills URLs, not certificates"),("n","manual fields"),("n",""),("n","")), ""),
- ("Operations", "Admin UI or management API for SPs", row(("y","management API over a database registry (admin-gated, audited); no bundled UI"),("n",""),("n",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y","")), ""),
+ ("Operations", "Admin UI or management API for SPs", row(("y","management API over a database registry (admin-gated, audited); a reference admin page in the example, no UI in the plugin"),("n",""),("n",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y",""),("y","")), ""),
  ("Operations", "Outbound SCIM provisioning", row(("n","not planned"),("n",""),("n",""),("p","preview"),("n","inbound only"),("y",""),("u",""),("n","inbound only"),("y","P1"),("y",""),("p","catalog apps only"),("n","")), ""),
  ("Platform", "Runs on serverless / edge (Cloudflare Workers)", row(("y","verified on a live Worker"),("n","Java server"),("u",""),("n","Java server"),("u",""),("u",""),("u",""),("u",""),("na","SaaS"),("na","SaaS"),("na","SaaS"),("na","SaaS")), "DECISIONS.md D-016, test runs on workerd"),
  ("Platform", "Embeds in an existing app", row(("y","a Better Auth plugin"),("n",""),("n",""),("n",""),("p","Go library zitadel/saml"),("n",""),("n",""),("y","npm library (licence needed)"),("na","SaaS"),("na","SaaS"),("na","SaaS"),("na","SaaS")), ""),
@@ -56,8 +56,8 @@ ROADMAP = [
    ("Supply chain and project files (done)", "Every GitHub Action pinned by SHA with least-privilege tokens; CodeQL, a blocking runtime dependency audit, dependency review, OSV-Scanner, OpenSSF Scorecard and Dependabot. SECURITY.md, CONTRIBUTING.md, issue forms, and a versioning and support policy."),
    ("Fuzzing (done)", "Property-based tests (fast-check) of the signature verifier, every inbound parser and issuance. The verifier held; issuance had five kinds of characters that produced invalid or unverifiable assertions, all fixed (D-036)."),
    ("Live SP verification", "Done: Cloudflare Access, Okta, Auth0 and Salesforce, live, with signed requests (Redirect and POST), encrypted assertions and Single Logout (D-034, D-035, D-042). Next: AWS IAM Identity Center."),
-   ("Observability hooks (done)", "onAssertionIssued, onDenied and onLogout callbacks, run in the background (waitUntil on Workers) and isolated from the flow, plus an optional audit-log table with retention that doesn't store anonymous noise (D-038)."),
-   ("better-auth-cloudflare 0.4", "Replace the vendored build once 0.4 is on npm (the README requires it for Workers users)."),
+   ("Observability hooks (done)", "onAssertionIssued, onDenied, onLogout and onSessionEnded callbacks, run in the background (waitUntil on Workers) and isolated from the flow, plus an optional audit-log table with retention that doesn't store anonymous noise (D-038)."),
+   ("better-auth-cloudflare 0.4", "1.0.0 goes to npm latest once 0.4 is released; release candidates are on the next tag meanwhile. The example then swaps its vendored build for ^0.4.0. The plugin doesn't depend on it: 0.3.1 works with verification and rate limits in the database."),
    ("Key rotation guide (done)", "docs/key-rotation.md: add next certificate, switch, retire. Rehearsed live with Cloudflare Access with zero downtime."),
    ("Database adapter test matrix", "Postgres, MySQL and MongoDB proven in CI next to SQLite and D1 (MongoDB found a real gap, fixed: D-033), with a Databases page in the guide. Still to add: Drizzle on Postgres/MySQL, and Prisma."),
    ("Second adversarial review (done)", "Fresh-eyes review plus an independent review by a different model (D-029, D-030); every finding fixed with a regression test. Everything since the first round: POST re-entry, error Responses, account policy, NameID, encryption, IdP-initiated SSO, POST signatures, metadata refresh, the registry and the CLI."),
@@ -66,7 +66,7 @@ ROADMAP = [
    ("IdP-initiated SSO (done)", "Opt-in per SP, off by default; RelayState only from a per-SP allow-list. Supported by 8 of the 11 products compared (partially by Ory Polis), including all four commercial IdPs."),
    ("Encrypted assertions (done)", "AES-256-GCM with RSA-OAEP, per SP, sign-then-encrypt. Decrypted and validated by node-saml and samlify. Shibboleth encrypts by default; Keycloak, authentik, Logto, Entra and Okta offer it per SP."),
    ("Register SPs from metadata XML (done)", "serviceProviderFromMetadata(): a helper that turns an SP's metadata into a serviceProviders entry, including certificates and ACS URLs."),
-   ("Per-SP signing choice (done)", "Move signResponse and signAssertion to each SP, as Shibboleth, Keycloak and authentik do."),
+   ("Per-SP signing choice (done)", "sign: both, response or assertion, per SP, as Shibboleth, Keycloak and authentik offer."),
    ("Signed IdP metadata (done)", "Optional (signMetadata), for SPs and federations that verify metadata signatures."),
  ]),
  ("v1.2", "Operations at scale", "For hosts with many SPs or changing SPs.", [
@@ -84,7 +84,7 @@ ROADMAP = [
    ("Salesforce as a live SP (done)", "Verified 2026-09-27 with a Developer Edition org: signed requests required and verified, NameID to Federation ID (D-042, docs/sp-salesforce.md)."),
    ("Load test and benchmark", "Throughput and latency of sign-ins on Workers under concurrency, published with the method so others can rerun it."),
    ("Release automation", "Changesets: changelog entries written with each PR, version bumps and the release PR generated, so a release is one merge."),
-   ("Admin page in the example", "A reference page in the Workers example for managing SPs through the registry API. The plugin itself still ships no UI."),
+   ("Admin page in the example (done)", "/admin in the Workers example: IdP details, SPs (add from metadata, edit, enable, delete, test sign-in) and recent audit events, on the registry API. The plugin itself ships no UI."),
    ("NameID from a user field (done)", "nameId: { field } for code and stored SPs (for example an employee ID); only fields users can't set themselves (D-041)."),
    ("MongoDB uniqueness report to Better Auth", "Better Auth's own tables (user.email, session.token) declare uniqueness the way that MongoDB's adapter ignores (D-033). A careful upstream report."),
    ("Offer the verifier to @better-auth/sso", "Our hardened XML-signature verifier (XSW defences, mutation-tested, fuzzed) could harden the SP side too."),
@@ -93,7 +93,7 @@ ROADMAP = [
  ("Not planned", "Out of scope", "Deliberately left out.", [
    ("Artifact binding", "Of the products compared, only Keycloak supports it fully (Shibboleth and SimpleSAMLphp for responses); no target SP needs it."),
    ("Outbound SCIM", "Provisioning is a separate concern from SSO; a separate plugin if ever."),
-   ("Admin UI", "Better Auth hosts build their own UI on the registry API."),
+   ("Admin UI in the plugin", "Better Auth plugins are headless; hosts build their own UI on the registry API, and the example has a reference page to copy."),
  ]),
 ]
 

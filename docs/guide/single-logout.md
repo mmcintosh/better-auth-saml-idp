@@ -124,7 +124,7 @@ samlIdp({
 - **Needs sessions in the database.** Better Auth deletes sessions that live only in `secondaryStorage` without database hooks. The plugin warns at startup then; set `session.storeSessionInDatabase: true`. better-auth-cloudflare with geolocation tracking already does.
 - **Works without Single Logout.** `onSessionEnded` alone turns on participant tracking (the `samlIdpSessionParticipant` table).
 - **Audit log:** `revoked` and `signed-out` are recorded when SPs were left signed in; `expired` never is.
-- **Retry or list later:** the rows are kept, marked ended, until they expire. `auth.api.samlIdpListSessionParticipants({ body: { userId } })` returns a user's SP sessions, live or ended. It's server-only, with no URL.
+- **Retry or list later:** the rows are kept, marked ended, until they expire. `auth.api.samlIdpListSessionParticipants!({ body: { userId } })` returns a user's SP sessions, live or ended. It's server-only, with no URL, and exists only while participant tracking is on (hence the `!`).
 
 Also consider `sessionNotOnOrAfter` (a server option, and per SP). It tells SPs up front when to end their session: `"idp-session"` for the IdP session's end, or `{ maxSeconds }`. Shibboleth and SimpleSAMLphp honour it; many SaaS SPs don't, and Slack is documented to ignore it.
 

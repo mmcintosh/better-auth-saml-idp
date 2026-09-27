@@ -163,7 +163,8 @@ To say more than no, return `{ allow: false, reason?, reauthenticate? }`:
 ```ts
 authorize: async ({ user, session }) => {
   if (user.status !== "active") return { allow: false, reason: "account not active" };
-  const mfaAge = Date.now() - new Date(session.mfaCompletedAt ?? 0).getTime();
+  // mfaCompletedAt: your own additional session field (not in Better Auth's Session type).
+  const mfaAge = Date.now() - new Date((session as { mfaCompletedAt?: Date | null }).mfaCompletedAt ?? 0).getTime();
   if (mfaAge > 12 * 3600_000) return { allow: false, reason: "MFA older than 12 h", reauthenticate: true };
   return true;
 },

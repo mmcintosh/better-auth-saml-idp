@@ -133,13 +133,17 @@ const { data, error } = await authClient.samlIdp.serviceProviders.create({
     organization: { id: "org_8f3…" }, // by id: slugs can be claimed by whoever creates them first
   },
 });
-if (error?.code === "INVALID_SERVICE_PROVIDER") console.log(error.issues);
+// The response body also carries `issues`: the list of what's wrong.
+if (error?.code === "INVALID_SERVICE_PROVIDER") console.log((error as { issues?: string[] }).issues);
 ```
 
-Or on the server:
+Or on the server (the registry endpoints exist only when the registry is enabled, hence the `!`):
 
 ```ts
-await auth.api.samlIdpCreateServiceProvider({ body: { serviceProvider }, headers });
+import type { StoredServiceProviderConfig } from "better-auth-saml-idp";
+
+const serviceProvider: StoredServiceProviderConfig = { id: "zoom", entityId: "https://example.zoom.us", acsUrls: ["https://example.zoom.us/saml/SSO"] };
+await auth.api.samlIdpCreateServiceProvider!({ body: { serviceProvider }, headers });
 ```
 
 Every change is logged: `[saml-idp] registry: user <id> created SP zoom (https://example.zoom.us)`. Errors are in the [error reference](errors.md#registry-api-errors-json).

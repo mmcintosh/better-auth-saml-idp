@@ -35,7 +35,7 @@ The plugin declares a bounded peer range on `better-auth`, currently `>=1.7.5 <1
 - CI tests every change at the **lowest** version in the range and at the **latest** release in it.
 - The [upstream canary](../../.github/workflows/upstream-canary.yml) tests Better Auth's `latest` and `next` tags weekly and opens an issue when something breaks.
 - A new Better Auth minor gets support in a plugin **minor** release once it passes, which widens the range. The range is never widened without testing.
-- The same goes for `better-auth-cloudflare` on Workers.
+- `better-auth-cloudflare` isn't a dependency; the Workers example and CI run a known-good version of it (see [Cloudflare Workers](cloudflare-workers.md)).
 
 ## Support windows
 

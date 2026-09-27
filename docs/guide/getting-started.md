@@ -7,11 +7,11 @@ This page takes you from nothing to a working sign-in at a SAML service provider
 ## 1. Install
 
 ```bash
-npm install better-auth-saml-idp
+npm install better-auth-saml-idp@next   # the release candidate, until 1.0.0
 # or: pnpm add / yarn add / bun add
 ```
 
-Requirements: `better-auth` `>=1.7.5 <1.8.0`, and a real database (replay protection relies on UNIQUE constraints). On Cloudflare Workers, also `better-auth-cloudflare` ≥ 0.4 and the `nodejs_compat` flag; see [Cloudflare Workers](cloudflare-workers.md).
+Requirements: `better-auth` `>=1.7.5 <1.8.0`, and a real database (replay protection relies on UNIQUE constraints). On Cloudflare Workers, also `better-auth-cloudflare` and the `nodejs_compat` flag. With `better-auth-cloudflare` 0.3.1 (npm's current release) and Better Auth ≥ 1.7.3, set `verification: { storeInDatabase: true }` and `rateLimit: { storage: "database" }` (0.3.1's KV storage breaks single-use values; [better-auth-cloudflare #72](https://github.com/zpg6/better-auth-cloudflare/issues/72)). 0.4 no longer needs them; see [Cloudflare Workers](cloudflare-workers.md).
 
 ## 2. Create a signing key
 
@@ -117,7 +117,7 @@ Or build the entry from the SP's metadata:
 npx better-auth-saml-idp sp-from-metadata https://sp.example.com/saml/metadata --id my-sp
 ```
 
-SPs can also be added at runtime with the [registry](service-providers.md#registry). Step-by-step guides: [Cloudflare Access](../sp-cloudflare-access.md), [Okta](../sp-okta.md), [Auth0](../sp-auth0.md), [HubSpot](../hubspot.md), [AWS IAM Identity Center](../sp-aws-iam-identity-center.md), and [testing with other SPs](../testing-with-sps.md).
+SPs can also be added at runtime with the [registry](service-providers.md#registry). Step-by-step guides: [Cloudflare Access](../sp-cloudflare-access.md), [Okta](../sp-okta.md), [Auth0](../sp-auth0.md), [Salesforce](../sp-salesforce.md), [HubSpot](../hubspot.md), [AWS IAM Identity Center](../sp-aws-iam-identity-center.md), and [testing with other SPs](../testing-with-sps.md).
 
 ## 7. Check it
 

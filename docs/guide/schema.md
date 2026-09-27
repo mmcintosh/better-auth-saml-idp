@@ -11,7 +11,7 @@ npx auth migrate     # Kysely adapters: create the tables
 npx auth generate    # Drizzle/Prisma: write the schema, then run your own migration
 ```
 
-On Cloudflare D1 with Drizzle, the example has ready-made migrations: [`examples/workers-hono/migrations/`](../../examples/workers-hono/migrations/) (`0001` core, `0002` replay key, `0003` registry, `0004` Single Logout, `0005` audit log).
+On Cloudflare D1 with Drizzle, the example has ready-made migrations: [`examples/workers-hono/migrations/`](../../examples/workers-hono/migrations/) (`0001` core, `0002` replay key, `0003` registry, `0004` session participants, `0005` audit log, `0006` renamed option keys in stored SPs, `0007` participant `userId`/`endedAt`).
 
 Rename tables or columns with the [`schema` option](options.md#schema).
 
@@ -39,7 +39,11 @@ export const samlIdpSeenRequests = sqliteTable(
     requestId: text("request_id").notNull(),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
   },
-  (t) => [index("saml_idp_seen_requests_expires_idx").on(t.expiresAt)],
+  (t) => [
+    index("saml_idp_seen_requests_expires_idx").on(t.expiresAt),
+    // Belt and braces next to `key`: replay detection must not depend on one index.
+    uniqueIndex("saml_idp_seen_requests_sp_request_uq").on(t.spId, t.requestId),
+  ],
 );
 ```
 </details>
@@ -122,12 +126,12 @@ export const samlIdpSessionParticipants = sqliteTable(
 
 ## `samlIdpAuditEvent` (with `auditLog.enabled`)
 
-One row per [event](observability.md): issued assertions, refusals that name an SP or a user, and logouts.
+One row per [event](observability.md): issued assertions, refusals of a signed-in user, logouts, and sessions that ended with SPs still signed in.
 
 | Field | Type | Key | Description |
 |---|---|---|---|
 | `id` | string | primary | Row id. |
-| `type` | string | index | `assertion.issued`, `denied` or `logout`. |
+| `type` | string | index | `assertion.issued`, `denied`, `logout` or `session.ended`. |
 | `at` | date | index | When. |
 | `spId` | string? | index | The SP, if any. |
 | `userId` | string? | index | The user, if any. |

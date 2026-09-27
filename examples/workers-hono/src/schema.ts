@@ -121,7 +121,7 @@ export const samlIdpSessionParticipants = sqliteTable(
     id: text("id").primaryKey(),
     key: text("key").notNull().unique(), // hash(sessionKey, spId)
     sessionKey: text("session_key").notNull(),
-    userId: text("user_id"), // D-043, migration 0006/0007
+    userId: text("user_id"), // D-043, migration 0007
     endedAt: integer("ended_at", { mode: "timestamp_ms" }),
     spId: text("sp_id").notNull(),
     nameId: text("name_id").notNull(),

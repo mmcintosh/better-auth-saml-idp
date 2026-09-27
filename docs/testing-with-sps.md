@@ -7,7 +7,7 @@ The IdP is checked against several independent SAML implementations, from automa
 | 1 | samlify (strict: message and assertion signatures required) | `test/integration/*.test.ts` | ✅ Node + workerd |
 | 1 | **`@better-auth/sso`**, Better Auth's own SAML SP | `test/interop/sp-interop.test.ts` | ✅ Node + workerd |
 | 1 | **`@node-saml/node-saml`** (`InResponseTo` validation always on, both signatures required) | `test/interop/sp-interop.test.ts` | ✅ Node + workerd |
-| 2 | **Keycloak 26.4** as an identity broker | `pnpm e2e` (Playwright + Chromium, Docker) | ✅ |
+| 2 | **Keycloak 26.7** as an identity broker | `pnpm e2e` (Playwright + Chromium, Docker) | ✅ |
 | 2 | **SimpleSAMLphp 2.5** SP | `pnpm e2e` (Playwright + Chromium, Docker) | ✅ |
 | 2 | **node-saml SP**: HTTP-POST binding, cross-site redirect after its ACS | `pnpm e2e` (Playwright + Chromium) | ✅ |
 | 3 | **Cloudflare Access** (Zero Trust) | [sp-cloudflare-access.md](sp-cloudflare-access.md) | manual |

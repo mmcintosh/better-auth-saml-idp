@@ -1,4 +1,4 @@
--- D1 test host schema; must match test/support/d1/schema.ts.
+-- Better Auth core tables and the plugin's replay table, for this example (src/schema.ts).
 CREATE TABLE users (
   id TEXT PRIMARY KEY NOT NULL,
   name TEXT NOT NULL,

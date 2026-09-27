@@ -4,97 +4,43 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
-The first npm release (1.0.0) waits for `better-auth-cloudflare` 0.4, which Workers users need.
-
-### Fixed
-
-- **Salesforce sign-in** (D-042): request IDs up to 1024 characters are accepted (was 256). Salesforce's are about 300, so every SP-initiated Salesforce sign-in failed with `INVALID_SAML_REQUEST`.
-
-### Changed
-
-- **`samlIdp({ baseURL })` takes the same value as Better Auth's `baseURL`** (API decision 6, D-040). A bare origin (`https://auth.example.com`) now gets `basePath` added, as Better Auth does; before, it produced wrong URLs in metadata. Full URLs (`…/api/auth`) work as before. If both are pinned and disagree, a warning is logged.
-- **One record shape for the registry API** (API decision 5, D-040): list, get, create and update all return `ServiceProviderRecord`, which is exported, for code and stored SPs alike.
-  - `warnings` moved inside the record. Create and update now return `{ serviceProvider }`, never `null`.
-  - Get also finds code SPs.
-  - A stored row that clashes with a code SP says so in `issues`.
-- **Option shapes say what they do** (API decision 4, D-040). Configurations and stored registry rows need these renames (the example ships migration `0006`):
-  - `signResponse` / `signAssertion` → `sign: "both" | "response" | "assertion"`, globally (`signing.sign`) and per SP.
-  - `requireSignedAuthnRequests` → `requestSignatures: "require" | "verify-if-signed" | "ignore"`. The default is `"verify-if-signed"` with certificates or a metadata URL, otherwise `"ignore"`.
-  - `spCertificate` → `spCertificates`, and `metadata.signingCertificate` → `metadata.signingCertificates`. Both still take one PEM or a list.
-
-  The old names are rejected at startup.
-  One tightening: a signed AuthnRequest from an SP whose certificates come only from a metadata URL that hasn't loaded yet is now refused, not accepted unchecked.
-- **No `options` on the plugin object** (API decision 3, D-040): it exposed the internal SP directory. By Better Auth convention `options` holds a plugin's configuration, and ours includes the signing key, so it stays absent.
-- **One client namespace** (API decision 2, D-040): the registry API moved from `/saml2/idp/service-providers/*` to `/saml-idp/service-providers/*`, so the client offers `authClient.samlIdp.serviceProviders.*` next to `signOutEverywhere()` and `launch()`. The SAML protocol routes (`/saml2/idp/sso`, `slo`, `init`, `resume`, `metadata`, `logout`) keep their URLs, which SPs are configured with, and are no longer offered as client calls.
-- **Public types are an explicit list** (API decision 1, D-040). The plugin's internal `ResolvedSamlIdpOptions` and `ResolvedServiceProvider` are no longer exported. `authorize()` receives a read-only `ServiceProviderInfo` (`id`, `entityId`, `acsUrls`, `nameIdFormat`, `organization`). `StoredServiceProviderConfig`, `ServiceProviderInfo` and `SamlIdpErrorCode` are now exported.
-
-### Security
-
-- **Third review (D-039), two independent reports:**
-  - organization attributes scoped to the SP's organization by default, with an `only` allow-list and a warning for claimable configurations;
-  - authoritative session reads before issuing;
-  - the audit log stores only denials of signed-in users;
-  - message size caps, and certificate selection before full verification;
-  - at most 10 certificates from metadata;
-  - signed requests need `Destination`;
-  - the Subject is bounded;
-  - the registry re-reads the user and requires an exact id;
-  - same-site confirmation for sign-out everywhere;
-  - `prompt=login` under ForceAuthn;
-  - safer log text;
-  - stricter XML tokenisation;
-  - a warning for user-writable mapped fields;
-  - gated, main-only releases.
-- **Hardening (D-037):** the pre-parse attribute scan in `parseXmlStrict` could take quadratic time on unterminated markup: 2.5 s for 64 KiB. It is now linear, and element nesting is capped at 100. This was not reachable in the default configuration, because libxml2 schema validation rejects such input first. It protects hosts that replace `schemaValidator`, and the CLI.
+The first release. Release candidates are published to npm under the `next` tag (`npm install better-auth-saml-idp@next`). 1.0.0 follows as `latest` once `better-auth-cloudflare` 0.4 is on npm, since Workers users on its current 0.3.1 need two settings (see [Cloudflare Workers](docs/guide/cloudflare-workers.md)).
 
 ### Added
 
-- **`authorize` can explain and ask for re-authentication** (D-044): return `{ allow: false, reason?, reauthenticate? }`. The reason goes to the `denied` event. `reauthenticate` sends the user back to sign in (`prompt=login`) and asks again, with `NoPassive` for passive requests and no loops. `authorize` now gets the session as re-read just before signing.
-- **`events.onSessionEnded`** (D-043): when a session ends *without* Single Logout (an admin revoke or disable, a factor change, `/sign-out`, expiry), the event names the SPs that weren't told, with NameID and SessionIndex, even when the delete runs outside a request. Participant rows gain `userId` and `endedAt` (D1 migration `0007`). They're kept until expiry and listed by the server-only `auth.api.samlIdpListSessionParticipants`.
-- **`sessionNotOnOrAfter`** (D-043), global and per SP: tell SPs when to end their session (`"idp-session"` or `{ maxSeconds }`). Off by default.
-- **NameID from a user field** (D-041): `nameId: { field: "employeeId" }`, for code and stored SPs. Only fields users can't set themselves (`id`, `email`, or `input: false`) are accepted, so nobody can claim another user's identity at an SP.
-- **Observability** ([guide](docs/guide/observability.md)): `events.onAssertionIssued`, `onDenied` and `onLogout` callbacks, which run in the background and can't affect the flow, and an optional `auditLog` table (`samlIdpAuditEvent`, D1 migration `0005`) with retention.
-- **Supply chain:**
-  - every GitHub Action pinned by SHA, least-privilege tokens;
-  - CodeQL (security-extended); a runtime dependency audit that blocks; dependency review on PRs; OSV-Scanner; OpenSSF Scorecard; Dependabot;
-  - a release workflow publishing with npm provenance, with a CycloneDX SBOM.
-- **Project files:** [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), issue forms (bug, SP interop, feature), a PR template, and [Versioning and support](docs/guide/versioning.md).
-- **Property-based fuzzing** (fast-check) of the signature verifier (XSW, mutation, byte flips) and of every inbound parser, plus an issuance round-trip over hostile user data. `FUZZ_RUNS` sets the depth.
-
-- **SAML 2.0 IdP plugin for Better Auth** with SP-initiated SSO.
-  - AuthnRequests over the HTTP-Redirect and HTTP-POST bindings.
-  - Responses over HTTP-POST.
-  - IdP metadata at `/saml2/idp/metadata`.
-- **Signing**
-  - Response and Assertion are signed with RSA-SHA256 by default. SHA-1 needs an explicit opt-in.
-  - Per-SP `signResponse` / `signAssertion`.
-  - Optional signed metadata (`signMetadata`).
-  - Extra certificates published for key rotation ([docs/key-rotation.md](docs/key-rotation.md)).
-- **Inbound validation**
-  - Every message is validated against the OASIS XSDs with a WebAssembly build of libxml2 that runs on Workers.
-  - DOCTYPE is refused. DEFLATE and size limits apply. Duplicate and percent-encoded parameters are rejected.
-- **Signed AuthnRequests** over HTTP-Redirect, which can be required per SP. SPs may have several certificates.
-- **Replay protection**
-  - Single-use pending requests (`consumeVerificationValue`).
-  - AuthnRequest-ID replay is rejected by a database unique key.
-- **Account policy:** users need a verified email; impersonated sessions and anonymous users are refused. The user and session are re-read right before signing.
-- **Protocol:** NameID per format (emailAddress, persistent, transient), ForceAuthn, IsPassive, and RequestedAuthnContext (exact match). Requests the IdP can't satisfy get signed SAML error Responses.
-- **`serviceProviderFromMetadata()`** builds a service-provider entry from the SP's metadata XML.
-- **Cloudflare Workers support** through `better-auth-cloudflare` (D1/Drizzle, `validateSchema`). There is a Workers + Hono example.
-- **Interop tests**
-  - `@better-auth/sso`, node-saml and samlify.
-  - Keycloak 26.4, SimpleSAMLphp 2.5 and a node-saml POST-binding SP in real Chromium over HTTPS.
-  - Verified live with Cloudflare Access.
-- **Interop:** Okta and Auth0 verified live as SPs (signed requests, encrypted assertions with Okta, metadata-sourced certificates with Auth0). `ProtocolBinding="HTTP-Redirect"` (sent by Auth0) is answered over HTTP-POST instead of being refused.
-- **The guide** (`docs/guide/`): getting started, service providers, flows, users and access, signing and encryption, Single Logout, `@better-auth/sso` interop, Cloudflare Workers, CLI, troubleshooting; and complete references for options, errors, security controls and schema. Links are checked in CI.
-- **Better Auth integration:** organization-scoped SPs and organization attributes (organization plugin), registry permissions through admin-plugin access control (`samlIdpStatements`), a typed client plugin with `signOutEverywhere()` / `launch()`, and tables verified with `npx auth generate`.
-- **Single Logout:** SP- and IdP-initiated, front-channel propagation to every SP in the session, `PartialLogout` reporting, and an authenticated LogoutRequest (signature, or the per-session SessionIndex).
-- **Database-backed SP registry** with an admin-gated management API: add, change, disable and remove SPs without a redeploy.
-- **SP certificates are parsed at startup**, so a malformed `spCertificate` is a configuration error instead of a sign-in failure.
-- **SP metadata URL with refresh:** an SP's signing and encryption certificates are kept current from its metadata. Entity ID and ACS URLs stay pinned, and the metadata signature can be pinned too.
-- **Signed AuthnRequests over HTTP-POST:** enveloped XML signatures verified with signature-wrapping defences. The Redirect binding keeps its query signatures.
-- **Declarative attribute mapping per SP:** `attributes` can be a map (field, constant, split list, first/last name) instead of a function, so SPs can be configured in JSON.
-- **Command-line tool** (`npx better-auth-saml-idp`) with seven commands: `inspect`, `decode` (signature verification and decryption), `request`, `smoke`, `sp-from-metadata`, `check-config` and `keygen`.
+- **SAML 2.0 IdP plugin for Better Auth.**
+  - SP-initiated SSO: AuthnRequests over HTTP-Redirect and HTTP-POST; Responses over HTTP-POST (a request for the HTTP-Redirect `ProtocolBinding`, as Auth0 sends, is answered over POST).
+  - IdP-initiated SSO, opt-in per SP. RelayState comes only from an allow-list, and a cross-site launch without a user click gets a confirmation page.
+  - IdP metadata at `/saml2/idp/metadata`, optionally signed (`signMetadata`).
+- **Signing:** Response and Assertion signed with RSA-SHA256 by default (`signing.sign: "both" | "response" | "assertion"`, per SP too). SHA-1 needs an explicit opt-in. Extra certificates are published for [key rotation](docs/key-rotation.md).
 - **Encrypted assertions per SP:** AES-256-GCM with RSA-OAEP, signed before encryption.
-- **IdP-initiated SSO**, opt-in per SP. RelayState comes only from an allow-list, and a cross-site redirect without a user click gets a confirmation page.
-- **Package:** ESM build with type declarations, checked with publint and Are the Types Wrong.
+- **Signed requests per SP** (`requestSignatures: "require" | "verify-if-signed" | "ignore"`; the default follows whether the SP has certificates). HTTP-Redirect query signatures, and enveloped XML signatures over HTTP-POST with signature-wrapping defences. `spCertificates` takes one PEM or several, for the SP's key rotation.
+- **SP metadata:** `serviceProviderFromMetadata()` builds an SP entry from its metadata XML. A metadata URL keeps an SP's signing and encryption certificates current; the entity ID and ACS URLs stay pinned, and the metadata signature can be pinned (`metadata.signingCertificates`).
+- **Users and access:**
+  - Account policy: a verified email is required; impersonated sessions and anonymous users are refused. The user and session are re-read right before signing.
+  - NameID per format (emailAddress, persistent, transient), or from a user field for any SP (`nameId: { field }`). Only fields users can't set themselves are accepted.
+  - Declarative attribute maps (field, constant, split list, first/last name, organization data), so SPs can be configured in JSON.
+  - `authorize` per SP: `true`, or `{ allow: false, reason?, reauthenticate? }`. The reason goes to the `denied` event; `reauthenticate` sends the user back to sign in (`prompt=login`) and asks again, with `NoPassive` for passive requests and no loops.
+  - Organization plugin: organization-scoped SPs and organization attributes.
+- **Protocol:** ForceAuthn, IsPassive, RequestedAuthnContext (exact match), and signed SAML error Responses for requests the IdP can't satisfy. Request IDs up to 1024 characters (Salesforce's are about 300).
+- **Single Logout:** SP- and IdP-initiated, front-channel propagation to every SP in the session, `PartialLogout` reporting, and authenticated LogoutRequests (signature, or the per-session SessionIndex). `sessionNotOnOrAfter` (global and per SP) tells SPs when to end their own session.
+- **Sessions that end without Single Logout** (an admin revoke or disable, a factor change, `/sign-out`, expiry): `events.onSessionEnded` names the SPs that weren't told, even when the delete runs outside a request, and the server-only `auth.api.samlIdpListSessionParticipants` lists a user's SP sessions.
+- **Database-backed SP registry** with an admin-gated API (`authClient.samlIdp.serviceProviders.*`): add, change, disable and remove SPs without a redeploy. Every call returns the same `ServiceProviderRecord`, with issues and warnings. Permissions through a function (`canManage`) or admin-plugin access control (`samlIdpStatements`).
+- **Observability:** `events.onAssertionIssued`, `onDenied`, `onLogout` and `onSessionEnded`, which run in the background and can't affect the flow, and an optional audit-log table with retention.
+- **Client plugin** (`better-auth-saml-idp/client`): `authClient.samlIdp.signOutEverywhere()`, `launch()` and the registry calls.
+- **Configuration:** `baseURL` takes the same value as Better Auth's. Invalid options and key material are refused at startup with every issue listed (`SamlIdpConfigError`); SP certificates are parsed at startup too.
+- **Command-line tool** (`npx better-auth-saml-idp`): `inspect`, `decode` (signature verification and decryption), `request`, `smoke`, `sp-from-metadata`, `check-config` and `keygen`.
+- **Cloudflare Workers:** runs on Workers with D1 through `better-auth-cloudflare`, with the XSD validator as WebAssembly. A Workers + Hono example includes D1 migrations and a reference admin page (`/admin`).
+- **Public types:** an explicit list, including `SamlIdpOptions`, `ServiceProviderConfig`, `StoredServiceProviderConfig`, `ServiceProviderInfo`, `ServiceProviderRecord`, `AuthorizeResult`, `SignedParts`, `RequestSignaturePolicy`, `NameIdSource`, `SessionLimit`, the event types and `SamlIdpErrorCode`.
+- **Verified with:**
+  - live: Cloudflare Access, Okta, Auth0 and Salesforce (including Single Logout);
+  - in CI: Keycloak 26.7, SimpleSAMLphp 2.5 and a node-saml POST-binding SP in real Chromium over HTTPS; `@better-auth/sso`, node-saml and samlify on Node and workerd, including an identity broker (`@better-auth/sso` upstream and this plugin downstream in one Better Auth).
+- **The guide** (`docs/guide/`) with complete references for options, errors, security controls and schema. Links are checked in CI.
+- **Project:** [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), issue forms, [versioning and support](docs/guide/versioning.md), and a release workflow with npm trusted publishing, staged publishing (approved by a maintainer with 2FA), provenance and a CycloneDX SBOM.
+
+### Security
+
+- **Inbound validation:** every message is validated against the OASIS XSDs (a WebAssembly build of libxml2 that runs on Workers), DOCTYPE is refused, and DEFLATE, size and nesting limits apply. Duplicate and percent-encoded parameters are rejected.
+- **Replay protection:** single-use pending requests, and AuthnRequest IDs rejected on reuse by a database unique key.
+- **Independent security reviews,** every finding fixed with a regression test (DECISIONS.md D-029, D-030, D-039), plus property-based fuzzing (fast-check) of the signature verifier and every inbound parser.
+- **Supply chain:** every GitHub Action pinned by SHA, least-privilege tokens, CodeQL, a blocking runtime dependency audit, dependency review, OSV-Scanner, OpenSSF Scorecard, a secret scan over the full history, and a reproducible-build check of `wasm/xsd.wasm`.
