@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { devMailbox, getAuth, idpInitiatedApps, requestCf, requestWaitUntil, type Env } from "./auth";
+import { registerAdmin } from "./admin";
 import { signInPage } from "./sign-in";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -16,6 +17,10 @@ const withCf = <T>(c: Ctx, fn: () => T) =>
 app.all("/api/auth/*", (c) => withCf(c, () => authFor(c).handler(c.req.raw)));
 
 app.get("/sign-in", (c) => signInPage(c.req.url));
+
+// A reference admin page for SAML_REGISTRY_ADMINS (src/admin.ts): the IdP's details, the SPs
+// (edit, enable, delete, add from metadata), and recent audit events.
+registerAdmin(app, authFor as any, withCf as any);
 
 // DEVELOPMENT ONLY (DEV_MAILBOX="true"): read the verification link that would have been emailed.
 app.get("/dev/mailbox", (c) => {
@@ -41,7 +46,7 @@ app.get("/", async (c) => {
       `<body style="font:16px system-ui;margin:2rem"><h1>better-auth-saml-idp example</h1><p>${who}</p>` +
       appList +
       `<p>IdP metadata: <a href="/api/auth/saml2/idp/metadata">${origin}/api/auth/saml2/idp/metadata</a></p>` +
-      `<p><a href="/sign-in">Sign in / sign up</a></p></body>`,
+      `<p><a href="/sign-in">Sign in / sign up</a> · <a href="/admin">Admin</a></p></body>`,
   );
 });
 

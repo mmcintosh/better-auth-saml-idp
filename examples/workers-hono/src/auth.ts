@@ -62,7 +62,7 @@ let plugin: { key: string; value: ReturnType<typeof samlIdp> } | undefined;
 
 function samlPlugin(env: Env, origin: string) {
   const key = `${origin}\n${env.SAML_SERVICE_PROVIDERS}\n${env.SAML_IDP_CERT}\n${env.SAML_IDP_ADDITIONAL_CERTS ?? ""}\n${env.SAML_REGISTRY_ADMINS ?? ""}`;
-  const admins = new Set((env.SAML_REGISTRY_ADMINS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean));
+  const admins = registryAdmins(env);
   if (plugin?.key === key) return plugin.value;
   const sps = JSON.parse(env.SAML_SERVICE_PROVIDERS || "[]") as SpJson[];
   const value = samlIdp({
@@ -80,8 +80,10 @@ function samlPlugin(env: Env, origin: string) {
     singleLogout: { enabled: true },
     registry: {
       enabled: true,
-      canManage: admins.size ? ({ user }) => user.emailVerified === true && admins.has(user.email.toLowerCase()) : undefined,
+      canManage: admins.size ? ({ user }) => isRegistryAdmin(env, user) : undefined,
     },
+    // Audit log (migration 0005): sign-ins, denials, logouts and ended sessions, shown on /admin.
+    auditLog: { enabled: true, retentionDays: 30 },
   });
   plugin = { key, value };
   return value;
@@ -155,6 +157,16 @@ let cached: { env: Env; origin: string; auth: ReturnType<typeof buildAuth> } | u
 export function getAuth(env: Env, origin: string) {
   if (cached?.env !== env || cached.origin !== origin) cached = { env, origin, auth: buildAuth(env, origin) };
   return cached.auth;
+}
+
+/** Emails allowed to manage SPs (SAML_REGISTRY_ADMINS, comma-separated). */
+function registryAdmins(env: Env): Set<string> {
+  return new Set((env.SAML_REGISTRY_ADMINS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean));
+}
+
+/** The registry's canManage rule, shared with the /admin page: a listed, verified email. */
+export function isRegistryAdmin(env: Env, user: { email: string; emailVerified?: boolean | null }): boolean {
+  return user.emailVerified === true && registryAdmins(env).has(user.email.toLowerCase());
 }
 
 /** SP ids that opted in to IdP-initiated SSO, for the home page's app launcher. */
