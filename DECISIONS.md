@@ -1243,3 +1243,18 @@ Roadmap D4. Stored SPs could only get the default NameID per format (email, pers
   7. drop the registry issue;
   8. allow `name`.
 
+## D-042: Salesforce verified live (2026-09-27)
+
+A free Salesforce Developer Edition org (My Domain `orgfarm-63501b2853-dev-ed.develop.my.salesforce.com`) as the SP, and the deployed Workers example as the IdP.
+- **Setup:** Salesforce SAML SSO configuration "Better Auth demo". The IdP certificate is from the live metadata (CN "better-auth-saml-idp-example (rotation 3)"); identity type Federation ID in the NameID; HTTP-Redirect requests signed RSA-SHA256; no encryption; Salesforce MFA off.
+- **Registry:** Salesforce was registered in the D1 registry from its downloaded metadata (`sp-from-metadata`):
+  - the entity ID was the value the admin entered (a `…salesforce-setup.com/` URL: any stable value works);
+  - the ACS was the My Domain URL;
+  - `requestSignatures: "require"` came from `AuthnRequestsSigned="true"`, with Salesforce's self-signed certificate.
+- **Checks:**
+  - before the browser test, an unsigned probe got `UNSIGNED_SAML_REQUEST`, proving the row loaded with the new API-decision-4 names;
+  - the maintainer then signed in from the My Domain login button in a private window and landed in Salesforce, with the Federation ID set to the demo account's email.
+
+  That exercises Salesforce's signed Redirect request, verified with a certificate from the registry, and our signed Response and Assertion accepted by a strict commercial SP.
+- **Not covered:** Single Logout. Salesforce's downloaded metadata had no `SingleLogoutService`, so logout wasn't registered.
+

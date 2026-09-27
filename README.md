@@ -83,7 +83,7 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 
 **Proposed: Under review**
 
-- [ ] **Salesforce as a live SP**: Free Developer Edition; a classic, strict SAML SP. Another "verified with" line next to Cloudflare Access, Okta and Auth0.
+- [x] **Salesforce as a live SP**: Verified 2026-09-27 with a Developer Edition org: signed requests required and verified, NameID to Federation ID (D-042, docs/sp-salesforce.md).
 - [ ] **Load test and benchmark**: Throughput and latency of sign-ins on Workers under concurrency, published with the method so others can rerun it.
 - [ ] **Release automation**: Changesets: changelog entries written with each PR, version bumps and the release PR generated, so a release is one merge.
 - [ ] **Admin page in the example**: A reference page in the Workers example for managing SPs through the registry API. The plugin itself still ships no UI.
@@ -114,6 +114,7 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 - [x] Cloudflare Access: live, with signed requests, encrypted assertions, metadata refresh and key rotation
 - [x] Okta: live (Integrator org as SP), signed requests verified, plain and encrypted assertions, SP stored in the D1 registry ([guide](docs/sp-okta.md))
 - [x] Auth0: live (Enterprise SAML connection), signed requests over both Redirect and **POST (XML signature)** verified with a certificate learned from Auth0's metadata URL, encrypted assertions, first/last name attributes ([guide](docs/sp-auth0.md))
+- [x] Salesforce: live (Developer Edition), signed requests required and verified, the NameID matched to the Federation ID, SP stored in the D1 registry ([guide](docs/sp-salesforce.md))
 - [x] Keycloak 26.4 and SimpleSAMLphp 2.5: real Chromium over HTTPS, in CI
 - [x] node-saml, samlify and `@better-auth/sso`: in CI, on Node and workerd
 - [x] SAMLtool: Response validation

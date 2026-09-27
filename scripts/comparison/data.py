@@ -81,7 +81,7 @@ ROADMAP = [
    ("Upstreaming", "Propose integration with @better-auth/sso on better-auth #6254 once v1 is stable."),
  ]),
  ("Proposed", "Under review", "Ideas raised while waiting for 0.4. Each one either moves into a release or goes.", [
-   ("Salesforce as a live SP", "Free Developer Edition; a classic, strict SAML SP. Another \"verified with\" line next to Cloudflare Access, Okta and Auth0."),
+   ("Salesforce as a live SP (done)", "Verified 2026-09-27 with a Developer Edition org: signed requests required and verified, NameID to Federation ID (D-042, docs/sp-salesforce.md)."),
    ("Load test and benchmark", "Throughput and latency of sign-ins on Workers under concurrency, published with the method so others can rerun it."),
    ("Release automation", "Changesets: changelog entries written with each PR, version bumps and the release PR generated, so a release is one merge."),
    ("Admin page in the example", "A reference page in the Workers example for managing SPs through the registry API. The plugin itself still ships no UI."),
