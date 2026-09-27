@@ -63,7 +63,7 @@ describe("#1 only verified, first-party accounts receive assertions", () => {
 });
 
 describe("#2 RelayState can't be smuggled past a Redirect-binding signature", () => {
-  const signedHost = () => host({ saml: { serviceProviders: sp({ requireSignedAuthnRequests: true, spCertificate: keys.sp.certificate }) } });
+  const signedHost = () => host({ saml: { serviceProviders: sp({ requestSignatures: "require", spCertificates: keys.sp.certificate }) } });
 
   it("an extra percent-encoded Relay%53tate on a signed URL is rejected", async () => {
     const { browser } = await signedHost();

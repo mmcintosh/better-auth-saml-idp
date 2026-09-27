@@ -400,15 +400,14 @@ export function checkRequestSignature(
   opts: { allowInsecureSha1: boolean },
   xml?: string,
 ): boolean {
+  if (sp.requestSignatures === "ignore") return false;
   if (!isSigned(raw, xml)) {
-    if (sp.requireSignedAuthnRequests) throw unsigned("missing Signature");
+    if (sp.requestSignatures === "require") throw unsigned("missing Signature");
     return false;
   }
-  // A signature is only checked when the SP has certificates.
-  if (sp.spCertificates.length === 0) {
-    if (sp.requireSignedAuthnRequests) throw unsigned("no SP certificate configured");
-    return false;
-  }
+  // Certificates only from a metadata URL that hasn't loaded: fail closed rather than accept a
+  // signature nobody checked (the policy promises verification).
+  if (sp.spCertificates.length === 0) throw unsigned("no SP certificate available to verify it");
   verifyMessageSignature(raw, xml, sp.spCertificates, opts);
   return true;
 }

@@ -311,7 +311,7 @@ async function requestReport(msg: Message, doc: any, opts: DecodeOptions, report
     if (/sha1/i.test(msg.raw.signed.sigAlg)) report.warn("signed with SHA-1: the IdP rejects it unless allowInsecureSha1 is set");
     if (certs.length === 0) report.warn("signed but not verified: pass --cert <sp.crt>");
     else {
-      const sp = { requireSignedAuthnRequests: true, spCertificates: certs } as unknown as ResolvedServiceProvider;
+      const sp = { requestSignatures: "require", spCertificates: certs } as unknown as ResolvedServiceProvider;
       try {
         checkRequestSignature(msg.raw, sp, { allowInsecureSha1: true });
         report.pass("Redirect-binding signature is valid");

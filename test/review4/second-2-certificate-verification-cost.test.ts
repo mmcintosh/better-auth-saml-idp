@@ -79,7 +79,7 @@ describe.skipIf(isWorkerd)("R4-2: signed-POST verification cost × certificates"
     const certs = certificates(MAX_LEARNED_CERTIFICATES + 2);
     const xml = metadataWith(certs);
     const parsed = await serviceProviderFromMetadata(xml, { id: "sp" });
-    const learned = [parsed.serviceProvider.spCertificate ?? []].flat();
+    const learned = [parsed.serviceProvider.spCertificates ?? []].flat();
     expect(learned.length).toBeLessThanOrEqual(MAX_LEARNED_CERTIFICATES);
 
     // And through the refresh path an SP ends up with at most that many certificates to try.
@@ -90,7 +90,7 @@ describe.skipIf(isWorkerd)("R4-2: signed-POST verification cost × certificates"
       const sp = {
         id: "sp", entityId: "https://sp.test/metadata", acsUrls: ["https://sp.test/acs"] as [string], nameIdFormat: "x", nameId: undefined, attributes: () => ({}), attributeMap: undefined,
         organization: undefined, singleLogoutService: undefined, metadata: { url: "https://sp.test/metadata", refreshSeconds: 3600, signingCertificates: [] },
-        requireSignedAuthnRequests: true, spCertificates: [], allowIdpInitiated: false, idpInitiatedRelayState: undefined, allowedRelayStates: [], authorize: () => true, signResponse: true, signAssertion: true,
+        requestSignatures: "require", spCertificates: [], allowIdpInitiated: false, idpInitiatedRelayState: undefined, allowedRelayStates: [], authorize: () => true, sign: "both",
       };
       const prepared = await cache.prepare(sp as any, { info() {}, warn() {} }, () => {});
       expect(prepared.spCertificates.length).toBeLessThanOrEqual(MAX_LEARNED_CERTIFICATES);

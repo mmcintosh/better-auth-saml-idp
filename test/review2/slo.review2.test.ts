@@ -51,8 +51,8 @@ describe("review2 SLO", () => {
       saml: {
         singleLogout: { enabled: true },
         serviceProviders: [
-          { id: A.id, entityId: A.entityId, acsUrls: [A.acs], spCertificate: keys.sp.certificate, singleLogoutService: { url: A.slo } },
-          { id: B.id, entityId: B.entityId, acsUrls: [B.acs], spCertificate: keys.idpNext.certificate, singleLogoutService: { url: B.slo } },
+          { id: A.id, entityId: A.entityId, acsUrls: [A.acs], spCertificates: keys.sp.certificate, singleLogoutService: { url: A.slo } },
+          { id: B.id, entityId: B.entityId, acsUrls: [B.acs], spCertificates: keys.idpNext.certificate, singleLogoutService: { url: B.slo } },
         ] as any,
       },
       // A short session that is refreshed on use (Better Auth's sliding expiry, scaled down:
@@ -86,7 +86,7 @@ describe("review2 SLO", () => {
           { id: B.id, entityId: B.entityId, acsUrls: [B.acs], singleLogoutService: { url: B.slo } },
           // C: a certificate-less SP with SLO that the user never used.
           { id: C.id, entityId: C.entityId, acsUrls: [C.acs], singleLogoutService: { url: C.slo } },
-          { id: A.id, entityId: A.entityId, acsUrls: [A.acs], spCertificate: keys.sp.certificate, singleLogoutService: { url: A.slo } },
+          { id: A.id, entityId: A.entityId, acsUrls: [A.acs], spCertificates: keys.sp.certificate, singleLogoutService: { url: A.slo } },
         ] as any,
       },
     });
@@ -126,7 +126,7 @@ describe("review2 SLO", () => {
             id: A.id,
             entityId: A.entityId,
             acsUrls: [A.acs],
-            requireSignedAuthnRequests: true, // the SP signs everything; its key is published in metadata
+            requestSignatures: "require", // the SP signs everything; its key is published in metadata
             metadata: { url: "https://sp.test/metadata.xml" },
             singleLogoutService: { url: A.slo },
           },

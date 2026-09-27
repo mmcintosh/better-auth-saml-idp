@@ -210,7 +210,7 @@ export class SpMetadataCache {
     if (result.serviceProvider.entityId !== sp.entityId)
       throw new Error(`metadata is for ${result.serviceProvider.entityId}, not the configured ${sp.entityId}`);
 
-    const signing = [result.serviceProvider.spCertificate ?? []].flat().filter((pem) => {
+    const signing = [result.serviceProvider.spCertificates ?? []].flat().filter((pem) => {
       try {
         const k = new X509Certificate(pem).publicKey;
         return k.asymmetricKeyType === "rsa" && (k.asymmetricKeyDetails?.modulusLength ?? 0) >= 2048;

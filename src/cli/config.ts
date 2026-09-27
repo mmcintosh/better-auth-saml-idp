@@ -4,10 +4,12 @@ import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { resolveOptions, SamlIdpConfigError } from "../options";
 import { serviceProviderFromMetadata, SpMetadataError } from "../saml/sp-metadata";
-import type { SamlIdpOptions } from "../types";
+import type { SamlIdpOptions, SignedParts } from "../types";
 import { certFromBase64, certSummary, checkCert, describeCert, fetchText, httpsOnly, readInput, Report, UsageError } from "./util";
 
 /** JSON configs may reference PEM files as "file:./idp.key" (relative to the config file). */
+const SIGNS: Record<SignedParts, string> = { both: "Response and Assertion", response: "Response only", assertion: "Assertion only" };
+
 function resolveFileRefs(value: unknown, base: string): unknown {
   if (typeof value === "string" && value.startsWith("file:")) {
     const path = resolve(base, value.slice(5));
@@ -61,7 +63,7 @@ export async function checkConfig(path: string | undefined): Promise<Report> {
     "Entity ID": o.entityId,
     "Base URL": o.baseURL ?? "(not pinned: follows the request's Host header)",
     "Login page": o.loginPage,
-    Signing: `${o.signing.signatureAlgorithm}/${o.signing.digestAlgorithm}; Response ${o.signing.signResponse ? "signed" : "unsigned"}, Assertion ${o.signing.signAssertion ? "signed" : "unsigned"}`,
+    Signing: `${o.signing.signatureAlgorithm}/${o.signing.digestAlgorithm}; signs ${SIGNS[o.signing.sign]}`,
     "Signed metadata": o.signMetadata,
     "Assertion lifetime": `${o.assertionLifetimeSeconds}s`,
     "AuthnContext": o.authnContextClassRef.split(":").pop(),
@@ -82,9 +84,9 @@ export async function checkConfig(path: string | undefined): Promise<Report> {
       "Entity ID": sp.entityId,
       "ACS URLs": sp.acsUrls.join("\n"),
       NameID: sp.nameIdFormat.split(":").pop(),
-      Signing: `Response ${sp.signResponse ? "signed" : "unsigned"}, Assertion ${sp.signAssertion || sp.encryption ? "signed" : "unsigned"}`,
+      Signing: `signs ${SIGNS[sp.sign]}`,
       Encryption: sp.encryption ? `${sp.encryption.dataAlgorithm} + ${sp.encryption.keyAlgorithm}` : "off",
-      "Signed requests": sp.requireSignedAuthnRequests ? `required (${sp.spCertificates.length} certificate${sp.spCertificates.length === 1 ? "" : "s"})` : "optional",
+      "Request signatures": `${sp.requestSignatures}${sp.requestSignatures === "ignore" ? "" : ` (${sp.spCertificates.length} certificate${sp.spCertificates.length === 1 ? "" : "s"}${sp.metadata ? " + metadata" : ""})`}`,
       "IdP-initiated": sp.allowIdpInitiated ? "allowed" : "off",
       Metadata: sp.metadata
         ? `${sp.metadata.url}\nrefresh every ${sp.metadata.refreshSeconds}s; signature ${sp.metadata.signingCertificates.length ? "pinned" : "not pinned"}`

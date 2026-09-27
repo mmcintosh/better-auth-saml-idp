@@ -253,31 +253,36 @@ describe("buildSignedResponse with encryption (sign-then-encrypt)", () => {
     });
   });
 
-  it("signResponse: false still signs the (encrypted) assertion", () => {
-    const { res } = build({ signResponse: false, signAssertion: true });
+  it('sign: "assertion" signs the assertion before encrypting it, and not the Response', () => {
+    const { res } = build({ sign: "assertion" });
     expect(signatureOf(res.xml, "Response")).toBeUndefined();
     const assertion = decryptWithNode(res.xml, keys.sp.privateKey);
     expect(verify(assertion, signatureOf(assertion, "Assertion"))).toBe(true);
   });
 
-  it("per-SP signing (signResponse: false for this SP) still signs the encrypted assertion", () => {
-    const { options } = build();
-    const res = buildSignedResponse(options, input(), { response: false, assertion: false }, options.serviceProviders[0]!.encryption);
+  it("the per-SP choice passed in wins over the global one", () => {
+    const { options } = build(); // global: both
+    const res = buildSignedResponse(options, input(), "assertion", options.serviceProviders[0]!.encryption);
     expect(signatureOf(res.xml, "Response")).toBeUndefined();
     const assertion = decryptWithNode(res.xml, keys.sp.privateKey);
     expect(verify(assertion, signatureOf(assertion, "Assertion"))).toBe(true);
   });
 
-  it("defensive rule: even if options somehow say sign nothing, an encrypted assertion is signed", () => {
+  it("every sign choice leaves the encrypted assertion covered by at least one signature", () => {
     const { options } = build();
-    const bad = { ...options, signing: { ...options.signing, signResponse: false, signAssertion: false } };
-    const res = buildSignedResponse(bad, input(), undefined, options.serviceProviders[0]!.encryption);
-    const assertion = decryptWithNode(res.xml, keys.sp.privateKey);
-    expect(verify(assertion, signatureOf(assertion, "Assertion"))).toBe(true);
+    for (const parts of ["both", "response", "assertion"] as const) {
+      const res = buildSignedResponse(options, input(), parts, options.serviceProviders[0]!.encryption);
+      const responseSig = signatureOf(res.xml, "Response");
+      const assertion = decryptWithNode(res.xml, keys.sp.privateKey);
+      const assertionSig = signatureOf(assertion, "Assertion");
+      expect([parts, responseSig !== undefined, assertionSig !== undefined]).toEqual([parts, parts !== "assertion", parts !== "response"]);
+      if (responseSig) expect(verify(res.xml, responseSig)).toBe(true);
+      if (assertionSig) expect(verify(assertion, assertionSig)).toBe(true);
+    }
   });
 
-  it("signAssertion: false + signResponse: true: the Response signature covers the encrypted assertion", () => {
-    const { res } = build({ signAssertion: false });
+  it('sign: "response": the Response signature covers the encrypted assertion', () => {
+    const { res } = build({ sign: "response" });
     expect(verify(res.xml, signatureOf(res.xml, "Response"))).toBe(true);
     expect(signatureOf(decryptWithNode(res.xml, keys.sp.privateKey), "Assertion")).toBeUndefined();
   });

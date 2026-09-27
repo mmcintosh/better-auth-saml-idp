@@ -35,6 +35,7 @@ export type {
   AuthorizeContext,
   DigestAlgorithm,
   OrganizationMembership,
+  RequestSignaturePolicy,
   SamlAttributeValue,
   SamlIdpOptions,
   SamlIdpUser,
@@ -45,6 +46,7 @@ export type {
   ServiceProviderEncryptionConfig,
   ServiceProviderInfo,
   SignatureAlgorithm,
+  SignedParts,
   SigningConfig,
 } from "./types";
 export type { SamlIdpErrorCode } from "./errors";

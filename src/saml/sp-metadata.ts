@@ -138,9 +138,9 @@ export async function serviceProviderFromMetadata(
     ...(singleLogoutService ? { singleLogoutService } : {}),
     ...(usable[0] ? { nameIdFormat: usable[0] } : {}),
     ...(sp.getAttribute("AuthnRequestsSigned") === "true" && signingCerts.length
-      ? { requireSignedAuthnRequests: true, spCertificate: signingCerts }
+      ? { requestSignatures: "require" as const, spCertificates: signingCerts }
       : signingCerts.length
-        ? { spCertificate: signingCerts }
+        ? { spCertificates: signingCerts }
         : {}),
     ...overrides,
   };

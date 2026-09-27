@@ -109,13 +109,16 @@ export interface ServiceProviderConfig {
    * `roles`, only members holding one of them. Give `slug` or `id`. Evaluated before `authorize`.
    */
   organization?: { slug?: string; id?: string; roles?: string[] };
-  /** Reject unsigned AuthnRequests from this SP. Requires `spCertificate`. */
-  requireSignedAuthnRequests?: boolean;
   /**
-   * PEM X.509 certificate(s) the SP signs AuthnRequests with. Pass several during the SP's key
-   * rotation (e.g. Cloudflare Access publishes two); a signature from any of them is accepted.
+   * What to do with signatures on this SP's requests (see {@link RequestSignaturePolicy}).
+   * Default: `"verify-if-signed"` when `spCertificates` or `metadata` is set, else `"ignore"`.
    */
-  spCertificate?: string | string[];
+  requestSignatures?: RequestSignaturePolicy;
+  /**
+   * PEM X.509 certificate(s) the SP signs its requests with: one, or several during the SP's
+   * key rotation (e.g. Cloudflare Access publishes two); a signature from any of them is accepted.
+   */
+  spCertificates?: string | string[];
   /**
    * Allow IdP-initiated (unsolicited) SSO to this SP via `GET /saml2/idp/init?sp=<id>`.
    * Default false. The Response carries no `InResponseTo`, so the SP must accept unsolicited
@@ -138,7 +141,7 @@ export interface ServiceProviderConfig {
   authorize?: (ctx: AuthorizeContext) => boolean | Promise<boolean>;
   /**
    * Keep this SP's certificates current from its metadata URL (D-026). Only certificates are
-   * taken from it: signing certificates (added to `spCertificate`) and, when `encryption` is on,
+   * taken from it: signing certificates (added to `spCertificates`) and, when `encryption` is on,
    * the encryption certificate (replacing `encryption.certificate`). The entity ID and ACS URLs
    * stay as configured here, so the metadata can never redirect assertions.
    */
@@ -151,22 +154,19 @@ export interface ServiceProviderConfig {
      * Pin the metadata's own signature (recommended; required by federations). When set,
      * unsigned or wrongly signed metadata is rejected and the last good copy is kept.
      */
-    signingCertificate?: string | string[];
+    signingCertificates?: string | string[];
   };
   /**
    * Where this SP receives SAML Single Logout messages (its SingleLogoutService). Needed for the
    * SP to take part in logout (D-028). Default binding: HTTP-Redirect.
    */
   singleLogoutService?: { url: string; binding?: "redirect" | "post"; /** Where LogoutResponses go, if not `url` (metadata ResponseLocation). */ responseUrl?: string };
-  /** Override the global `signing.signResponse` for this SP. */
-  signResponse?: boolean;
-  /** Override the global `signing.signAssertion` for this SP. At least one must stay on. */
-  signAssertion?: boolean;
+  /** Override the global `signing.sign` for this SP. */
+  sign?: SignedParts;
   /**
    * Encrypt the assertion to this SP (`<saml:EncryptedAssertion>`, XML Encryption 1.1).
    * The assertion is signed first, then encrypted, then the Response is signed
-   * ("sign-then-encrypt"); with encryption on, the assertion is always signed when
-   * `signResponse` is false. Omit to send plaintext assertions.
+   * ("sign-then-encrypt"), as `sign` says. Omit to send plaintext assertions.
    */
   encryption?: ServiceProviderEncryptionConfig;
 }
@@ -199,11 +199,23 @@ export interface SigningConfig {
   digestAlgorithm?: DigestAlgorithm;
   /** Explicit opt-in to SHA-1 for legacy SPs. Logs a warning at startup. */
   allowInsecureSha1?: boolean;
-  /** Sign the `<Response>`. Default true. */
-  signResponse?: boolean;
-  /** Sign the `<Assertion>`. Default true. */
-  signAssertion?: boolean;
+  /** Which parts of the SAML Response to sign. Default `"both"`. */
+  sign?: SignedParts;
 }
+
+/** Sign the whole `<Response>`, only the `<Assertion>` inside it, or both (the default). */
+export type SignedParts = "both" | "response" | "assertion";
+
+/**
+ * Signatures on an SP's AuthnRequests and LogoutRequests:
+ * - `"require"`: every request must be signed by one of the SP's certificates.
+ * - `"verify-if-signed"`: an unsigned AuthnRequest is accepted, a signed one must verify.
+ *   LogoutRequests (and LogoutResponses) must always be signed, since logout is unauthenticated otherwise.
+ * - `"ignore"`: signatures are not checked. For SPs whose certificate you don't have.
+ * With certificates only from `metadata`, a signature that can't be checked yet (metadata
+ * not loaded) is rejected, never accepted unverified.
+ */
+export type RequestSignaturePolicy = "require" | "verify-if-signed" | "ignore";
 
 export interface SamlIdpOptions {
   /** The IdP entity ID, usually `https://<host>/<basePath>/saml2/idp`. */
@@ -336,7 +348,7 @@ export interface ResolvedServiceProvider {
   metadata: { url: string; refreshSeconds: number; signingCertificates: string[] } | undefined;
   /** The declarative map, when one was configured (for diagnostics). */
   attributeMap: AttributeMap | undefined;
-  requireSignedAuthnRequests: boolean;
+  requestSignatures: RequestSignaturePolicy;
   /** Normalised to a list; empty when none configured. */
   spCertificates: string[];
   allowIdpInitiated: boolean;
@@ -344,8 +356,7 @@ export interface ResolvedServiceProvider {
   allowedRelayStates: string[];
   authorize: (ctx: AuthorizeContext) => boolean | Promise<boolean>;
   /** Effective signing for this SP (per-SP override, else the global setting). */
-  signResponse: boolean;
-  signAssertion: boolean;
+  sign: SignedParts;
   /** Present when assertions to this SP are encrypted; the certificate is parsed at startup. */
   encryption?: import("./saml/encrypt").AssertionEncryption;
 }

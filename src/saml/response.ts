@@ -1,7 +1,7 @@
 import type { KeyObject } from "node:crypto";
 import { SignedXml } from "xml-crypto";
 import type { SamlStatus } from "./request";
-import type { DigestAlgorithm, ResolvedSamlIdpOptions, SamlAttributeValue, SignatureAlgorithm } from "../types";
+import type { DigestAlgorithm, ResolvedSamlIdpOptions, SamlAttributeValue, SignatureAlgorithm, SignedParts } from "../types";
 import { SIGNATURE_ALGORITHM_URI } from "./idp";
 import { type AssertionEncryption, encryptAssertionInResponse } from "./encrypt";
 
@@ -174,21 +174,20 @@ function sign(xml: string, target: "Assertion" | "Response", signing: Signing): 
  * effective signing choice (per-SP override, else global); defaults to the global setting.
  * With `encryption` (the SP's, D-020): sign the Assertion, encrypt it into an
  * EncryptedAssertion, then sign the Response ("sign-then-encrypt", so the SP verifies the
- * assertion signature after decrypting). An encrypted assertion is always signed when the
- * Response is not, so the SP never receives an unsigned assertion.
+ * assertion signature after decrypting). Every `SignedParts` value signs at least one of the
+ * two, so the SP never receives an unsigned assertion, encrypted or not.
  */
 export function buildSignedResponse(
   options: ResolvedSamlIdpOptions,
   input: BuildResponseInput,
-  what: { response: boolean; assertion: boolean } = { response: options.signing.signResponse, assertion: options.signing.signAssertion },
+  parts: SignedParts = options.signing.sign,
   encryption?: AssertionEncryption,
 ) {
   const built = buildResponseXml(options, input);
   let xml = built.xml;
-  const signAssertion = what.assertion || (encryption !== undefined && !what.response);
-  if (signAssertion) xml = sign(xml, "Assertion", options.signing);
+  if (parts !== "response") xml = sign(xml, "Assertion", options.signing);
   if (encryption) xml = encryptAssertionInResponse(xml, encryption);
-  if (what.response) xml = sign(xml, "Response", options.signing);
+  if (parts !== "assertion") xml = sign(xml, "Response", options.signing);
   return { ...built, xml, base64: toBase64(xml), encrypted: encryption !== undefined };
 }
 

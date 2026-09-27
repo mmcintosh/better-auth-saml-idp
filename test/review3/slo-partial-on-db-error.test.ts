@@ -36,7 +36,7 @@ describe("Single Logout: participant read failure", () => {
       saml: {
         singleLogout: { enabled: true },
         serviceProviders: [
-          { id: A.id, entityId: A.entityId, acsUrls: [A.acs], spCertificate: keys.sp.certificate, singleLogoutService: { url: A.slo } },
+          { id: A.id, entityId: A.entityId, acsUrls: [A.acs], spCertificates: keys.sp.certificate, singleLogoutService: { url: A.slo } },
           { id: B.id, entityId: B.entityId, acsUrls: [B.acs], singleLogoutService: { url: B.slo } },
         ],
       },

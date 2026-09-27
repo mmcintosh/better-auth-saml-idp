@@ -9,6 +9,7 @@ import type {
   SamlIdpOptions,
   SamlIdpUser,
   AttributeSource,
+  SignedParts,
 } from "./types";
 
 export const NAMEID_EMAIL = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress";
@@ -94,13 +95,13 @@ const serviceProviderShape = z.object({
     nameIdFormat: z.string().min(1).optional(),
     nameId: fn<(user: SamlIdpUser) => string>().optional(),
     attributes: z.union([fn<(user: SamlIdpUser) => Record<string, string | string[]>>(), attributeMapSchema]).optional(),
-    requireSignedAuthnRequests: z.boolean().optional(),
-    spCertificate: z.union([pem("CERTIFICATE"), z.array(pem("CERTIFICATE")).min(1)]).optional(),
+    requestSignatures: z.enum(["require", "verify-if-signed", "ignore"]).optional(),
+    spCertificates: z.union([pem("CERTIFICATE"), z.array(pem("CERTIFICATE")).min(1)]).optional(),
     allowIdpInitiated: z.boolean().optional(),
     idpInitiatedRelayState: z.string().min(1).optional(),
     allowedRelayStates: z.array(z.string().min(1)).optional(),
     authorize: fn<ResolvedServiceProvider["authorize"]>().optional(),
-    signResponse: z.boolean().optional(),
+    sign: z.enum(["both", "response", "assertion"]).optional(),
     organization: z
       .object({ slug: z.string().min(1).max(256).optional(), id: z.string().min(1).max(256).optional(), roles: z.array(z.string().min(1).max(128)).min(1).optional() })
       .strict()
@@ -111,11 +112,10 @@ const serviceProviderShape = z.object({
       .object({
         url: z.url({ protocol: /^https$/, error: "must be an https:// URL" }),
         refreshSeconds: z.number().int().min(300).max(7 * 86400).optional(),
-        signingCertificate: z.union([pem("CERTIFICATE"), z.array(pem("CERTIFICATE")).min(1)]).optional(),
+        signingCertificates: z.union([pem("CERTIFICATE"), z.array(pem("CERTIFICATE")).min(1)]).optional(),
       })
       .strict()
       .optional(),
-    signAssertion: z.boolean().optional(),
     encryption: z
       .object({
         certificate: pem("CERTIFICATE"),
@@ -130,12 +130,16 @@ const serviceProviderShape = z.object({
 
 type SpRefinable = Pick<
   z.infer<typeof serviceProviderShape>,
-  "requireSignedAuthnRequests" | "spCertificate" | "metadata" | "allowIdpInitiated" | "idpInitiatedRelayState" | "allowedRelayStates" | "encryption"
+  "requestSignatures" | "spCertificates" | "metadata" | "allowIdpInitiated" | "idpInitiatedRelayState" | "allowedRelayStates" | "encryption"
 >;
 
 function refineServiceProvider(sp: SpRefinable, ctx: z.RefinementCtx) {
-    if (sp.requireSignedAuthnRequests && !sp.spCertificate && !sp.metadata)
-      ctx.addIssue({ code: "custom", path: ["spCertificate"], message: "is required when requireSignedAuthnRequests is true (or set metadata.url)" });
+    const hasCerts = sp.spCertificates !== undefined || sp.metadata !== undefined;
+    if ((sp.requestSignatures === "require" || sp.requestSignatures === "verify-if-signed") && !hasCerts)
+      ctx.addIssue({ code: "custom", path: ["spCertificates"], message: `is required when requestSignatures is "${sp.requestSignatures}" (or set metadata.url)` });
+    // "ignore" means the certificates are never used: almost certainly not what was meant.
+    if (sp.requestSignatures === "ignore" && sp.spCertificates !== undefined)
+      ctx.addIssue({ code: "custom", path: ["requestSignatures"], message: 'is "ignore", so spCertificates would never be checked; remove one of them' });
     // RelayState settings only apply to IdP-initiated SSO; setting them without the opt-in is
     // almost certainly a mistake (the host believes IdP-initiated SSO is on).
     for (const key of ["idpInitiatedRelayState", "allowedRelayStates"] as const)
@@ -187,8 +191,7 @@ const optionsSchema = z
         signatureAlgorithm: z.enum(["rsa-sha256", "rsa-sha512", "rsa-sha1"]).optional(),
         digestAlgorithm: z.enum(["sha256", "sha512", "sha1"]).optional(),
         allowInsecureSha1: z.boolean().optional(),
-        signResponse: z.boolean().optional(),
-        signAssertion: z.boolean().optional(),
+        sign: z.enum(["both", "response", "assertion"]).optional(),
       })
       .strict(),
     assertionLifetimeSeconds: z.number().int().min(30).max(3600).optional(),
@@ -390,21 +393,15 @@ export function checkEncryptionCertificate(
 type ParsedServiceProvider = z.infer<typeof serviceProviderSchema> | StoredServiceProviderConfig;
 
 interface SpDefaults {
-  signResponse: boolean | undefined;
-  signAssertion: boolean | undefined;
+  sign: SignedParts;
   relayStateMaxBytes: number;
   authorize?: ResolvedServiceProvider["authorize"];
 }
 
 /** Per-SP checks and defaults, shared by code SPs and database-registry SPs. */
 function resolveServiceProvider(sp: ParsedServiceProvider, path: string, d: SpDefaults, issues: string[], warnings: string[]): ResolvedServiceProvider {
-  const signResponse = sp.signResponse ?? d.signResponse ?? true;
-  const signAssertion = sp.signAssertion ?? d.signAssertion ?? true;
-  if (sp.metadata && sp.metadata.signingCertificate === undefined)
-    warnings.push(`${path}.metadata: the metadata's signature isn't pinned (signingCertificate); its certificates are trusted on TLS alone`);
-  // Only when the SP sets it itself; an inherited global both-off is reported once, by resolveOptions.
-  if (!signResponse && !signAssertion && (sp.signResponse !== undefined || sp.signAssertion !== undefined))
-    issues.push(`${path}: at least one of signResponse and signAssertion must be true`);
+  if (sp.metadata && sp.metadata.signingCertificates === undefined)
+    warnings.push(`${path}.metadata: the metadata's signature isn't pinned (signingCertificates); its certificates are trusted on TLS alone`);
 
   const relayValues: [string, string][] = [
     ...(sp.idpInitiatedRelayState !== undefined ? [["idpInitiatedRelayState", sp.idpInitiatedRelayState] as [string, string]] : []),
@@ -416,8 +413,8 @@ function resolveServiceProvider(sp: ParsedServiceProvider, path: string, d: SpDe
   // Parse every SP certificate now: a garbage PEM would otherwise only show up as failed
   // signature checks at request time.
   const spCerts: [string, string][] = [
-    ...[sp.spCertificate ?? []].flat().map((c, j): [string, string] => [`${path}.spCertificate${Array.isArray(sp.spCertificate) ? `.${j}` : ""}`, c]),
-    ...[sp.metadata?.signingCertificate ?? []].flat().map((c, j): [string, string] => [`${path}.metadata.signingCertificate.${j}`, c]),
+    ...[sp.spCertificates ?? []].flat().map((c, j): [string, string] => [`${path}.spCertificates${Array.isArray(sp.spCertificates) ? `.${j}` : ""}`, c]),
+    ...[sp.metadata?.signingCertificates ?? []].flat().map((c, j): [string, string] => [`${path}.metadata.signingCertificates${Array.isArray(sp.metadata?.signingCertificates) ? `.${j}` : ""}`, c]),
   ];
   for (const [p, c] of spCerts) {
     try {
@@ -453,10 +450,10 @@ function resolveServiceProvider(sp: ParsedServiceProvider, path: string, d: SpDe
       ? {
           url: sp.metadata.url,
           refreshSeconds: sp.metadata.refreshSeconds ?? 86400,
-          signingCertificates: sp.metadata.signingCertificate === undefined ? [] : [sp.metadata.signingCertificate].flat(),
+          signingCertificates: sp.metadata.signingCertificates === undefined ? [] : [sp.metadata.signingCertificates].flat(),
         }
       : undefined,
-    requireSignedAuthnRequests: sp.requireSignedAuthnRequests ?? false,
+    requestSignatures: sp.requestSignatures ?? (sp.spCertificates !== undefined || sp.metadata !== undefined ? "verify-if-signed" : "ignore"),
     organization: sp.organization,
     singleLogoutService: sp.singleLogoutService
       ? {
@@ -465,13 +462,12 @@ function resolveServiceProvider(sp: ParsedServiceProvider, path: string, d: SpDe
           ...(sp.singleLogoutService.responseUrl ? { responseUrl: sp.singleLogoutService.responseUrl } : {}),
         }
       : undefined,
-    spCertificates: sp.spCertificate === undefined ? [] : [sp.spCertificate].flat(),
+    spCertificates: sp.spCertificates === undefined ? [] : [sp.spCertificates].flat(),
     allowIdpInitiated: sp.allowIdpInitiated ?? false,
     idpInitiatedRelayState: sp.idpInitiatedRelayState,
     allowedRelayStates: sp.allowedRelayStates ?? [],
     authorize: ("authorize" in sp ? sp.authorize : undefined) ?? d.authorize ?? (() => true),
-    signResponse,
-    signAssertion,
+    sign: sp.sign ?? d.sign,
     ...(encryption ? { encryption } : {}),
   };
 }
@@ -492,7 +488,7 @@ export function resolveStoredServiceProvider(
   const serviceProvider = resolveServiceProvider(
     parsed.data,
     "serviceProvider",
-    { signResponse: options.signing.signResponse, signAssertion: options.signing.signAssertion, relayStateMaxBytes: options.relayStateMaxBytes, authorize },
+    { sign: options.signing.sign, relayStateMaxBytes: options.relayStateMaxBytes, authorize },
     issues,
     warnings,
   );
@@ -514,8 +510,6 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
     issues.push("signing: SHA-1 is insecure; set signing.allowInsecureSha1: true to use it anyway");
   if (usesSha1 && o.signing.allowInsecureSha1)
     warnings.push("signing: SHA-1 is enabled (allowInsecureSha1). Only use this for SPs that cannot do SHA-256.");
-  if (o.signing.signResponse === false && o.signing.signAssertion === false)
-    issues.push("signing: at least one of signResponse and signAssertion must be true");
 
   const lifetime = o.assertionLifetimeSeconds ?? 300;
   if (lifetime > 300) warnings.push(`assertionLifetimeSeconds is ${lifetime}; the recommended maximum is 300`);
@@ -530,8 +524,7 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
   }
 
   const spDefaults: SpDefaults = {
-    signResponse: o.signing.signResponse,
-    signAssertion: o.signing.signAssertion,
+    sign: o.signing.sign ?? "both",
     relayStateMaxBytes: o.relayStateMaxBytes ?? RELAY_STATE_HARD_CAP,
   };
   const serviceProviders = o.serviceProviders.map((sp, i) => resolveServiceProvider(sp, `serviceProviders.${i}`, spDefaults, issues, warnings));
@@ -554,8 +547,7 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
       signatureAlgorithm: sigAlg,
       digestAlgorithm: digestAlg,
       allowInsecureSha1: o.signing.allowInsecureSha1 ?? false,
-      signResponse: o.signing.signResponse ?? true,
-      signAssertion: o.signing.signAssertion ?? true,
+      sign: o.signing.sign ?? "both",
       keyObject: keyCheck.key,
     },
     assertionLifetimeSeconds: lifetime,

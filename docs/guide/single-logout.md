@@ -15,7 +15,7 @@ samlIdp({
       id: "app",
       entityId: "https://app.example.com/saml/metadata",
       acsUrls: ["https://app.example.com/saml/acs"],
-      spCertificate: appCert,                                   // strongly recommended, see below
+      spCertificates: appCert,                                   // strongly recommended, see below
       singleLogoutService: { url: "https://app.example.com/saml/slo" }, // binding: "redirect" (default) | "post"
     },
   ],
@@ -72,7 +72,7 @@ Better Auth's own `/sign-out` only ends the IdP session. Use `signOutEverywhere`
 
 A forged LogoutRequest could sign someone out, so every one must be authenticated:
 
-- **SPs with certificates** (`spCertificate` or `metadata.url`), or that require signed requests, **must sign** their logout messages, and the signature is verified like an AuthnRequest's. If no certificate is available, for example because a metadata fetch failed, the message is refused rather than accepted unsigned.
+- **SPs with certificates** (`spCertificates` or `metadata.url`), that is, any `requestSignatures` other than `"ignore"`, **must sign** their logout messages, and the signature is verified like an AuthnRequest's. If no certificate is available, for example because a metadata fetch failed, the message is refused rather than accepted unsigned.
 - **SPs without certificates** can end the session only with the right SessionIndex. That's a keyed MAC over (session, SP), different for every SP and every session, known only to the SP it was sent to. One SP's value can't end the session in another SP's name.
 
 Give SPs that use SLO a certificate. For certificate-less SPs, anyone can make the IdP produce a signed `Success` LogoutResponse addressed to that SP (with no effect at the IdP), so such SPs must check `InResponseTo` against their own pending logout.

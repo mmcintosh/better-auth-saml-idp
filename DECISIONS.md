@@ -1142,3 +1142,29 @@ After 1.0, anything public is a semver promise. Review 4 listed six choices that
   - C, exposing our configuration as `options` like the organization plugin does: it includes the private signing key, readable by every other plugin.
   - D, leaving it.
 - **Test:** `test/unit/public-api.test.ts` asserts the plugin object has no `options`.
+
+**4. Honest option shapes: `sign`, `requestSignatures`, plural certificate names (all three as proposed).**
+- **Before:**
+  - `signResponse` and `signAssertion` were two booleans for a three-way choice. "Both false" had to be rejected by two separate startup checks, one global and one per SP.
+  - `requireSignedAuthnRequests: boolean` hid three behaviours, and which one applied depended on whether certificates were configured. With `false` and no certificate, a signed request was accepted without its signature being checked. Logout had its own, separately written `mustSign` rule.
+  - `spCertificate` and `metadata.signingCertificate` held lists under singular names.
+- **Now:**
+  - `sign: "both" | "response" | "assertion"`, both globally (`signing.sign`) and per SP; default `"both"`. "Sign nothing" can't be expressed. `buildSignedResponse` takes the choice directly, and its defensive "encrypted assertion without any signature" branch is gone because it can no longer be reached.
+  - `requestSignatures: "require" | "verify-if-signed" | "ignore"`. Its default is derived: `"verify-if-signed"` with `spCertificates` or `metadata`, else `"ignore"`. One value drives both AuthnRequests and logout: logout messages must be signed unless the policy is `"ignore"`, the same outcome as the old `mustSign`. `"require"` and `"verify-if-signed"` without certificates are startup errors, and so is `"ignore"` together with `spCertificates`.
+  - IdP metadata advertises `WantAuthnRequestsSigned` only when every SP is `"require"`.
+  - `spCertificates` and `metadata.signingCertificates` take one PEM or a list. The old names are unknown keys and are rejected, not ignored.
+- **One tightening:** under `"verify-if-signed"` with certificates only from a metadata URL that hasn't loaded, a *signed* AuthnRequest is now refused (`UNSIGNED_SAML_REQUEST`) instead of being accepted unchecked. That matches logout and `"require"`, which already failed closed.
+- **Rejected:** keeping the booleans and documenting the hidden cases; accepting only arrays for certificates (clumsy for the common single certificate).
+- **Stored SPs:** registry rows use the same JSON, so rows with the old names fail validation. The example's migration `0006_api_decision_4_option_names.sql` rewrites them. It's idempotent, and it was checked on copies of the live demo's okta and auth0 rows, which need it.
+- **Tests:** `options.test.ts` (derivation, the three startup errors, old names rejected, single or list); `encrypt.test.ts` (every `sign` value leaves the encrypted assertion signed at least once); `sp-metadata-refresh.test.ts` (`"ignore"` never checks, even with loaded certificates; the new fail-closed case); `metadata.test.ts` (`WantAuthnRequestsSigned` stays false for `"verify-if-signed"`).
+- **Mutation proof:** ten mutations, each caught:
+  1. drop the `"ignore"` early return;
+  2. revert the fail-closed branch;
+  3. make logout require signatures only for `"require"`;
+  4. always derive `"ignore"`;
+  5. sign the assertion only for `"both"`;
+  6. drop the per-SP `sign` override;
+  7. drop the `"ignore"` + certificates check;
+  8. drop the `"verify-if-signed"` needs-certificates check;
+  9. advertise `WantAuthnRequestsSigned` for any non-ignore policy (caught after adding the lenient-metadata case);
+  10. stop importing `AuthnRequestsSigned="true"` as `"require"`.

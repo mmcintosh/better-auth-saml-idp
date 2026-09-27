@@ -58,12 +58,17 @@ describe("GET /saml2/idp/metadata", { timeout: 60_000 }, () => {
           id: "s",
           entityId: "https://sp.test/metadata",
           acsUrls: ["https://sp.test/acs"],
-          requireSignedAuthnRequests: true,
-          spCertificate: keys.sp.certificate,
+          requestSignatures: "require",
+          spCertificates: keys.sp.certificate,
         },
       ],
     });
     expect(xml).toMatch(/WantAuthnRequestsSigned="true"/);
+    // "verify-if-signed" (the default with certificates) accepts unsigned requests: no promise.
+    const lenient = await fetchMetadata({
+      serviceProviders: [{ id: "s", entityId: "https://sp.test/metadata", acsUrls: ["https://sp.test/acs"], spCertificates: keys.sp.certificate }],
+    });
+    expect(lenient.xml).toMatch(/WantAuthnRequestsSigned="false"/);
   });
 
   it("never contains private key material", async () => {

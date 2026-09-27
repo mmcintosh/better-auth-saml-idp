@@ -58,7 +58,7 @@ async function signedRedirect(key: string, spec = {}) {
 async function host(sp: Record<string, unknown> = {}, logs: string[] = []) {
   const { auth } = await createHost({
     saml: {
-      serviceProviders: [{ id: "test-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], requireSignedAuthnRequests: true, metadata: { url: MD_URL }, ...sp } as any],
+      serviceProviders: [{ id: "test-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], requestSignatures: "require", metadata: { url: MD_URL }, ...sp } as any],
     },
     auth: { logger: { level: "info", log: (_l: string, m: string) => logs.push(m) } },
   });
@@ -103,11 +103,26 @@ describe("SP metadata URL with refresh", () => {
   it("configured certificates stay trusted; a failed fetch falls back to them and backs off", async () => {
     const served = serve(() => new Response("nope", { status: 503 }));
     const logs: string[] = [];
-    const browser = await host({ spCertificate: keys.sp.certificate }, logs);
+    const browser = await host({ spCertificates: keys.sp.certificate }, logs);
     expect((await browser.fetch(await signedRedirect(keys.sp.privateKey))).status).toBe(200);
     expect(await code(await browser.fetch(await signedRedirect(keys.idpNext.privateKey)))).toBe("UNSIGNED_SAML_REQUEST");
     expect(served.count).toBe(1); // no retry storm
     expect(logs.some((m) => /metadata refresh .* failed \(HTTP 503\); using the configured certificates/.test(m))).toBe(true);
+  });
+
+  it('"verify-if-signed" with only metadata certificates: until they load, a signed request is refused, never accepted unchecked', async () => {
+    serve(() => new Response("nope", { status: 503 }));
+    const browser = await host({ requestSignatures: "verify-if-signed" });
+    const unsigned = `${SSO_URL}?SAMLRequest=${encodeURIComponent(Buffer.from(await deflateRaw(authnRequestXml().xml)).toString("base64"))}`;
+    expect((await browser.fetch(unsigned)).status).toBe(200);
+    expect(await code(await browser.fetch(await signedRedirect(keys.idpNext.privateKey)))).toBe("UNSIGNED_SAML_REQUEST");
+  });
+
+  it('"ignore" never checks a signature, even with metadata certificates loaded (API decision 4)', async () => {
+    serve(() => metadata());
+    const browser = await host({ requestSignatures: "ignore" });
+    // Signed with a key the metadata doesn't list: the policy says ignore, so it isn't checked.
+    expect((await browser.fetch(await signedRedirect(keys.idpNext.privateKey))).status).toBe(200);
   });
 
   it("never takes ACS URLs from metadata", async () => {
@@ -120,8 +135,8 @@ describe("SP metadata URL with refresh", () => {
   it.each([
     ["metadata for another entity ID", () => metadata({ entityId: "https://other.test/sp" }), {}],
     ["expired metadata (validUntil)", () => metadata({ validUntil: "2020-01-01T00:00:00Z" }), {}],
-    ["unsigned metadata when the signature is pinned", () => metadata(), { signingCertificate: keys.idpNext.certificate }],
-    ["metadata signed by another key than the pinned one", () => metadata({ signWith: { key: keys.sp.privateKey } }), { signingCertificate: keys.idpNext.certificate }],
+    ["unsigned metadata when the signature is pinned", () => metadata(), { signingCertificates: keys.idpNext.certificate }],
+    ["metadata signed by another key than the pinned one", () => metadata({ signWith: { key: keys.sp.privateKey } }), { signingCertificates: keys.idpNext.certificate }],
     ["not XML", () => "<html>login</html>", {}],
     [
       "a body over 1 MiB without Content-Length",
@@ -164,7 +179,7 @@ describe("SP metadata URL with refresh", () => {
 
   it("accepts metadata signed with the pinned key", async () => {
     serve(() => metadata({ signWith: { key: keys.idpNext.privateKey } }));
-    const browser = await host({ metadata: { url: MD_URL, signingCertificate: keys.idpNext.certificate } });
+    const browser = await host({ metadata: { url: MD_URL, signingCertificates: keys.idpNext.certificate } });
     expect((await browser.fetch(await signedRedirect(keys.sp.privateKey))).status).toBe(200);
   });
 

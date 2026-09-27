@@ -40,7 +40,7 @@ Put this in `SAML_SERVICE_PROVIDERS`, then redeploy. The plugin's default NameID
 | IdP Entity ID / Issuer URL | the entity ID from step 1 |
 | Signing certificate | the certificate from step 1 |
 | Email attribute name | `email` (optional; the NameID is already the email) |
-| Sign SAML authentication requests | optional. Cloudflare signs over HTTP-Redirect, which the IdP verifies. To require it, set `requireSignedAuthnRequests: true` and give `spCertificate` **both** certificates from Cloudflare's SP metadata. `npx better-auth-saml-idp sp-from-metadata https://<team>.cloudflareaccess.com/cdn-cgi/access/saml-metadata --id cf-access` prints that entry. Verified live on 2026-09-25 (DECISIONS.md D-018) |
+| Sign SAML authentication requests | optional. Cloudflare signs over HTTP-Redirect, which the IdP verifies. To require it, set `requestSignatures: "require"` and give `spCertificates` **both** certificates from Cloudflare's SP metadata. `npx better-auth-saml-idp sp-from-metadata https://<team>.cloudflareaccess.com/cdn-cgi/access/saml-metadata --id cf-access` prints that entry. Verified live on 2026-09-25 (DECISIONS.md D-018) |
 
 Save, then use **Test** on the provider. Run it in a private window: an existing Access session from another login method is reused otherwise, and the result shows that identity instead. You'll be sent to the IdP's `/sign-in` page. After you sign in, Cloudflare shows the identity and attributes it received. **Take a screenshot; this is the Phase 3 evidence.**
 

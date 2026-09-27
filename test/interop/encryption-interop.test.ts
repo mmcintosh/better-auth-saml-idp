@@ -107,8 +107,8 @@ describe("interop: @node-saml/node-saml decrypts our encrypted assertions", () =
     expect(profile?.nameID).toBe(user.email);
   });
 
-  it("signResponse: false — the assertion signature is verified after decryption", async () => {
-    const { auth } = await idp({}, { signing: { privateKey: keys.idp.privateKey, certificate: keys.idp.certificate, signResponse: false } });
+  it('sign: "assertion" — the assertion signature is verified after decryption', async () => {
+    const { auth } = await idp({}, { signing: { privateKey: keys.idp.privateKey, certificate: keys.idp.certificate, sign: "assertion" } });
     const sp = nodeSaml({ wantAuthnResponseSigned: false });
     const { user, form } = await nodeSamlForm(auth, sp);
     // No Response signature, and the assertion's signature is inside the ciphertext.
@@ -166,15 +166,15 @@ describe.skipIf(isWorkerd)("interop: samlify decrypts our encrypted assertions (
     expect((await verifier.verify(form.samlResponse)).extract.nameID).toBe(user.email);
   });
 
-  it("signResponse: false — samlify verifies the decrypted assertion's signature", async () => {
-    const { auth } = await idp({}, { signing: { privateKey: keys.idp.privateKey, certificate: keys.idp.certificate, signResponse: false } });
+  it(`sign: "assertion" — samlify verifies the decrypted assertion's signature`, async () => {
+    const { auth } = await idp({}, { signing: { privateKey: keys.idp.privateKey, certificate: keys.idp.certificate, sign: "assertion" } });
     const verifier = await strictSp(auth, { ...spOpts(), wantMessageSigned: false });
     const { user, form } = await samlifyForm(auth);
     expect((await verifier.verify(form.samlResponse)).extract.nameID).toBe(user.email);
   });
 
   it("a wrong SP private key can't decrypt", async () => {
-    const { auth } = await idp({}, { signing: { privateKey: keys.idp.privateKey, certificate: keys.idp.certificate, signResponse: false } });
+    const { auth } = await idp({}, { signing: { privateKey: keys.idp.privateKey, certificate: keys.idp.certificate, sign: "assertion" } });
     const verifier = await strictSp(auth, { encPrivateKey: keys.idpNext.privateKey, encryptCert: keys.idpNext.certificate, wantMessageSigned: false });
     const { form } = await samlifyForm(auth);
     await expect(verifier.verify(form.samlResponse)).rejects.toThrow(/ERR_EXCEPTION_OF_ASSERTION_DECRYPTION/);

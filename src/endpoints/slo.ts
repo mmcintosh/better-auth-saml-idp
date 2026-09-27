@@ -71,10 +71,10 @@ async function consume<T>(adapter: Adapter, prefix: string, id: string | undefin
 }
 
 /**
- * Must this SP's logout messages be signed? When it has certificates, requires signed
- * AuthnRequests, or gets its certificates from metadata (which may have failed to load).
+ * Must this SP's logout messages be signed? Unless its policy is "ignore": logout carries no
+ * other proof of who sent it, so "verify-if-signed" is as strict here as "require".
  */
-const mustSign = (sp: ResolvedServiceProvider) => sp.spCertificates.length > 0 || sp.requireSignedAuthnRequests || sp.metadata !== undefined;
+const mustSign = (sp: ResolvedServiceProvider) => sp.requestSignatures !== "ignore";
 
 const sloUrl = (ctx: GenericEndpointContext, state: PluginState) => `${idpBaseURL(state.options, ctx.context.baseURL)}${SLO_PATH}`;
 

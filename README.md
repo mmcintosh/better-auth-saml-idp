@@ -302,7 +302,7 @@ npx better-auth-saml-idp smoke https://auth.example.com --sp <SP entity ID>
 | `signing.privateKey` / `.certificate` | PEM | (required) | RSA ≥ 2048 key and its certificate |
 | `signing.additionalCertificates` | PEM[] | `[]` | Published but not used to sign (rotation) |
 | `signing.signatureAlgorithm` / `.digestAlgorithm` | string | `rsa-sha256` / `sha256` | SHA-1 also needs `allowInsecureSha1` |
-| `signing.signResponse` / `.signAssertion` | boolean | `true` / `true` | Global default; each SP can override |
+| `signing.sign` | `"both"` / `"response"` / `"assertion"` | `"both"` | What to sign: the Response, the Assertion, or both. Each SP can override |
 | `serviceProviders` | array | (required) | See the next table |
 | `registry` | object | off | `{ enabled, canManage?, permissions?, cacheSeconds?, authorize? }` [database registry](#managing-sps-at-runtime-registry) |
 | `singleLogout` | object | off | `{ enabled: true }` [Single Logout](#single-logout) |
@@ -330,12 +330,12 @@ npx better-auth-saml-idp smoke https://auth.example.com --sp <SP entity ID>
 | `attributes` | map or function | none | [Attributes](#attributes) |
 | `authorize` | function | allow | Decide per user and SP (gets `organizations`); a denial issues no assertion |
 | `organization` | object | none | `{ slug \| id, roles? }`: [members only](#organizations-and-permissions) |
-| `requireSignedAuthnRequests` | boolean | `false` | Reject unsigned requests (Redirect or POST) |
-| `spCertificate` | PEM or PEM[] | none | The SP's signing certificates (several during its rotation) |
-| `metadata` | object | none | `{ url, refreshSeconds?, signingCertificate? }` [refresh certificates](#keeping-sp-certificates-current) |
+| `requestSignatures` | `"require"` / `"verify-if-signed"` / `"ignore"` | `"verify-if-signed"` with certificates, else `"ignore"` | Signatures on the SP's requests (Redirect or POST) |
+| `spCertificates` | PEM or PEM[] | none | The SP's signing certificates (several during its rotation) |
+| `metadata` | object | none | `{ url, refreshSeconds?, signingCertificates? }` [refresh certificates](#keeping-sp-certificates-current) |
 | `encryption` | object | none | `{ certificate, dataAlgorithm?, keyAlgorithm? }` [encrypt assertions](#signing-and-encryption) |
 | `singleLogoutService` | object | none | `{ url, binding? }` where the SP takes logout messages ([Single Logout](#single-logout)) |
-| `signResponse` / `signAssertion` | boolean | global | Per-SP signing choice (at least one stays on) |
+| `sign` | as `signing.sign` | global | Per-SP signing choice |
 | `allowIdpInitiated` | boolean | `false` | [IdP-initiated SSO](#idp-initiated-sso) |
 | `idpInitiatedRelayState` / `allowedRelayStates` | string / string[] | none | RelayState for IdP-initiated SSO (exact-match allow-list) |
 
@@ -376,13 +376,13 @@ Missing, null and empty values are left out, dates become ISO 8601, and arrays b
 
 ### Signing and encryption
 
-- **Signing.** Response and Assertion are both signed by default. Each SP can override `signResponse` / `signAssertion`, but at least one stays on. `signMetadata: true` signs the metadata document.
+- **Signing.** Response and Assertion are both signed by default. Each SP can choose with `sign: "response"` or `"assertion"`. `signMetadata: true` signs the metadata document.
 - **Encryption per SP.** `encryption: { certificate }` sends `<saml:EncryptedAssertion>`, using AES-256-GCM with RSA-OAEP, signed before encryption and wrapped in a signed Response.
   - `dataAlgorithm` also takes `aes128-gcm`, or `aes256-cbc` together with `allowInsecureCbc: true`.
   - `keyAlgorithm: "rsa-oaep-sha256"` is available, but node-saml and samlify can't decrypt it.
   - RSA PKCS#1 v1.5 isn't offered.
   - Verified live with Cloudflare Access ([guide](docs/sp-cloudflare-access.md#5-encrypt-assertions-optional)).
-- **Signed AuthnRequests.** Set `requireSignedAuthnRequests: true` with the SP's `spCertificate`, or with its `metadata.url`.
+- **Signed requests.** With the SP's `spCertificates` (or its `metadata.url`), a signed request must verify and an unsigned one is still accepted (`"verify-if-signed"`). Set `requestSignatures: "require"` to refuse unsigned ones. Without certificates, signatures aren't checked (`"ignore"`).
   - Redirect-binding signatures are verified over the exact query octets.
   - POST-binding signatures are enveloped XML signatures, accepted only when they cover the request's own unique ID with allow-listed algorithms and one of the SP's configured certificates ([D-025](DECISIONS.md)).
 
@@ -415,7 +415,7 @@ samlIdp({
   // ...
   singleLogout: { enabled: true }, // adds the saml_idp_session_participants table (migration 0004)
   serviceProviders: [
-    { id: "app", entityId: "…", acsUrls: ["…"], spCertificate: "…",
+    { id: "app", entityId: "…", acsUrls: ["…"], spCertificates: "…",
       singleLogoutService: { url: "https://app.example.com/saml/slo" } }, // binding: "redirect" (default) or "post"
   ],
 });
@@ -521,14 +521,14 @@ samlIdp({
 ```ts
 { id: "cf-access", entityId: "https://TEAM.cloudflareaccess.com/cdn-cgi/access/callback",
   acsUrls: ["https://TEAM.cloudflareaccess.com/cdn-cgi/access/callback"],
-  requireSignedAuthnRequests: true,
+  requestSignatures: "require",
   metadata: { url: "https://TEAM.cloudflareaccess.com/cdn-cgi/access/saml-metadata" } }
 ```
 
 The SP's signing certificates, plus its encryption certificate when `encryption` is on, are refreshed from its metadata, daily by default.
 - **Only certificates are taken.** The entity ID must match, and ACS URLs always come from your config, so a compromised metadata URL can't redirect assertions.
 - **Failures are safe.** Certificates you configure stay trusted, and a failed fetch keeps the last good copy.
-- **Pinning.** Pin the metadata's own signature with `metadata.signingCertificate` when the SP signs it.
+- **Pinning.** Pin the metadata's own signature with `metadata.signingCertificates` when the SP signs it.
 - **Verified live** with Cloudflare Access, with no certificates configured.
 
 ### Registering an SP from its metadata
@@ -540,7 +540,7 @@ const { serviceProvider, warnings } = await serviceProviderFromMetadata(metadata
 });
 ```
 
-The result gives you the entity ID, HTTP-POST ACS URLs (default first), NameID format and signing certificates, plus `requireSignedAuthnRequests` if the SP asks for it. The document is XSD-validated first, but its own signature is **not** checked, so review the result before you pin it. The CLI equivalent is `sp-from-metadata`.
+The result gives you the entity ID, HTTP-POST ACS URLs (default first), NameID format and signing certificates, plus `requestSignatures: "require"` if the SP asks for it. The document is XSD-validated first, but its own signature is **not** checked, so review the result before you pin it. The CLI equivalent is `sp-from-metadata`.
 
 ## 🧰 Command-line tool
 

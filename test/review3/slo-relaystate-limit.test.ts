@@ -20,7 +20,7 @@ describe("Single Logout: RelayState size", () => {
     const { auth } = await createHost({
       saml: {
         singleLogout: { enabled: true },
-        serviceProviders: [{ id: "sp-a", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], spCertificate: keys.sp.certificate, singleLogoutService: { url: "https://sp.test/slo" } }],
+        serviceProviders: [{ id: "sp-a", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], spCertificates: keys.sp.certificate, singleLogoutService: { url: "https://sp.test/slo" } }],
       },
     });
     const browser = new Browser(auth); // no session at all: unauthenticated caller

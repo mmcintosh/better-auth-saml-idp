@@ -14,7 +14,7 @@ const code = async (res: Response) => /<code>([A-Z_]+)<\/code>/.exec(await res.c
 
 describe("R4-6: signed AuthnRequests must state their Destination", () => {
   it("refuses a signed HTTP-Redirect AuthnRequest without Destination, as SLO already does", async () => {
-    const { auth } = await createHost({ saml: { serviceProviders: [{ id: "test-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], requireSignedAuthnRequests: true, spCertificate: keys.sp.certificate }] } });
+    const { auth } = await createHost({ saml: { serviceProviders: [{ id: "test-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], requestSignatures: "require", spCertificates: keys.sp.certificate }] } });
     const browser = new Browser(auth);
     await browser.signUp();
     const res = await browser.fetch(await redirectUrl(authnRequestXml({ destination: null }).xml, { sign: true }));

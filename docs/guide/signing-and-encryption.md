@@ -23,13 +23,13 @@ Create a key with `npx better-auth-saml-idp keygen` ([getting started](getting-s
 By default, **both** the `<Response>` and the `<Assertion>` are signed: an enveloped XML signature, exclusive C14N, placed after the `Issuer` as the schema requires. Some SPs want only one:
 
 ```ts
-signing: { /* … */, signResponse: true, signAssertion: true },   // global defaults
+signing: { /* … */, sign: "both" },                  // global default
 serviceProviders: [
-  { id: "legacy", /* … */, signResponse: false },                // this SP: assertion only
+  { id: "legacy", /* … */, sign: "assertion" },     // this SP: assertion only
 ],
 ```
 
-At least one must stay on, and with encryption, the assertion is always signed when the Response isn't.
+There is no way to sign neither. With encryption, the assertion is signed before it's encrypted whenever `sign` includes it.
 
 ### SHA-1
 

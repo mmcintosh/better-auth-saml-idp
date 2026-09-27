@@ -79,15 +79,15 @@ Pending sign-ins and logout steps are stored as Better Auth verification values 
 **How it works.**
 - **HTTP-Redirect:** the signature covers the exact query octets as received (`SAMLRequest`, `RelayState`, `SigAlg`, in that order, undecoded). A parameter name that needed decoding can't have been signed, so it's refused. This is verified with Node's crypto and the SP's certificate, with no XML involved.
 - **HTTP-POST:** an enveloped XML signature on the request, checked with the rules in [XML signature verification](#xml-signature-verification).
-- Any of the SP's certificates may have signed (SPs rotate keys). Certificates come from `spCertificate` and/or the SP's [metadata URL](service-providers.md#keeping-sp-certificates-current). A certificate embedded in the message is never trusted.
+- Any of the SP's certificates may have signed (SPs rotate keys). Certificates come from `spCertificates` and/or the SP's [metadata URL](service-providers.md#keeping-sp-certificates-current). A certificate embedded in the message is never trusted.
 - If an SP has certificates, a signature that's present but invalid is always refused, even when signing isn't required.
 
 **Options.**
 
 | Option (per SP) | Effect |
 |---|---|
-| `requireSignedAuthnRequests` | Refuse unsigned requests. |
-| `spCertificate` | The SP's signing certificates. |
+| `requestSignatures` | `"require"` refuses unsigned requests; `"verify-if-signed"` (the default with certificates) checks signed ones. |
+| `spCertificates` | The SP's signing certificates. |
 | `metadata.url` | Learn them from the SP's metadata. |
 
 Logout messages must be signed whenever the SP has certificates, requires signed requests, or uses `metadata`. If no certificate is available (for example a metadata fetch failed), they're refused rather than accepted unsigned.

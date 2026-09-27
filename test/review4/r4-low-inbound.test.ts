@@ -13,7 +13,7 @@ const code = async (res: Response) => /<code>([A-Z_]+)<\/code>/.exec(await res.c
 
 describe("R4-L1: a signed AuthnRequest must carry Destination", () => {
   it("signed without Destination is refused; signed with it, or unsigned without it, still work", async () => {
-    const { auth } = await createHost({ saml: { serviceProviders: [{ id: "test-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], spCertificate: keys.sp.certificate }] } });
+    const { auth } = await createHost({ saml: { serviceProviders: [{ id: "test-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], spCertificates: keys.sp.certificate }] } });
     const browser = new Browser(auth);
     const res = await browser.fetch(await redirectUrl(authnRequestXml({ destination: null }).xml, { sign: true }));
     expect(await code(res)).toBe("INVALID_SAML_REQUEST");

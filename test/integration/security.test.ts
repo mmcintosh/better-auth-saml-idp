@@ -336,8 +336,8 @@ describe("§7 algorithms, validity, signatures", () => {
   });
 
   it.each([
-    ["assertion only", { signResponse: false }, { message: false, assertion: true }, 1],
-    ["response only", { signAssertion: false }, { message: true, assertion: false }, 1],
+    ["assertion only", { sign: "assertion" }, { message: false, assertion: true }, 1],
+    ["response only", { sign: "response" }, { message: true, assertion: false }, 1],
   ])("per-SP signing: %s, accepted by an SP that requires exactly that", async (_, over, want, signatures) => {
     const { auth, browser } = await host({ saml: { serviceProviders: spConfig(over) } });
     await browser.signUp();
@@ -494,7 +494,7 @@ describe("§7 inbound request validation", () => {
 
 describe("§7 signed AuthnRequests", () => {
   const signedHost = () =>
-    host({ saml: { serviceProviders: spConfig({ requireSignedAuthnRequests: true, spCertificate: keys.sp.certificate }) } });
+    host({ saml: { serviceProviders: spConfig({ requestSignatures: "require", spCertificates: keys.sp.certificate }) } });
 
   it("accepts a valid Redirect-binding signature", async () => {
     const { browser } = await signedHost();
@@ -505,7 +505,7 @@ describe("§7 signed AuthnRequests", () => {
 
   it("accepts a signature from any of several SP certificates (SP key rotation)", async () => {
     const { browser } = await host({
-      saml: { serviceProviders: spConfig({ requireSignedAuthnRequests: true, spCertificate: [keys.idpNext.certificate, keys.sp.certificate] }) },
+      saml: { serviceProviders: spConfig({ requestSignatures: "require", spCertificates: [keys.idpNext.certificate, keys.sp.certificate] }) },
     });
     await browser.signUp();
     expect((await browser.fetch(await redirectUrl(authnRequestXml().xml, { sign: true }))).status).toBe(200);
@@ -513,7 +513,7 @@ describe("§7 signed AuthnRequests", () => {
 
   it("rejects a signature from a key that is not configured", async () => {
     const { browser } = await host({
-      saml: { serviceProviders: spConfig({ requireSignedAuthnRequests: true, spCertificate: [keys.idpNext.certificate] }) },
+      saml: { serviceProviders: spConfig({ requestSignatures: "require", spCertificates: [keys.idpNext.certificate] }) },
     });
     const res = await browser.fetch(await redirectUrl(authnRequestXml().xml, { sign: true }));
     expect(res.status).toBe(400);

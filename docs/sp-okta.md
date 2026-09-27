@@ -28,7 +28,7 @@ From the downloaded metadata:
 npx better-auth-saml-idp sp-from-metadata metadata.xml --id okta
 ```
 
-This gives the entity ID (the Audience URI), the ACS URL, `requireSignedAuthnRequests: true` with Okta's signing certificate, and `encryption` with Okta's encryption certificate. Keep `encryption` to send encrypted assertions (Okta decrypts them), or remove it for plain ones. Add attributes Okta's just-in-time provisioning can use:
+This gives the entity ID (the Audience URI), the ACS URL, `requestSignatures: "require"` with Okta's signing certificate, and `encryption` with Okta's encryption certificate. Keep `encryption` to send encrypted assertions (Okta decrypts them), or remove it for plain ones. Add attributes Okta's just-in-time provisioning can use:
 
 ```ts
 attributes: {

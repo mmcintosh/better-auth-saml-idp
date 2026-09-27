@@ -36,8 +36,8 @@ async function host(sps: Record<string, unknown>[] = [], saml: Record<string, un
     saml: {
       singleLogout: { enabled: true },
       serviceProviders: [
-        { id: A.id, entityId: A.entityId, acsUrls: [A.acs], spCertificate: keys.sp.certificate, singleLogoutService: { url: A.slo } },
-        { id: B.id, entityId: B.entityId, acsUrls: [B.acs], spCertificate: keys.idpNext.certificate, singleLogoutService: { url: B.slo } },
+        { id: A.id, entityId: A.entityId, acsUrls: [A.acs], spCertificates: keys.sp.certificate, singleLogoutService: { url: A.slo } },
+        { id: B.id, entityId: B.entityId, acsUrls: [B.acs], spCertificates: keys.idpNext.certificate, singleLogoutService: { url: B.slo } },
         ...sps,
       ] as any,
       ...saml,
@@ -192,7 +192,7 @@ describe("SP-initiated Single Logout", () => {
 
   it("an originator with binding: post gets an auto-POSTed, XML-signed LogoutResponse", async () => {
     const D = { id: "sp-d", entityId: "https://d.test/sp", acs: "https://d.test/acs", slo: "https://d.test/slo" };
-    const { browser } = await host([{ id: D.id, entityId: D.entityId, acsUrls: [D.acs], spCertificate: keys.sp.certificate, singleLogoutService: { url: D.slo, binding: "post" } }]);
+    const { browser } = await host([{ id: D.id, entityId: D.entityId, acsUrls: [D.acs], spCertificates: keys.sp.certificate, singleLogoutService: { url: D.slo, binding: "post" } }]);
     const d = await signIn(browser, D);
     const res = await browser.fetch(redirectBindingUrl(SLO, "SAMLRequest", logoutRequestXml({ issuer: D.entityId, nameId: d.nameId, sessionIndex: d.sessionIndex }).xml, undefined, spSigning(keys.sp.privateKey)));
     expect(clearsSession(res)).toBe(true); // also on a raw (auto-POST) Response
@@ -204,7 +204,7 @@ describe("SP-initiated Single Logout", () => {
 
   it("an SP without singleLogoutService can't start a logout", async () => {
     const E = { id: "sp-e", entityId: "https://e.test/sp", acs: "https://e.test/acs" };
-    const { browser } = await host([{ id: E.id, entityId: E.entityId, acsUrls: [E.acs], spCertificate: keys.sp.certificate }]);
+    const { browser } = await host([{ id: E.id, entityId: E.entityId, acsUrls: [E.acs], spCertificates: keys.sp.certificate }]);
     const res = await browser.fetch(redirectBindingUrl(SLO, "SAMLRequest", logoutRequestXml({ issuer: E.entityId, nameId: "x" }).xml, undefined, spSigning(keys.sp.privateKey)));
     expect(await code(res)).toBe("LOGOUT_NOT_SUPPORTED");
   });

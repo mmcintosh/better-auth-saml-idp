@@ -50,8 +50,7 @@ Every option `samlIdp()` accepts. Options are validated when `samlIdp()` is call
 | `signatureAlgorithm` | `"rsa-sha256" \| "rsa-sha512" \| "rsa-sha1"` | `"rsa-sha256"` | Signature algorithm for everything the IdP signs. `rsa-sha1` also needs `allowInsecureSha1`. |
 | `digestAlgorithm` | `"sha256" \| "sha512" \| "sha1"` | `"sha256"` | Digest algorithm. `sha1` also needs `allowInsecureSha1`. |
 | `allowInsecureSha1` | `boolean` | `false` | Allow SHA-1: for signing with the options above, and for accepting SHA-1-signed requests. Logs a warning. Only for SPs that can't do SHA-256. |
-| `signResponse` | `boolean` | `true` | Sign the `<Response>`. Each SP can override it. |
-| `signAssertion` | `boolean` | `true` | Sign the `<Assertion>`. Each SP can override it. At least one of the two must be on. |
+| `sign` | `"both" \| "response" \| "assertion"` | `"both"` | Which parts to sign: the `<Response>`, the `<Assertion>` inside it, or both. Each SP can override it. |
 
 ## `accountPolicy`
 
@@ -117,12 +116,11 @@ The same options apply to SPs in `serviceProviders` and to SPs stored in the reg
 | `attributes` | map or `(user, { organizations, organization }) => Record<string, string \| string[]>` | none | The `<AttributeStatement>`. See [`attributes`](#attributes). |
 | `authorize` | `({ user, session, serviceProvider, organizations }) => boolean \| Promise<boolean>` | allow | Decide per user and SP. Anything but `true`, or a throw, is `ACCESS_DENIED` (code SPs only). |
 | `organization` | `{ slug?, id?, roles? }` | none | Only members of this organization, with one of `roles` if given. See [`organization`](#organization). |
-| `requireSignedAuthnRequests` | `boolean` | `false` | Refuse unsigned requests. Needs `spCertificate` or `metadata.url`. |
-| `spCertificate` | PEM `string \| string[]` | none | The SP's signing certificates. Any of them may have signed (SPs rotate keys; Cloudflare Access publishes two). Parsed and checked (RSA) at startup. |
+| `requestSignatures` | `"require" \| "verify-if-signed" \| "ignore"` | `"verify-if-signed"` with `spCertificates` or `metadata`, else `"ignore"` | Signatures on this SP's requests. `"require"`: unsigned requests are refused. `"verify-if-signed"`: an unsigned AuthnRequest is accepted, a signed one must verify. `"ignore"`: nothing is checked. Except with `"ignore"`, logout messages must always be signed. `"require"` and `"verify-if-signed"` need `spCertificates` or `metadata.url`; `"ignore"` can't be combined with `spCertificates`. |
+| `spCertificates` | PEM `string \| string[]` | none | The SP's signing certificates. Any of them may have signed (SPs rotate keys; Cloudflare Access publishes two). Parsed and checked (RSA) at startup. |
 | `metadata` | `object` | none | Keep the SP's certificates current from its metadata URL. See [`metadata`](#metadata). |
 | `encryption` | `object` | none | Encrypt assertions to this SP. See [`encryption`](#encryption). |
-| `signResponse` | `boolean` | `signing.signResponse` | Per-SP override. |
-| `signAssertion` | `boolean` | `signing.signAssertion` | Per-SP override. At least one of the two must stay on (with encryption, the assertion is always signed when the Response isn't). |
+| `sign` | `"both" \| "response" \| "assertion"` | `signing.sign` | Per-SP override. |
 | `allowIdpInitiated` | `boolean` | `false` | Accept `/saml2/idp/init?sp=<id>` for this SP. See [IdP-initiated SSO](flows.md#idp-initiated-sso). |
 | `idpInitiatedRelayState` | `string` | none | RelayState sent with IdP-initiated Responses. Needs `allowIdpInitiated`. |
 | `allowedRelayStates` | `string[]` | `[]` | RelayState values a caller of `/init` may choose, matched exactly. Anything else is replaced by `idpInitiatedRelayState`. Needs `allowIdpInitiated`. |
@@ -143,9 +141,9 @@ The same options apply to SPs in `serviceProviders` and to SPs stored in the reg
 |---|---|---|---|
 | `url` | `string` | **required** | The SP's metadata URL, https only. Fetched with a 5 s timeout, redirects not followed, 1 MiB at most (streamed), then XSD-validated. |
 | `refreshSeconds` | `number` | `86400` | How often to refresh. 300 to 604800. Failures retry after 5 minutes, doubling. |
-| `signingCertificate` | PEM `string \| string[]` | none | Pin the metadata's own signature; unsigned or wrongly signed metadata is rejected. Without it a warning is logged and trust rests on TLS. |
+| `signingCertificates` | PEM `string \| string[]` | none | Pin the metadata's own signature; unsigned or wrongly signed metadata is rejected. Without it a warning is logged and trust rests on TLS. |
 
-Only certificates are taken from metadata: signing certificates are **added** to `spCertificate`, and with `encryption` on, the metadata's encryption certificate **replaces** `encryption.certificate`. The entity ID must match, and ACS URLs always come from your configuration. See [Keeping SP certificates current](service-providers.md#keeping-sp-certificates-current).
+Only certificates are taken from metadata: signing certificates are **added** to `spCertificates`, and with `encryption` on, the metadata's encryption certificate **replaces** `encryption.certificate`. The entity ID must match, and ACS URLs always come from your configuration. See [Keeping SP certificates current](service-providers.md#keeping-sp-certificates-current).
 
 ## `organization`
 

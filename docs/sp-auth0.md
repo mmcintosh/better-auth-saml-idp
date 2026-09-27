@@ -35,7 +35,7 @@ Or keep its certificates current automatically:
   id: "auth0",
   entityId: "urn:auth0:<tenant>:better-auth",
   acsUrls: ["https://<tenant>.auth0.com/login/callback?connection=better-auth"],
-  requireSignedAuthnRequests: true,
+  requestSignatures: "require",
   metadata: { url: "https://<tenant>.auth0.com/samlp/metadata?connection=better-auth" },
   attributes: {
     email: "email",

@@ -39,7 +39,7 @@ describe("review2 metadata", () => {
     const options = resolveOptions(baseOptions({ registry: { enabled: true } } as any));
     const stored = (pin: string) => {
       const r = resolveStoredServiceProvider(
-        { id: "db-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], requireSignedAuthnRequests: true, metadata: { url: MD_URL, signingCertificate: pin } },
+        { id: "db-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], requestSignatures: "require", metadata: { url: MD_URL, signingCertificates: pin } },
         options,
       );
       if (!r.serviceProvider) throw new Error(r.issues.join("; "));

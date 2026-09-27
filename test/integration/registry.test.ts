@@ -108,7 +108,7 @@ describe("SP registry: lifecycle", () => {
   it("a strict SP accepts a Response for a stored SP with required signed requests", async () => {
     const { auth } = await host();
     const { browser } = await admin(auth);
-    const sp = stored({ requireSignedAuthnRequests: true, spCertificate: keys.sp.certificate });
+    const sp = stored({ requestSignatures: "require", spCertificates: keys.sp.certificate });
     expect((await api(browser, "/create", { serviceProvider: sp })).status).toBe(200);
     const unsigned = await browser.fetch(await redirectUrl(authnRequestXml({ issuer: NEW_SP, acsUrl: NEW_ACS }).xml));
     expect(await code(unsigned)).toBe("UNSIGNED_SAML_REQUEST");
@@ -123,7 +123,7 @@ describe("SP registry: validation", () => {
     ["a function-only option", () => stored({ authorize: "() => true" }), /authorize|Unrecognized/],
     ["an unknown option", () => stored({ nope: 1 }), /nope|Unrecognized/],
     ["a bad attribute map", () => stored({ attributes: { a: { field: "x", part: "middle" } } }), /part/],
-    ["a bad certificate", () => stored({ spCertificate: "-----BEGIN CERTIFICATE-----\nnope\n-----END CERTIFICATE-----" }), /spCertificate/],
+    ["a bad certificate", () => stored({ spCertificates: "-----BEGIN CERTIFICATE-----\nnope\n-----END CERTIFICATE-----" }), /spCertificates/],
   ])("rejects %s with its issues", async (_, sp, re) => {
     const { auth } = await host();
     const { browser } = await admin(auth);

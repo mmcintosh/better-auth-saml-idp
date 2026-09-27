@@ -185,7 +185,7 @@ describe("cli: request + decode an AuthnRequest", () => {
   });
 
   it("post binding with --sign-key: an XML-signed request that decode verifies and the IdP accepts", async () => {
-    const { browser } = await host({ saml: { serviceProviders: [{ id: "test-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], requireSignedAuthnRequests: true, spCertificate: keys.sp.certificate }] } });
+    const { browser } = await host({ saml: { serviceProviders: [{ id: "test-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], requestSignatures: "require", spCertificates: keys.sp.certificate }] } });
     await browser.signUp();
     const r = await json(["request", BASE_URL, "--sp", SP_ENTITY_ID, "--binding", "post", "--sign-key", SP_KEY]);
     const b64 = /name="SAMLRequest" value="([^"]+)"/.exec(r.report.output!)![1]!;
@@ -232,7 +232,7 @@ describe("cli: sp-from-metadata", () => {
     const r = await run(["sp-from-metadata", "test/fixtures/sp-metadata/cloudflare-access.xml", "--id", "cf"]);
     expect(r.code).toBe(0);
     const entry = JSON.parse(r.stdout);
-    expect(entry).toMatchObject({ id: "cf", requireSignedAuthnRequests: true });
+    expect(entry).toMatchObject({ id: "cf", requestSignatures: "require" });
     expect(entry.acsUrls[0]).toMatch(/cloudflareaccess\.com/);
   });
 

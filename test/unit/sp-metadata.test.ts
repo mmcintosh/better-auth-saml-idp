@@ -24,9 +24,9 @@ describe("serviceProviderFromMetadata", () => {
     expect(sp.id).toBe("cf");
     expect(sp.entityId).toBe("https://aged-bird-8df2.cloudflareaccess.com/cdn-cgi/access/callback");
     expect(sp.acsUrls[0]).toBe("https://aged-bird-8df2.cloudflareaccess.com/cdn-cgi/access/callback");
-    expect(sp.requireSignedAuthnRequests).toBe(true);
-    expect((sp.spCertificate as string[]).length).toBeGreaterThanOrEqual(1);
-    for (const pem of sp.spCertificate as string[]) expect(pem).toMatch(/^-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]+-----END CERTIFICATE-----\n$/);
+    expect(sp.requestSignatures).toBe("require");
+    expect((sp.spCertificates as string[]).length).toBeGreaterThanOrEqual(1);
+    for (const pem of sp.spCertificates as string[]) expect(pem).toMatch(/^-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]+-----END CERTIFICATE-----\n$/);
   });
 
   it("reads samlify-generated SP metadata", async () => {
@@ -47,9 +47,9 @@ describe("serviceProviderFromMetadata", () => {
       entityId: "https://samlify.test/sp",
       acsUrls: ["https://samlify.test/acs"],
       nameIdFormat: NAMEID_FORMAT.persistent,
-      requireSignedAuthnRequests: true,
+      requestSignatures: "require",
     });
-    expect(b64Body((r.serviceProvider.spCertificate as string[])[0]!)).toBe(b64Body(keys.sp.certificate));
+    expect(b64Body((r.serviceProvider.spCertificates as string[])[0]!)).toBe(b64Body(keys.sp.certificate));
     expect(r.warnings.some((w) => w.includes("HTTP-Redirect"))).toBe(true);
   });
 
@@ -70,7 +70,7 @@ describe("serviceProviderFromMetadata", () => {
       acsUrls: ["https://node-saml.test/acs"],
       nameIdFormat: NAMEID_FORMAT.emailAddress,
     });
-    expect((r.serviceProvider.spCertificate as string[]).map(b64Body)).toEqual([b64Body(keys.sp.certificate)]);
+    expect((r.serviceProvider.spCertificates as string[]).map(b64Body)).toEqual([b64Body(keys.sp.certificate)]);
     expect(r.encryptionCertificates.map(b64Body)).toEqual([b64Body(keys.idpNext.certificate)]);
   });
 
@@ -94,8 +94,8 @@ describe("serviceProviderFromMetadata", () => {
     );
     const r = await serviceProviderFromMetadata(xml, { id: "x" });
     expect(r.serviceProvider.acsUrls).toEqual(["https://sp.test/d", "https://sp.test/a", "https://sp.test/b", "https://sp.test/c"]);
-    expect(r.serviceProvider.requireSignedAuthnRequests).toBeUndefined();
-    expect(r.serviceProvider.spCertificate).toHaveLength(1);
+    expect(r.serviceProvider.requestSignatures).toBeUndefined();
+    expect(r.serviceProvider.spCertificates).toHaveLength(1);
     expect(r.encryptionCertificates).toHaveLength(1);
   });
 

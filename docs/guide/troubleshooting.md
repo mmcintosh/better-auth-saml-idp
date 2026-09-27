@@ -9,7 +9,7 @@ Start with the error code on the page (see the [error reference](errors.md)), th
 - Compare fingerprints: `npx better-auth-saml-idp inspect https://auth.example.com` shows the SHA-256 fingerprint of each published certificate. The SP's must match the one that signs (`signing.certificate`).
 - After a key rotation, the SP may still have the old certificate. See [key rotation](../key-rotation.md).
 - **Cloudflare Access:** add each certificate as a separate entry. Pasting two PEM blocks into one box makes it trust neither ("Response uses a certificate that is not configured").
-- Some SPs want only the Response or only the Assertion signed: set `signResponse` / `signAssertion` on that SP.
+- Some SPs want only the Response or only the Assertion signed: set `sign: "response"` or `sign: "assertion"` on that SP.
 - SPs that can only do SHA-1 need `allowInsecureSha1` (and a warning comes with it).
 
 ## `UNKNOWN_SERVICE_PROVIDER`
@@ -37,7 +37,7 @@ The debug log says which check failed. Common causes:
 
 ## `UNSIGNED_SAML_REQUEST`
 
-The SP must sign (`requireSignedAuthnRequests`), or it has certificates and its signature didn't verify. `decode "<URL>" --cert sp.crt` verifies it exactly as the IdP does. Check that `spCertificate` has the SP's current certificate. With `metadata.url`, the log shows whether the last refresh failed.
+The SP must sign (`requestSignatures: "require"`), or it has certificates and its signature didn't verify. `decode "<URL>" --cert sp.crt` verifies it exactly as the IdP does. Check that `spCertificates` has the SP's current certificate. With `metadata.url`, the log shows whether the last refresh failed.
 
 ## The user is sent to sign in again and again
 

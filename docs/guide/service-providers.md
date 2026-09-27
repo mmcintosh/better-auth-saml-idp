@@ -60,8 +60,8 @@ What it reads:
 | `entityID` | `entityId` |
 | HTTP-POST `AssertionConsumerService`s, default first, then by `index` | `acsUrls` (other bindings are listed in `warnings`) |
 | The first supported `NameIDFormat` | `nameIdFormat` |
-| `KeyDescriptor` `use="signing"` (or no `use`) certificates | `spCertificate` |
-| `AuthnRequestsSigned="true"` | `requireSignedAuthnRequests` (with the certificates) |
+| `KeyDescriptor` `use="signing"` (or no `use`) certificates | `spCertificates` |
+| `AuthnRequestsSigned="true"` | `requestSignatures: "require"` (with the certificates) |
 | `SingleLogoutService` (Redirect preferred; `Location` for requests, `ResponseLocation` for responses) | `singleLogoutService` |
 | `KeyDescriptor` `use="encryption"` certificates | returned separately as `encryptionCertificates`; encryption isn't turned on for you |
 
@@ -140,22 +140,22 @@ SPs rotate their signing and encryption keys. Instead of copying certificates in
   id: "cf-access",
   entityId: "https://team.cloudflareaccess.com/cdn-cgi/access/callback",
   acsUrls: ["https://team.cloudflareaccess.com/cdn-cgi/access/callback"],
-  requireSignedAuthnRequests: true,
+  requestSignatures: "require",
   metadata: {
     url: "https://team.cloudflareaccess.com/cdn-cgi/access/saml-metadata",
     refreshSeconds: 86400,                 // default: daily
-    signingCertificate: federationCert,    // optional: pin the metadata's own signature
+    signingCertificates: federationCert,    // optional: pin the metadata's own signature
   },
 }
 ```
 
 **Only certificates are taken from metadata.**
-- Its signing certificates are **added** to `spCertificate`.
+- Its signing certificates are **added** to `spCertificates`.
 - With `encryption` configured, its encryption certificate **replaces** `encryption.certificate`. Your algorithms stay.
 - The entity ID in the metadata must equal the configured one.
 - **ACS URLs always come from your configuration**, so a compromised metadata URL can't redirect assertions.
 
-**Fetching.** https only, 5 s timeout, redirects not followed, 1 MiB at most (enforced while streaming), then the XSD check, a strict parse, and a refusal when `validUntil` has passed. With `signingCertificate`, the metadata's signature must verify with it (the same [hardened verifier](security.md#xml-signature-verification)); otherwise a startup warning notes that trust rests on TLS.
+**Fetching.** https only, 5 s timeout, redirects not followed, 1 MiB at most (enforced while streaming), then the XSD check, a strict parse, and a refusal when `validUntil` has passed. With `signingCertificates`, the metadata's signature must verify with it (the same [hardened verifier](security.md#xml-signature-verification)); otherwise a startup warning notes that trust rests on TLS.
 
 **Freshness.**
 - The first use in each isolate waits for the fetch (5 s at most).

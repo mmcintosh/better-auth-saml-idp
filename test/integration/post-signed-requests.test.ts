@@ -42,7 +42,7 @@ async function host(sp: Record<string, unknown> = {}, saml: HostOptions["saml"] 
   const { auth } = await createHost({
     saml: {
       ...saml,
-      serviceProviders: [{ id: "test-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], requireSignedAuthnRequests: true, spCertificate: keys.sp.certificate, ...sp }],
+      serviceProviders: [{ id: "test-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], requestSignatures: "require", spCertificates: keys.sp.certificate, ...sp }],
     },
   });
   const browser = new Browser(auth);
@@ -162,16 +162,16 @@ describe("signed AuthnRequests over HTTP-POST", () => {
     await expectRefused(await postBinding(await host(), signed.replace(signatureOf(signed), signatureOf(signed) + signatureOf(signed))));
   });
 
-  it("not required: a valid signature is fine, an invalid one is still rejected, and without SP certificates it's ignored", async () => {
-    const optional = await host({ requireSignedAuthnRequests: false });
+  it('"verify-if-signed": a valid signature is fine, an invalid one is still rejected; "ignore" (no SP certificates) doesn\'t check', async () => {
+    const optional = await host({ requestSignatures: "verify-if-signed" });
     await expectAccepted(await postBinding(optional, sign(authnRequestXml().xml)));
     await expectRejected(await postBinding(optional, sign(authnRequestXml().xml, { key: keys.idpNext.privateKey, cert: keys.idpNext.certificate })));
-    const noCerts = await host({ requireSignedAuthnRequests: false, spCertificate: undefined });
+    const noCerts = await host({ requestSignatures: undefined, spCertificates: undefined });
     await expectAccepted(await postBinding(noCerts, sign(authnRequestXml().xml, { key: keys.idpNext.privateKey })));
   });
 
   it("the SP's rotation: any configured certificate may have signed", async () => {
-    const browser = await host({ spCertificate: [keys.idpNext.certificate, keys.sp.certificate] });
+    const browser = await host({ spCertificates: [keys.idpNext.certificate, keys.sp.certificate] });
     await expectAccepted(await postBinding(browser, sign(authnRequestXml().xml)));
   });
 });

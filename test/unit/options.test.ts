@@ -28,8 +28,7 @@ describe("resolveOptions: defaults", () => {
     expect(r.signing).toMatchObject({
       signatureAlgorithm: "rsa-sha256",
       digestAlgorithm: "sha256",
-      signResponse: true,
-      signAssertion: true,
+      sign: "both",
       allowInsecureSha1: false,
       additionalCertificates: [],
     });
@@ -48,7 +47,8 @@ describe("resolveOptions: defaults", () => {
   it("applies SP defaults", async () => {
     const [s] = resolveOptions(baseOptions()).serviceProviders;
     expect(s!.nameIdFormat).toBe(NAMEID_EMAIL);
-    expect(s!.requireSignedAuthnRequests).toBe(false);
+    expect(s!.requestSignatures).toBe("ignore"); // no certificate to check a signature with
+    expect(s!.sign).toBe("both");
     expect(s!.allowIdpInitiated).toBe(false);
     const user = { id: "u1", email: "a@example.com", name: "A", emailVerified: true, createdAt: new Date(), updatedAt: new Date() };
     expect(s!.nameId).toBeUndefined(); // default is per format, computed at issuance
@@ -93,10 +93,10 @@ describe("resolveOptions: signing algorithms", () => {
     );
   });
 
-  it("requires at least one of signResponse / signAssertion", () => {
-    expect(issuesFor(baseOptions({ signing: { ...baseOptions().signing, signResponse: false, signAssertion: false } }))).toEqual([
-      "signing: at least one of signResponse and signAssertion must be true",
-    ]);
+  it("sign takes only the three choices (API decision 4: no way to sign nothing)", () => {
+    expect(issuesFor(baseOptions({ signing: { ...baseOptions().signing, sign: "none" as any } }))[0]).toMatch(/^signing\.sign:/);
+    // The pre-decision-4 booleans are gone, not silently ignored.
+    expect(issuesFor(baseOptions({ signing: { ...baseOptions().signing, signResponse: false } as any }))[0]).toMatch(/signResponse/);
   });
 });
 
@@ -106,21 +106,18 @@ describe("resolveOptions: per-SP signing and signed metadata", () => {
   it("per-SP overrides fall back to the global setting", () => {
     const r = resolveOptions(
       baseOptions({
-        signing: { ...baseOptions().signing, signResponse: false },
-        serviceProviders: [sp({ id: "a" }), sp({ id: "b", signResponse: true, signAssertion: false })] as any,
+        signing: { ...baseOptions().signing, sign: "assertion" },
+        serviceProviders: [sp({ id: "a" }), sp({ id: "b", sign: "response" })] as any,
       }),
     );
-    expect(r.serviceProviders.map((s) => [s.signResponse, s.signAssertion])).toEqual([
-      [false, true],
-      [true, false],
-    ]);
+    expect(r.signing.sign).toBe("assertion");
+    expect(r.serviceProviders.map((s) => s.sign)).toEqual(["assertion", "response"]);
     expect(r.signMetadata).toBe(false);
   });
 
-  it("an SP can't turn both signatures off", () => {
-    expect(issuesFor(baseOptions({ serviceProviders: [sp({ signResponse: false, signAssertion: false })] as any }))).toEqual([
-      "serviceProviders.0: at least one of signResponse and signAssertion must be true",
-    ]);
+  it("an SP can't choose to sign nothing", () => {
+    expect(issuesFor(baseOptions({ serviceProviders: [sp({ sign: "none" })] as any }))[0]).toMatch(/^serviceProviders\.0\.sign:/);
+    expect(issuesFor(baseOptions({ serviceProviders: [sp({ signAssertion: false })] as any }))[0]).toMatch(/signAssertion/);
   });
 });
 
@@ -198,13 +195,54 @@ describe("resolveOptions: service providers", () => {
     ]);
   });
 
-  it("requires spCertificate when requireSignedAuthnRequests is set", () => {
-    expect(issuesFor(baseOptions({ serviceProviders: [sp({ requireSignedAuthnRequests: true })] }))).toEqual([
-      "serviceProviders.0.spCertificate: is required when requireSignedAuthnRequests is true (or set metadata.url)",
+  it("requires spCertificates when requestSignatures promises a check", () => {
+    for (const policy of ["require", "verify-if-signed"] as const) {
+      expect(issuesFor(baseOptions({ serviceProviders: [sp({ requestSignatures: policy })] }))).toEqual([
+        `serviceProviders.0.spCertificates: is required when requestSignatures is "${policy}" (or set metadata.url)`,
+      ]);
+      expect(() =>
+        resolveOptions(baseOptions({ serviceProviders: [sp({ requestSignatures: policy, spCertificates: keys.sp.certificate })] })),
+      ).not.toThrow();
+    }
+  });
+
+  it('refuses "ignore" together with spCertificates (the certificates would never be used)', () => {
+    expect(issuesFor(baseOptions({ serviceProviders: [sp({ requestSignatures: "ignore", spCertificates: keys.sp.certificate })] }))).toEqual([
+      'serviceProviders.0.requestSignatures: is "ignore", so spCertificates would never be checked; remove one of them',
     ]);
-    expect(() =>
-      resolveOptions(baseOptions({ serviceProviders: [sp({ requireSignedAuthnRequests: true, spCertificate: keys.sp.certificate })] })),
-    ).not.toThrow();
+  });
+
+  it("derives requestSignatures from what the SP was given", () => {
+    const policies = resolveOptions(
+      baseOptions({
+        serviceProviders: [
+          sp({ id: "none", entityId: "https://sp.test/none" }),
+          sp({ id: "cert", entityId: "https://sp.test/cert", spCertificates: keys.sp.certificate }),
+          sp({ id: "md", entityId: "https://sp.test/md", metadata: { url: "https://sp.test/md.xml" } }),
+          sp({ id: "req", entityId: "https://sp.test/req", requestSignatures: "require", spCertificates: [keys.sp.certificate] }),
+        ],
+      }),
+    ).serviceProviders.map((s) => [s.id, s.requestSignatures]);
+    expect(policies).toEqual([
+      ["none", "ignore"],
+      ["cert", "verify-if-signed"],
+      ["md", "verify-if-signed"],
+      ["req", "require"],
+    ]);
+  });
+
+  it("certificate lists take one PEM or several, under the plural names only", () => {
+    const one = resolveOptions(baseOptions({ serviceProviders: [sp({ spCertificates: keys.sp.certificate })] })).serviceProviders[0]!;
+    const two = resolveOptions(baseOptions({ serviceProviders: [sp({ spCertificates: [keys.sp.certificate, keys.idpNext.certificate] })] })).serviceProviders[0]!;
+    expect(one.spCertificates).toEqual([keys.sp.certificate]);
+    expect(two.spCertificates).toEqual([keys.sp.certificate, keys.idpNext.certificate]);
+    const pinned = resolveOptions(
+      baseOptions({ serviceProviders: [sp({ metadata: { url: "https://sp.test/md.xml", signingCertificates: keys.sp.certificate } })] }),
+    ).serviceProviders[0]!;
+    expect(pinned.metadata?.signingCertificates).toEqual([keys.sp.certificate]);
+    // The singular names from before decision 4 are rejected, not silently dropped.
+    expect(issuesFor(baseOptions({ serviceProviders: [sp({ spCertificate: keys.sp.certificate } as any)] }))[0]).toMatch(/spCertificate\b/);
+    expect(issuesFor(baseOptions({ serviceProviders: [sp({ requireSignedAuthnRequests: true } as any)] }))[0]).toMatch(/requireSignedAuthnRequests/);
   });
 
   it("IdP-initiated SSO is opt-in per SP, with RelayState settings", () => {

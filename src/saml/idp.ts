@@ -27,7 +27,7 @@ export function createIdp(options: ResolvedSamlIdpOptions, baseURL: string): Idp
     // setting only if every SP requires it.
     // Only a promise we can keep: with a registry, SPs added later may not sign.
     wantAuthnRequestsSigned:
-      options.registry === undefined && options.serviceProviders.length > 0 && options.serviceProviders.every((sp) => sp.requireSignedAuthnRequests),
+      options.registry === undefined && options.serviceProviders.length > 0 && options.serviceProviders.every((sp) => sp.requestSignatures === "require"),
     requestSignatureAlgorithm: SIGNATURE_ALGORITHM_URI[options.signing.signatureAlgorithm],
     nameIDFormat: nameIdFormats,
     singleSignOnService: [
