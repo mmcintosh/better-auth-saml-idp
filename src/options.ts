@@ -1,4 +1,5 @@
 import { compileAttributeMap } from "./attributes";
+import { nameIdFromField } from "./nameid";
 import { type KeyObject, X509Certificate, createPrivateKey, createPublicKey } from "node:crypto";
 import * as z from "zod";
 import type { AssertionEncryption } from "./saml/encrypt";
@@ -86,6 +87,7 @@ const attributeSource = z.custom<AttributeSource>(() => true).superRefine((v, ct
   if (o.split !== undefined && (typeof o.split !== "string" || o.split.length < 1 || o.split.length > 8)) issue("must be a 1-8 character separator", ["split"]);
   if (o.part !== undefined && o.part !== "first" && o.part !== "last") issue('must be "first" or "last"', ["part"]);
 });
+const nameIdSourceSchema = z.object({ field: z.string().regex(FIELD_NAME, FIELD_MESSAGE) }).strict();
 const attributeMapSchema = z.record(z.string().min(1, "attribute names can't be empty").max(256), attributeSource);
 
 const serviceProviderShape = z.object({
@@ -93,7 +95,7 @@ const serviceProviderShape = z.object({
     entityId: z.string().min(1).max(1024),
     acsUrls: z.array(acsUrl).min(1, "must list at least one ACS URL"),
     nameIdFormat: z.string().min(1).optional(),
-    nameId: fn<(user: SamlIdpUser) => string>().optional(),
+    nameId: z.union([fn<(user: SamlIdpUser) => string>(), nameIdSourceSchema]).optional(),
     attributes: z.union([fn<(user: SamlIdpUser) => Record<string, string | string[]>>(), attributeMapSchema]).optional(),
     requestSignatures: z.enum(["require", "verify-if-signed", "ignore"]).optional(),
     spCertificates: z.union([pem("CERTIFICATE"), z.array(pem("CERTIFICATE")).min(1)]).optional(),
@@ -162,7 +164,7 @@ const serviceProviderSchema = serviceProviderShape.strict().superRefine(refineSe
  */
 export const storedServiceProviderSchema = serviceProviderShape
   .omit({ nameId: true, authorize: true })
-  .extend({ attributes: attributeMapSchema.optional() })
+  .extend({ attributes: attributeMapSchema.optional(), nameId: nameIdSourceSchema.optional() })
   .strict()
   .superRefine(refineServiceProvider);
 export type StoredServiceProviderConfig = z.infer<typeof storedServiceProviderSchema>;
@@ -443,7 +445,13 @@ function resolveServiceProvider(sp: ParsedServiceProvider, path: string, d: SpDe
     entityId: sp.entityId,
     acsUrls: sp.acsUrls as [string, ...string[]],
     nameIdFormat: sp.nameIdFormat ?? NAMEID_EMAIL,
-    nameId: "nameId" in sp ? sp.nameId : undefined,
+    nameId:
+      typeof sp.nameId === "function"
+        ? sp.nameId
+        : sp.nameId
+          ? ((field) => (user: SamlIdpUser) => nameIdFromField(user, field))(sp.nameId.field)
+          : undefined,
+    nameIdField: typeof sp.nameId === "object" ? sp.nameId.field : undefined,
     attributes: typeof attributes === "function" ? attributes : compileAttributeMap(attributes ?? {}),
     attributeMap: typeof attributes === "function" ? undefined : attributes,
     metadata: sp.metadata

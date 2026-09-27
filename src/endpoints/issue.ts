@@ -13,6 +13,7 @@ import { hasOrganizationPlugin, loadMemberships, matchOrganization, warnClaimabl
 import { recordParticipant, sessionIndexOf } from "../storage/participants";
 import { base64url, type ValidatedRequest } from "../storage/pending";
 import { NAMEID_FORMAT, type OrganizationMembership, type ResolvedSamlIdpOptions, type ResolvedServiceProvider, type SamlIdpUser, type ServiceProviderInfo } from "../types";
+import { nameIdFieldProblem } from "../nameid";
 
 /** A mapped field the user object lacks: warn once per SP and field (typo, or a field not in the schema). */
 const warnedMissing = new Set<string>();
@@ -213,6 +214,12 @@ export async function issueResponse(
   }
   if (allowed !== true) return fail(ctx, state, "ACCESS_DENIED", `authorize() denied user ${user.id} for SP ${sp.id}`, who);
 
+  // Re-checked here, not only at startup/registry save: a field can become user-writable later.
+  const fieldProblem = sp.nameIdField === undefined ? undefined : nameIdFieldProblem(sp.nameIdField, ctx.context.options as any);
+  if (fieldProblem) {
+    ctx.context.logger.error(`[saml-idp] SP ${sp.id}: ${fieldProblem}; not issuing`);
+    return fail(ctx, state, "INTERNAL_ERROR", undefined, who);
+  }
   let nameId: unknown;
   let attributes: ReturnType<ResolvedServiceProvider["attributes"]>;
   try {
@@ -222,6 +229,8 @@ export async function issueResponse(
     ctx.context.logger.error(`[saml-idp] nameId()/attributes() threw for SP ${sp.id}`, e);
     return fail(ctx, state, "INTERNAL_ERROR", undefined, who);
   }
+  if (sp.nameIdField !== undefined && nameId === "")
+    return fail(ctx, state, "ACCESS_DENIED", `user ${user.id} has no value in ${sp.nameIdField}, SP ${sp.id}'s NameID field`, who);
   if (typeof nameId !== "string" || nameId.length === 0) {
     ctx.context.logger.error(`[saml-idp] nameId() returned an empty value for SP ${sp.id}`);
     return fail(ctx, state, "INTERNAL_ERROR", undefined, who);

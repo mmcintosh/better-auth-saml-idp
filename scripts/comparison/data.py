@@ -85,7 +85,7 @@ ROADMAP = [
    ("Load test and benchmark", "Throughput and latency of sign-ins on Workers under concurrency, published with the method so others can rerun it."),
    ("Release automation", "Changesets: changelog entries written with each PR, version bumps and the release PR generated, so a release is one merge."),
    ("Admin page in the example", "A reference page in the Workers example for managing SPs through the registry API. The plugin itself still ships no UI."),
-   ("NameID from a user field", "For stored SPs, choose the NameID source (for example a username or employee ID) in JSON, as attributes already can."),
+   ("NameID from a user field (done)", "nameId: { field } for code and stored SPs (for example an employee ID); only fields users can't set themselves (D-041)."),
    ("MongoDB uniqueness report to Better Auth", "Better Auth's own tables (user.email, session.token) declare uniqueness the way that MongoDB's adapter ignores (D-033). A careful upstream report."),
    ("Offer the verifier to @better-auth/sso", "Our hardened XML-signature verifier (XSW defences, mutation-tested, fuzzed) could harden the SP side too."),
    ("Community Plugins listing", "An entry in Better Auth's Community Plugins at v1.0."),

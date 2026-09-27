@@ -1214,3 +1214,32 @@ After 1.0, anything public is a semver promise. Review 4 listed six choices that
   2. ignoring the custom `basePath`;
   3. dropping the warning;
   4. always appending `basePath`.
+
+## D-041: NameID from a user field (2026-09-27)
+
+Roadmap D4. Stored SPs could only get the default NameID per format (email, persistent HMAC, transient), because a NameID function can't be JSON.
+
+- **Now:** `nameId: { field }` for code and stored SPs. The value is the user field, trimmed; a finite number becomes its digits; anything else is empty, and a user with an empty value is denied (`ACCESS_DENIED`, with the field named in the log).
+- **The security rule:** the NameID is the user's identity at the SP. The field must be one users can't set themselves:
+  - `id`;
+  - `email` (a change goes through verification);
+  - an additional or plugin user field declared with `input: false`, and with no declaration allowing input.
+
+  Core `name` and `image` (editable through `/update-user`), unknown fields, and fields declared with input are refused:
+  - at startup for code SPs (`SamlIdpConfigError`);
+  - on registry create/update (`INVALID_SERVICE_PROVIDER`);
+  - at issuance, every time. A field can become writable after a row was saved, or a row can be edited by hand, and such an SP issues nothing (`INTERNAL_ERROR`).
+
+  The registry reports such a row as `valid: false`, with the reason.
+- **Stricter than attribute maps:** they only warn about writable fields (R4-L9), because an attribute is data the SP interprets, while the NameID picks the account.
+- **Tests:** `test/integration/nameid-field.test.ts` covers the rule's cases (core, additional, plugin, double declaration), value conversion, option shapes, the user id end to end on both runtimes, an `input: false` field with a denied empty user (Node), the startup error, the registry refusal, and a hand-edited row reported invalid that never issues.
+- **Mutation proof:** eight mutations, each caught:
+  1. drop the issuance check;
+  2. drop the registry check;
+  3. drop the startup check;
+  4. ignore plugin fields;
+  5. `some` → `every` for double declarations;
+  6. drop `ACCESS_DENIED` for empty values;
+  7. drop the registry issue;
+  8. allow `name`.
+

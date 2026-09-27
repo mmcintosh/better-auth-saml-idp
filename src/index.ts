@@ -8,7 +8,8 @@ import { metadataEndpoint } from "./endpoints/metadata";
 import { resumeEndpoint } from "./endpoints/resume";
 import { ssoEndpoint } from "./endpoints/sso";
 import { SAML_IDP_ERROR_CODES } from "./errors";
-import { resolveOptions } from "./options";
+import { nameIdFieldProblem } from "./nameid";
+import { resolveOptions, SamlIdpConfigError } from "./options";
 import { idpCache, SSO_PATH, withBasePath } from "./saml/idp";
 import { samlIdpSchema } from "./schema";
 import { SpMetadataCache } from "./saml/sp-metadata-refresh";
@@ -34,6 +35,7 @@ export type {
   AttributeSource,
   AuthorizeContext,
   DigestAlgorithm,
+  NameIdSource,
   OrganizationMembership,
   RequestSignaturePolicy,
   SamlAttributeValue,
@@ -68,6 +70,12 @@ export const samlIdp = (options: SamlIdpOptions) => {
         warnClaimableOrganizations(ctx.logger, ctx.options.plugins as any, sp);
         warnUserWritableFields(ctx.logger, ctx.options.user as any, sp);
       }
+      // Stored SPs are checked when saved and again at issuance.
+      const nameIdIssues = resolved.serviceProviders.flatMap((sp) => {
+        const problem = sp.nameIdField === undefined ? undefined : nameIdFieldProblem(sp.nameIdField, ctx.options as any);
+        return problem ? [`serviceProviders (${sp.id}): ${problem}`] : [];
+      });
+      if (nameIdIssues.length) throw new SamlIdpConfigError(nameIdIssues);
       if (resolved.baseURL) {
         // Same rule as Better Auth's own baseURL, so the same value can go in both (decision 6).
         resolved.baseURL = withBasePath(resolved.baseURL, ctx.options.basePath);

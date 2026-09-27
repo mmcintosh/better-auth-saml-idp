@@ -121,8 +121,13 @@ export interface ServiceProviderConfig {
    * - persistent: an opaque, stable, per-SP identifier (HMAC of the user id, keyed with the
    *   Better Auth secret) that is never re-assigned to another user;
    * - transient: a new random identifier for every assertion.
+   *
+   * Or `{ field }` (also for stored SPs): the value of a user field, e.g. an employee number.
+   * Only fields users can't set themselves: `"id"`, `"email"`, or an additional (or plugin)
+   * field with `input: false`. Anything else is refused, since the NameID is the user's identity
+   * at the SP. A user with no value in the field is denied.
    */
-  nameId?: (user: SamlIdpUser) => string;
+  nameId?: ((user: SamlIdpUser) => string) | NameIdSource;
   /**
    * Attributes to include in the `<AttributeStatement>`: a function, or a declarative map from
    * attribute name to source (usable from JSON configuration), e.g.
@@ -226,6 +231,11 @@ export interface SigningConfig {
   allowInsecureSha1?: boolean;
   /** Which parts of the SAML Response to sign. Default `"both"`. */
   sign?: SignedParts;
+}
+
+/** NameID from a user field; see `ServiceProviderConfig.nameId`. */
+export interface NameIdSource {
+  field: string;
 }
 
 /** Sign the whole `<Response>`, only the `<Assertion>` inside it, or both (the default). */
@@ -367,6 +377,8 @@ export interface ResolvedServiceProvider {
   nameIdFormat: string;
   /** Host-supplied NameID function; undefined means "use the format's default". */
   nameId: ((user: SamlIdpUser) => string) | undefined;
+  /** With `nameId: { field }`: the field, re-checked at issuance (it must not be user-writable). */
+  nameIdField: string | undefined;
   attributes: (user: SamlIdpUser, context: AttributeContext, onMissingField?: (field: string) => void) => Record<string, SamlAttributeValue>;
   organization: { slug?: string; id?: string; roles?: string[] } | undefined;
   singleLogoutService: { url: string; binding: "redirect" | "post"; responseUrl?: string } | undefined;

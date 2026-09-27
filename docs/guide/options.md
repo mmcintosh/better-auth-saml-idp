@@ -104,7 +104,7 @@ The fields of each table are in the [schema reference](schema.md).
 
 ## Service provider options
 
-The same options apply to SPs in `serviceProviders` and to SPs stored in the registry, except the function-valued ones (`nameId`, a function `attributes`, `authorize`), which only code SPs can have.
+The same options apply to SPs in `serviceProviders` and to SPs stored in the registry, except the function-valued ones (a function `nameId`, a function `attributes`, `authorize`), which only code SPs can have.
 
 | Option | Type | Default | Description |
 |---|---|---|---|
@@ -112,7 +112,7 @@ The same options apply to SPs in `serviceProviders` and to SPs stored in the reg
 | `entityId` | `string` | **required** | The SP's entity ID, matched **exactly** against the request's `Issuer`. Unique. |
 | `acsUrls` | `string[]` | **required** | Allow-list of Assertion Consumer Service URLs. A requested URL must match one exactly; with none requested, the first is used. https only (http only for `localhost`, `127.0.0.1` and `[::1]`). |
 | `nameIdFormat` | `string` | `emailAddress` | `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`, `…:2.0:nameid-format:persistent`, `…:2.0:nameid-format:transient` or `…:1.1:nameid-format:unspecified` (NAMEID_FORMAT exports these). See [NameID](users-and-access.md#nameid). |
-| `nameId` | `(user) => string` | per format | Custom NameID value (code SPs only). |
+| `nameId` | `(user) => string` or `{ field }` | per format | Custom NameID value. A function works for code SPs only. `{ field: "employeeId" }` works for stored SPs too and sends that user field: only `"id"`, `"email"`, or an additional or plugin field with `input: false`, because a field users can edit would let them claim someone else's identity at the SP. That's refused at startup, when saving to the registry, and at sign-in. A user with no value in the field is denied (`ACCESS_DENIED`). |
 | `attributes` | map or `(user, { organizations, organization }) => Record<string, string \| string[]>` | none | The `<AttributeStatement>`. See [`attributes`](#attributes). |
 | `authorize` | `({ user, session, serviceProvider, organizations }) => boolean \| Promise<boolean>` | allow | Decide per user and SP. Anything but `true`, or a throw, is `ACCESS_DENIED` (code SPs only). |
 | `organization` | `{ slug?, id?, roles? }` | none | Only members of this organization, with one of `roles` if given. See [`organization`](#organization). |

@@ -45,6 +45,7 @@ The first npm release (1.0.0) waits for `better-auth-cloudflare` 0.4, which Work
 
 ### Added
 
+- **NameID from a user field** (D-041): `nameId: { field: "employeeId" }`, for code and stored SPs. Only fields users can't set themselves (`id`, `email`, or `input: false`) are accepted, so nobody can claim another user's identity at an SP.
 - **Observability** ([guide](docs/guide/observability.md)): `events.onAssertionIssued`, `onDenied` and `onLogout` callbacks, which run in the background and can't affect the flow, and an optional `auditLog` table (`samlIdpAuditEvent`, D1 migration `0005`) with retention.
 - **Supply chain:**
   - every GitHub Action pinned by SHA, least-privilege tokens;
