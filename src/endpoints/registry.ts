@@ -26,7 +26,7 @@ const MAX_SAME_ENTITY = 100;
 export type Adapter = {
   create(a: { model: string; data: Record<string, unknown> }): Promise<unknown>;
   findOne(a: { model: string; where: { field: string; value: unknown }[] }): Promise<unknown>;
-  findMany(a: { model: string; where?: { field: string; value: unknown }[]; limit?: number; sortBy?: { field: string; direction: "asc" | "desc" } }): Promise<unknown[]>;
+  findMany(a: { model: string; where?: { field: string; value: unknown }[]; limit?: number; offset?: number; sortBy?: { field: string; direction: "asc" | "desc" } }): Promise<unknown[]>;
   update(a: { model: string; where: { field: string; value: unknown }[]; update: Record<string, unknown> }): Promise<unknown>;
   delete(a: { model: string; where: { field: string; value: unknown }[] }): Promise<void>;
 };

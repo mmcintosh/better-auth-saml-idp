@@ -1,3 +1,6 @@
+// Fixed in D-053 (backfillMongoServiceProviderKeys; the endpoint reports rows it can't write);
+// kept as a regression test, and the adapter matrix has the main suite's (MongoDB only).
+// Comments saying "today" describe dac64f3.
 // Review 6 (D-052): the documented upgrade of an existing registry, on MongoDB. The guide says
 // "run step 3 [the backfill] before the UNIQUE index on lookupKey is created". But Better Auth's
 // MongoDB adapter creates a model's declared indexes itself, on the first create/update of that
@@ -13,10 +16,11 @@
 import { betterAuth } from "better-auth";
 import { admin, organization } from "better-auth/plugins";
 import { afterAll, describe, expect, it } from "vitest";
-import { samlIdp } from "../../src";
+import { backfillMongoServiceProviderKeys, samlIdp } from "../../src";
+import { lookupKeyOf } from "../../src/saml/sp-directory";
 import { baseOptions, SP_ACS } from "../support/config";
 import { AUTH_BASE, BASE_URL } from "../support/host";
-import { Browser } from "../support/sp";
+import { authnRequestXml, Browser, readAutoPost, redirectUrl } from "../support/sp";
 
 const KIND = process.env.ADAPTER_DB;
 const URL_ = process.env.ADAPTER_URL ?? "";
@@ -61,9 +65,8 @@ describe.skipIf(KIND !== "mongodb")("R6-4: the upgrade of a populated registry o
     };
   }
 
-  it("two stored SPs from before tenants: the backfill should fill in both keys; today its first write fails on the UNIQUE index build", async () => {
-    const dbName = `saml_review6_${Date.now().toString(36)}`;
-    // Before: the registry without tenants, with two SPs saved through the API.
+  /** The registry without tenants, with two SPs saved through the API. */
+  async function populated(dbName: string) {
     const before = await host(false, dbName);
     const adminBrowser = new Browser(before.auth);
     const adminUser = await adminBrowser.signUp();
@@ -76,19 +79,49 @@ describe.skipIf(KIND !== "mongodb")("R6-4: the upgrade of a populated registry o
       });
       expect(res.status).toBe(200);
     }
+    return before;
+  }
 
-    // After: tenants on (MongoDB has no column to add, so the guide's step 3 is next).
-    const after = await host(true, dbName);
-    let result: { updated: number; skipped: string[] } | undefined;
-    let error: unknown;
-    try {
-      result = (await (after.auth.api as any).samlIdpBackfillServiceProviderKeys()) as typeof result;
-    } catch (e) {
-      error = e;
-    }
-    expect(error, `the backfill threw: ${String((error as Error | undefined)?.message ?? "")}`).toBeUndefined();
-    expect(result).toEqual({ updated: 2, skipped: [] });
+  /** After the upgrade: every document has the key lookups use, the index is built, SPs sign in and the registry saves. */
+  async function upgraded(after: Awaited<ReturnType<typeof host>>) {
     const docs = await after.database.collection("samlIdpServiceProvider").find({}).toArray();
-    expect(docs.every((d) => typeof d.lookupKey === "string")).toBe(true);
+    for (const d of docs) expect(d.lookupKey).toBe(await lookupKeyOf("", d.entityId));
+    const browser = new Browser(after.auth);
+    await browser.signUp();
+    const url = (await redirectUrl(authnRequestXml({ issuer: "https://sp1.test/sp", acsUrl: SP_ACS }).xml));
+    expect((await readAutoPost(await browser.fetch(url))).xml).toContain("urn:oasis:names:tc:SAML:2.0:status:Success");
+    const admin = new Browser(after.auth);
+    const adminUser = await admin.signUp();
+    await ((await after.auth.$context) as any).adapter.update({ model: "user", where: [{ field: "id", value: adminUser.id }], update: { role: "admin" } });
+    const res = await admin.fetch(`${AUTH_BASE}/saml-idp/service-providers/create`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ serviceProvider: { id: "sp3", entityId: "https://sp3.test/sp", acsUrls: [SP_ACS] } }),
+    });
+    expect(res.status, await res.clone().text()).toBe(200);
+    const indexes = await after.database.collection("samlIdpServiceProvider").indexes();
+    expect(indexes.find((i) => i.name === "saml_idp_service_provider_lookup_key_unique")?.unique).toBe(true);
+  }
+
+  it("the guide's order: backfillMongoServiceProviderKeys before tenants are turned on; then everything works", async () => {
+    const dbName = `saml_review6_${Date.now().toString(36)}a`;
+    const before = await populated(dbName);
+    expect(await backfillMongoServiceProviderKeys(before.database)).toEqual({ updated: 2, skipped: [], failed: [] });
+    expect(await backfillMongoServiceProviderKeys(before.database)).toEqual({ updated: 0, skipped: [], failed: [] }); // idempotent
+    const after = await host(true, dbName);
+    expect(await (after.auth.api as any).samlIdpBackfillServiceProviderKeys()).toEqual({ updated: 0, skipped: [], failed: [] });
+    await upgraded(after);
+  });
+
+  it("tenants turned on first (the old order): the endpoint reports the rows it can't write instead of throwing; the MongoDB backfill then recovers", async () => {
+    const dbName = `saml_review6_${Date.now().toString(36)}b`;
+    await populated(dbName);
+    const after = await host(true, dbName);
+    // Today (dac64f3) this threw E11000 at the first row. It now names every row it couldn't key.
+    const result = (await (after.auth.api as any).samlIdpBackfillServiceProviderKeys()) as { updated: number; failed: string[] };
+    expect(result.updated).toBe(0);
+    expect(result.failed.sort()).toEqual(["sp1", "sp2"]);
+    expect(await backfillMongoServiceProviderKeys(after.database)).toEqual({ updated: 2, skipped: [], failed: [] });
+    await upgraded(after);
   });
 });

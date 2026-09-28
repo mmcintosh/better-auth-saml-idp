@@ -31,6 +31,7 @@ export { SamlIdpConfigError } from "./options";
 export { libxml2Validator } from "./saml/validator";
 export { serviceProviderFromMetadata, SpMetadataError } from "./saml/sp-metadata";
 export { samlIdpStatements, type SamlServiceProviderAction, type SamlTenantAction } from "./access";
+export { backfillMongoServiceProviderKeys, type MongoDbLike } from "./endpoints/tenants";
 export type { SpFromMetadataOptions, SpFromMetadataResult } from "./saml/sp-metadata";
 // An explicit list (API decision 1, before 1.0): what's here is supported; the plugin's resolved
 // internals (ResolvedSamlIdpOptions, ResolvedServiceProvider) are not exported and may change.

@@ -171,39 +171,111 @@ export function tenantEndpoints(state: PluginState) {
   };
 }
 
+/** A row's tenant and lookup key, from its own config; undefined when the config can't say. */
+async function keysOf(row: { config: unknown; entityId: unknown }): Promise<{ tenantId: string; lookupKey: string } | undefined> {
+  let tenant: unknown;
+  try {
+    tenant = (JSON.parse(String(row.config)) as { tenant?: unknown }).tenant;
+  } catch {
+    return undefined;
+  }
+  if ((tenant !== undefined && typeof tenant !== "string") || typeof row.entityId !== "string") return undefined;
+  const tenantId = tenant ?? "";
+  return { tenantId, lookupKey: await lookupKeyOf(tenantId, row.entityId) };
+}
+
+const BACKFILL_PAGE = 500;
+
 /**
  * One-time step when tenants are enabled on an existing registry (D-052): fill in `tenantId`
  * and `lookupKey` on rows saved before, which no lookup finds until then. Server-only (no URL):
  * call `auth.api.samlIdpBackfillServiceProviderKeys()` once from a script or a deploy step.
- * Each row's key comes from its own config; rows whose config doesn't parse are skipped and
- * reported. Safe to run again: rows that already have a key are left alone.
+ * Each row's key comes from its own config; rows whose config doesn't parse are skipped, and rows
+ * whose write fails are listed in `failed` (and logged): one bad row doesn't stop the rest
+ * (review 6 I-1). Reads the table in pages, however large. Safe to run again: rows that already
+ * have a key are left alone. On MongoDB, use `backfillMongoServiceProviderKeys` (R6-4).
  */
 export const backfillEndpoint = (state: PluginState) =>
   createAuthEndpoint.serverOnly({ method: "POST" }, async (ctx) => {
-    const rows = (await adapterOf(ctx).findMany({ model: SP_MODEL, limit: 10_000 })) as StoredSpRow[];
     let updated = 0;
     const skipped: string[] = [];
-    for (const row of rows) {
-      if (row.lookupKey) continue;
-      let tenant: unknown;
-      try {
-        tenant = (JSON.parse(row.config) as { tenant?: unknown }).tenant;
-      } catch {
-        skipped.push(row.spId);
-        continue;
+    const failed: string[] = [];
+    let mongoIndex = false;
+    for (let offset = 0; ; offset += BACKFILL_PAGE) {
+      const rows = (await adapterOf(ctx).findMany({ model: SP_MODEL, limit: BACKFILL_PAGE, offset, sortBy: { field: "spId", direction: "asc" } })) as StoredSpRow[];
+      for (const row of rows) {
+        if (row.lookupKey) continue;
+        const keys = await keysOf(row);
+        if (!keys) {
+          skipped.push(row.spId);
+          continue;
+        }
+        try {
+          await adapterOf(ctx).update({ model: SP_MODEL, where: [{ field: "id", value: row.id }], update: keys });
+          updated++;
+        } catch (e) {
+          failed.push(row.spId);
+          // MongoDB builds the UNIQUE lookupKey index before any write, and can't while two
+          // documents lack the key (R6-4).
+          mongoIndex ||= (e as { code?: unknown })?.code === 11000;
+          ctx.context.logger.error(`[saml-idp] backfill: SP ${row.spId} could not be given a lookup key`, e);
+        }
       }
-      if (tenant !== undefined && typeof tenant !== "string") {
-        skipped.push(row.spId);
-        continue;
-      }
-      const tenantId = tenant ?? "";
-      await adapterOf(ctx).update({ model: SP_MODEL, where: [{ field: "id", value: row.id }], update: { tenantId, lookupKey: await lookupKeyOf(tenantId, row.entityId) } });
-      updated++;
+      if (rows.length < BACKFILL_PAGE) break;
     }
     state.directory.invalidate();
-    ctx.context.logger.info(`[saml-idp] backfill: ${updated} SP row(s) given a lookup key${skipped.length ? `; skipped (config isn't valid JSON): ${skipped.join(", ")}` : ""}`);
-    return ctx.json({ updated, skipped });
+    ctx.context.logger.info(
+      `[saml-idp] backfill: ${updated} SP row(s) given a lookup key${skipped.length ? `; skipped (config isn't valid JSON): ${skipped.join(", ")}` : ""}${failed.length ? `; failed: ${failed.join(", ")}` : ""}`,
+    );
+    if (mongoIndex)
+      ctx.context.logger.error(
+        "[saml-idp] backfill: on MongoDB, run backfillMongoServiceProviderKeys(db) from better-auth-saml-idp first (docs/guide/multi-tenant.md#database)",
+      );
+    return ctx.json({ updated, skipped, failed });
   });
+
+/** The part of a MongoDB `Db` (the `mongodb` driver's) that the MongoDB backfill uses. */
+export interface MongoDbLike {
+  collection(name: string): {
+    find(filter: Record<string, unknown>): { toArray(): Promise<Record<string, unknown>[]> };
+    updateOne(filter: Record<string, unknown>, update: Record<string, unknown>): Promise<unknown>;
+  };
+}
+
+/**
+ * The registry upgrade's backfill on MongoDB (review 6 R6-4). Better Auth's MongoDB adapter builds
+ * a model's indexes before its first write, and the UNIQUE index on `lookupKey` can't be built
+ * while two or more documents lack the key, so `samlIdpBackfillServiceProviderKeys` can't write
+ * there. This writes the same keys through the driver itself, with the `Db` you gave
+ * `mongodbAdapter`. Run it once, before turning tenants on (or after: then the index is built on
+ * the next write). Safe to run again. `collection`: the model's collection name, if you renamed it
+ * (`samlIdpServiceProviders` with `usePlural`).
+ */
+export async function backfillMongoServiceProviderKeys(
+  db: MongoDbLike,
+  options: { collection?: string } = {},
+): Promise<{ updated: number; skipped: string[]; failed: string[] }> {
+  const collection = db.collection(options.collection ?? SP_MODEL);
+  // `lookupKey: null` matches documents without the field too.
+  const docs = await collection.find({ lookupKey: null }).toArray();
+  let updated = 0;
+  const skipped: string[] = [];
+  const failed: string[] = [];
+  for (const doc of docs) {
+    const keys = await keysOf({ config: doc.config, entityId: doc.entityId });
+    if (!keys) {
+      skipped.push(String(doc.spId));
+      continue;
+    }
+    try {
+      await collection.updateOne({ _id: doc._id, lookupKey: null }, { $set: keys });
+      updated++;
+    } catch {
+      failed.push(String(doc.spId));
+    }
+  }
+  return { updated, skipped, failed };
+}
 
 /**
  * When an organization is deleted through Better Auth (`/organization/delete`), its tenant is

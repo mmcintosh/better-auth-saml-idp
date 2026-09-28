@@ -370,5 +370,61 @@ describe.skipIf(!KIND)(`adapter matrix: ${KIND}, tenants`, { timeout: 60_000 }, 
     expect((await post("/tenants/update", { organizationId: orgs[1], enabled: false })).status).toBe(200);
     expect((await tauth.handler(new Request(`${AUTH_BASE}/saml2/idp/metadata/${orgs[1]}`))).status).toBe(404);
     expect((await tauth.handler(new Request(`${AUTH_BASE}/saml2/idp/metadata/${orgs[0]}`))).status).toBe(200);
+    // Signing in above also checked each tenant's organization binding (its createdAt, D-053)
+    // after a round trip through this database. A deleted tenant's key is retired (D-053).
+    const tc = await c.adapter.create({ model: "organization", data: { name: "tc", slug: `tc-${Date.now()}`, createdAt: new Date() } });
+    const td = await c.adapter.create({ model: "organization", data: { name: "td", slug: `td-${Date.now()}`, createdAt: new Date() } });
+    expect((await post("/tenants/create", { organizationId: tc.id, tenantKey: "retired-key" })).status).toBe(200);
+    expect((await post("/tenants/delete", { organizationId: tc.id })).status).toBe(200);
+    const again = await post("/tenants/create", { organizationId: td.id, tenantKey: "retired-key" });
+    expect(again.status).toBe(409);
+    expect(((await again.json()) as { code?: string }).code).toBe("TENANT_KEY_RETIRED");
+  });
+});
+
+// MongoDB only (review 6 R6-4, D-053): upgrading a registry that already has SPs. The adapter
+// builds the UNIQUE lookupKey index before a write, which fails while two documents lack the key;
+// backfillMongoServiceProviderKeys writes the keys through the driver, before tenants are on.
+describe.skipIf(KIND !== "mongodb")("adapter matrix: mongodb, upgrading a populated registry to tenants", { timeout: 60_000 }, () => {
+  it("two stored SPs: the MongoDB backfill keys them; with tenants on they sign in and the registry saves", async () => {
+    const { MongoClient } = await import("mongodb");
+    const { mongodbAdapter } = await import("better-auth/adapters/mongodb");
+    const { backfillMongoServiceProviderKeys } = await import("../../src");
+    const client = new MongoClient(URL_);
+    await client.connect();
+    const database = client.db(`saml_matrix_${Date.now().toString(36)}_up`);
+    try {
+      const before = betterAuth(optionsFor(mongodbAdapter(database, { client }), false));
+      const admin = new Browser(before);
+      const adminUser = await admin.signUp();
+      await ((await before.$context) as any).adapter.update({ model: "user", where: [{ field: "id", value: adminUser.id }], update: { role: "admin" } });
+      for (const i of [1, 2]) {
+        const res = await admin.fetch(`${AUTH_BASE}/saml-idp/service-providers/create`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ serviceProvider: { id: `old${i}`, entityId: `https://old${i}.test/sp`, acsUrls: [SP_ACS] } }),
+        });
+        expect(res.status).toBe(200);
+      }
+      expect(await backfillMongoServiceProviderKeys(database)).toEqual({ updated: 2, skipped: [], failed: [] });
+      const after = betterAuth(optionsFor(mongodbAdapter(database, { client }), true));
+      expect(await (after.api as any).samlIdpBackfillServiceProviderKeys()).toEqual({ updated: 0, skipped: [], failed: [] });
+      const user = new Browser(after);
+      await user.signUp();
+      const { xml } = await readAutoPost(await user.fetch(await redirectUrl(authnRequestXml({ issuer: "https://old2.test/sp", acsUrl: SP_ACS }).xml)));
+      expect(xml).toContain("urn:oasis:names:tc:SAML:2.0:status:Success");
+      const adminAfter = new Browser(after);
+      const adminAfterUser = await adminAfter.signUp();
+      await ((await after.$context) as any).adapter.update({ model: "user", where: [{ field: "id", value: adminAfterUser.id }], update: { role: "admin" } });
+      const res = await adminAfter.fetch(`${AUTH_BASE}/saml-idp/service-providers/create`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ serviceProvider: { id: "new1", entityId: "https://new1.test/sp", acsUrls: [SP_ACS] } }),
+      });
+      expect(res.status).toBe(200);
+    } finally {
+      await database.dropDatabase().catch(() => {});
+      await client.close();
+    }
   });
 });

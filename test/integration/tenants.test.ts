@@ -798,6 +798,47 @@ describe("tenants: stored SPs through the registry API (D-052)", () => {
     expect(issuer((await readAutoPost(await browser.fetch(await authn(SSO_URL, { issuer: entityId, acsUrl: acs })))).xml)).toBe(IDP_ENTITY_ID);
     expect((await api()).updated).toBe(0); // idempotent
   });
+
+  it("the backfill reports a row it can't write and carries on with the rest (review 6 I-1)", async () => {
+    const t = `${Date.now().toString(36)}${n++}`;
+    const database = await createHostDatabase();
+    // Two rows saved before tenants, then the guide's steps 1 and 2 (as in the test above).
+    const before = await createHost({ database, plugins: [organization()], saml: { registry: { enabled: true, canManage }, serviceProviders: [] } });
+    const now = new Date();
+    const ids = [`bf-a-${t}`, `bf-b-${t}`];
+    for (const id of ids) {
+      const config = { id, entityId: `https://${id}.test/sp`, acsUrls: [`https://${id}.test/acs`] };
+      await ((await before.auth.$context) as any).adapter.create({
+        model: "samlIdpServiceProvider",
+        data: { spId: id, entityId: config.entityId, config: JSON.stringify(config), enabled: true, createdAt: now, updatedAt: now },
+      });
+    }
+    const saml = { registry: { enabled: true, canManage, cacheSeconds: 0 }, tenants: { enabled: true }, serviceProviders: [] };
+    if (!isWorkerd) {
+      (database.db as { exec(sql: string): void }).exec("ALTER TABLE samlIdpServiceProvider ADD COLUMN lookupKey TEXT");
+      const { getMigrations } = await import("better-auth/db/migration");
+      const { hostOptions } = await import("../support/host");
+      await (await getMigrations(hostOptions(database, { plugins: [organization()], saml }) as any)).runMigrations();
+    }
+    const { auth } = await createHost({ database, plugins: [organization()], saml });
+    const ctx = (await auth.$context) as any;
+    // The first row's write fails (as a UNIQUE clash would); the second is still keyed.
+    const update = ctx.adapter.update;
+    ctx.adapter.update = async (a: any) => {
+      const row = await ctx.adapter.findOne({ model: "samlIdpServiceProvider", where: a.where });
+      if (a.model === "samlIdpServiceProvider" && row?.spId === ids[0]) throw new Error("simulated write failure");
+      return update(a);
+    };
+    const first = await (auth.api as any).samlIdpBackfillServiceProviderKeys();
+    ctx.adapter.update = update;
+    expect(first.failed).toContain(ids[0]);
+    expect(first.failed).not.toContain(ids[1]);
+    const keyed = (await ctx.adapter.findOne({ model: "samlIdpServiceProvider", where: [{ field: "spId", value: ids[1] }] })).lookupKey;
+    expect(keyed).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const again = await (auth.api as any).samlIdpBackfillServiceProviderKeys();
+    expect(again.failed).toEqual([]);
+    expect(again.updated).toBeGreaterThanOrEqual(1);
+  });
 });
 
 describe("tenants off: no tenant routes", () => {
