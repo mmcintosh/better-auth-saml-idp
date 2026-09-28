@@ -78,7 +78,7 @@ ROADMAP = [
  ("Next", "Reach, trust and B2B", "Adoption by Better Auth's mainstream users, trust signals, and what B2B apps ask for next.", [
    ("Next.js example", "A Next.js App Router example (Node runtime) next to the Workers one: most Better Auth apps are Next.js or Node servers."),
    ("Prisma and Drizzle on Postgres/MySQL (done)", "The most common Better Auth adapters, proven in the CI adapter matrix alongside Kysely, MongoDB, SQLite and D1 (D-051)."),
-   ("Bun and Deno", "Smoke tests on both runtimes in CI, as Better Auth advertises them."),
+   ("Bun and Deno (done)", "The built package smoke-tested on both in CI (test/runtimes/smoke.mjs): CLI keygen, metadata and a full sign-in with the signature verified (D-051)."),
    ("OpenSSF Best Practices badge", "The passing-level self-assessment at bestpractices.dev, with the evidence for each criterion."),
    ("Raise the OpenSSF Scorecard score", "Work through the checks the published Scorecard marks down, and record what is out of reach for a single-maintainer project."),
    ("Multi-tenant IdP", "One IdP identity per organization: each customer organization gets its own entity ID, metadata and signing key (organization plugin). Designed with a review before it is built."),

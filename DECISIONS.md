@@ -1498,3 +1498,24 @@ The published Scorecard was 6.7. Fixed:
 - Maintained scores 0 until the repository is 90 days old.
 - Branch-Protection at maximum needs required reviews, which would block the only maintainer.
 - Binary-Artifacts flags `wasm/xsd.wasm`: deliberate and checked, since CI rebuilds it byte-for-byte from source (wasm-reproducible.yml).
+
+## D-051: Adapter matrix with Drizzle and Prisma; Bun and Deno (2026-09-28)
+
+From the "Reach, trust and B2B" roadmap lane: prove the plugin on the stacks most Better Auth apps use.
+- **Drizzle on Postgres and MySQL, and Prisma 6 on Postgres,** join the CI adapter matrix (`test/adapters`), running the same 10 database-dependent tests as Kysely and MongoDB:
+  - a full sign-in;
+  - replay under concurrency, and the unique key;
+  - single-use resume;
+  - the registry race and exact lookups;
+  - participants;
+  - organization memberships;
+  - the sweep.
+- **Schemas are built, not hand-written.** `test/adapters/orm-schemas.ts` turns Better Auth's `getAuthTables(options)` (core, admin and organization plugins, and this plugin) into Drizzle pg/mysql tables and a Prisma schema, as `npx auth generate` would. They follow any future table change automatically.
+  - Tables are created by Better Auth's own migrator, and column types follow it (varchar(255) for keyed MySQL columns, timestamptz on Postgres).
+  - Prisma's client is generated per run into `node_modules/.cache`, so it resolves the installed `@prisma/client`; Prisma 6 bundles its engine, so no install scripts are needed.
+  - `prisma` and `@prisma/client` are dev dependencies only.
+- **Verified locally:** against Postgres 17 and MySQL 8.4 containers, each of drizzle-postgres, drizzle-mysql and prisma-postgres passes 10/10, and plain postgres and mysql still do.
+- **Bun and Deno:** `test/runtimes/smoke.mjs` is plain JavaScript on the built `dist/`. It runs the CLI's `keygen` on the same runtime, then Better Auth with the plugin on the memory adapter: metadata, sign-up, an SP-initiated HTTP-Redirect sign-in, and the Response signature verified with xml-crypto. It passes on Node 24, Bun 1.4.2 and Deno 2.9.6.
+- **CI:** a `runtimes` job, bun and deno, with `oven-sh/setup-bun` and `denoland/setup-deno` pinned by SHA.
+- **Scope:** a smoke test, not the whole suite. The suite needs Vitest's Node and workerd pools, and Better Auth's own runtime support is Bun's and Deno's Node compatibility.
+
