@@ -1565,7 +1565,7 @@ The roadmap item "One IdP identity per organization", built as phase 1 of `docs/
 - SLO across A, B and the root, the participant Destination rule, a disabled participant's tenant, a LogoutRequest at another tenant's URL;
 - events and audit rows; the tenant API (CRUD, immutability, refusals, 403 for non-managers and for the organization's own owner, the `samlTenant` permission); stored SPs (tenant, filtering, immutability, overlap warning); the upgrade and backfill path.
 - **Adapter matrix:** a tenants block on a second fresh database (the `lookupKey` race, one entity ID in two tenants, per-tenant lookups, tenant booleans). Run locally against Postgres 17, MySQL 8.4, Drizzle on both, Prisma on Postgres and MongoDB 8.2: 11/11 each.
-- **Full suite:** 139 files passed, 10 skipped; 1322 tests passed, 58 skipped (before: 132 files, 1218 passed, 54 skipped).
+- **Full suite:** 139 files passed, 10 skipped; 1324 tests passed, 58 skipped (before: 132 files, 1218 passed, 54 skipped).
 
 **Mutation proof** (each broken on purpose, a test failed, restored with `git checkout`):
 1. stored lookup without the row-tenant re-check (unit test);
