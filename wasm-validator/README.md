@@ -224,7 +224,7 @@ What the suite covers, identically in both runtimes:
 
 ## Benchmarks
 
-The input is the same 290-byte AuthnRequest used in `spike/validator-bench.ts`.
+The input is the same 290-byte AuthnRequest used in the Phase 0 validator benchmark.
 In the tables, "xmllint" means `@authenio/samlify-node-xmllint` 2.0.0
 (node-xmllint 1.0.0). Both validators ran in the same run.
 

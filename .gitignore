@@ -1,11 +1,9 @@
 node_modules/
 dist/
 .wrangler/
-spike/out/
 *.pem
 *.key
 .dev.vars
-spike/.coexist-cfg.json
 e2e/.generated/
 test-results/
 playwright-report/

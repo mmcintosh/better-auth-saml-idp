@@ -23,6 +23,6 @@ jobs:
           queries: security-extended
           config: |
             # Tests and e2e harnesses don't ship; keep the results about the package and its tooling.
-            paths-ignore: [node_modules, dist, vendor, spike, wasm-validator/c, wasm-validator/test, test, e2e, test-results]
+            paths-ignore: [node_modules, dist, vendor, wasm-validator/c, wasm-validator/test, test, e2e, test-results]
       - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with: { category: "/language:${{ matrix.language }}" }

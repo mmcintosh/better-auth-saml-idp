@@ -12,6 +12,5 @@
     "isolatedModules": true,
     "noEmit": true
   },
-  "include": ["src", "test"],
-  "exclude": ["test/spike"]
+  "include": ["src", "test"]
 }

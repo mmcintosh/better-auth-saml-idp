@@ -52,7 +52,3 @@ The files in `schemas/` are unmodified and keep their original notices. **Change
 ## better-auth-cloudflare, in `vendor/` (development and tests only; not shipped)
 
 `vendor/better-auth-cloudflare-0.3.1-main-dbe08c51b.tgz` is a build of https://github.com/zpg6/better-auth-cloudflare at commit `dbe08c51b`, which is unreleased at the time of writing. MIT License, Copyright (c) 2025 Zach Grimaldi; the license is included inside the tarball.
-
-## Spike code, in `spike/libxml2-vendor/` (Phase 0 evidence only; not shipped)
-
-This is a patched copy of `libxml2-wasm` 0.7.2 (https://github.com/jameslan/libxml2-wasm, MIT, Copyright (c) 2023 James Lan; its LICENSE files are copied alongside) that also contains libxml2 (MIT, above). It exists to reproduce the workerd blocker recorded in DECISIONS.md D-003.

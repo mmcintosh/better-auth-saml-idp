@@ -1048,7 +1048,7 @@ That last mutant first survived. The test handler recorded synchronously before 
 
 ## D-039: Third review ("review 4"), two independent reports (2026-09-26)
 
-**How it was run.** Two independent reviews of tag `review-3-baseline` (`c338731`) from [the brief](docs/review/brief.md), each with proof tests.
+**How it was run.** Two independent reviews of tag `review-3-baseline` (`c338731`) from the review brief (`docs/review/brief.md`, removed in D-055), each with proof tests.
 - **Report A:** six parallel adversarial passes; 18 proof assertions.
 - **Report B:** its own branch, with failing tests `r4-1`…`r4-7` that pass once fixed.
 
@@ -1520,7 +1520,7 @@ From the "Reach, trust and B2B" roadmap lane: prove the plugin on the stacks mos
 
 ## D-052: Multi-tenant IdP, phase 1: an IdP identity per organization under the shared key (2026-09-28)
 
-The roadmap item "One IdP identity per organization", built as phase 1 of `docs/review/multi-tenant-design.md`, on the maintainer's decisions in its §9: host administrators create tenants; membership is mandatory; `tenantKey` defaults to the organization id, may be chosen at creation, never changes; KMS/HSM deferred. Phases 2 (per-tenant keys) and 3 (delegation) are not built. Guide: `docs/guide/multi-tenant.md`.
+The roadmap item "One IdP identity per organization", built as phase 1 of `docs/design/multi-tenant.md` (then `docs/review/multi-tenant-design.md`), on the maintainer's decisions in its §9: host administrators create tenants; membership is mandatory; `tenantKey` defaults to the organization id, may be chosen at creation, never changes; KMS/HSM deferred. Phases 2 (per-tenant keys) and 3 (delegation) are not built. Guide: `docs/guide/multi-tenant.md`.
 
 **What it is.** `tenants: { enabled: true }`, off by default.
 - A tenant is an organization with a `samlIdpTenant` row, created through the registry API (`/saml-idp/tenants/*`, the `samlTenant` access-control resource). Its entity ID is its metadata URL; its URLs are `/saml2/idp/{metadata,sso,slo}/<tenantKey>`. All tenants sign with `signing` (`keys: "shared"`, the only value).

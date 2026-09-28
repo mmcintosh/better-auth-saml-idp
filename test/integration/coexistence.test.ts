@@ -9,7 +9,7 @@ import { baseOptions } from "../support/config";
 
 // vitest-pool-workers loads "samlify" and "samlify/build/src/api" as two separate module
 // instances, so this identity check can't be made there. Node and real wrangler/esbuild
-// bundles share one instance; the bundle case is checked by spike/coexist.ts (DECISIONS.md D-006).
+// bundles share one instance; the bundle case was checked by a Phase 0 spike (DECISIONS.md D-006).
 const isWorkerd = typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers";
 
 describe("coexistence with @better-auth/sso", () => {

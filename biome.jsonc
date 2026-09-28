@@ -11,8 +11,7 @@
 			"examples/nextjs/src/**",
 			"examples/nextjs/scripts/**",
 			"examples/nextjs/next.config.ts",
-			"!src/saml/schemas.generated.ts",
-			"!test/spike"
+			"!src/saml/schemas.generated.ts"
 		]
 	},
 	"formatter": { "enabled": false },
