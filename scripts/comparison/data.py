@@ -76,7 +76,7 @@ ROADMAP = [
    ("Signed AuthnRequests over HTTP-POST (done)", "Enveloped XML signatures with XSW defences, pinned to the SP's certificates; node-saml interop; each defence mutation-tested."),
  ]),
  ("Next", "Reach, trust and B2B", "Adoption by Better Auth's mainstream users, trust signals, and what B2B apps ask for next.", [
-   ("Next.js example (done)", "examples/nextjs: App Router on the Node runtime with node:sqlite, a sign-in page that honours callbackURL, prompt=login and acr_values; CI builds it, starts it and signs in with node-saml."),
+   ("Next.js example (done)", "examples/nextjs: App Router on the Node runtime with node:sqlite, a sign-in page that honours callbackURL and prompt=login; CI builds it, starts it and signs in with node-saml."),
    ("Prisma and Drizzle on Postgres/MySQL (done)", "The most common Better Auth adapters, proven in the CI adapter matrix alongside Kysely, MongoDB, SQLite and D1 (D-051)."),
    ("Bun and Deno (done)", "The built package smoke-tested on both in CI (test/runtimes/smoke.mjs): CLI keygen, metadata and a full sign-in with the signature verified (D-051)."),
    ("OpenSSF Best Practices badge", "The passing-level self-assessment at bestpractices.dev, with the evidence for each criterion."),

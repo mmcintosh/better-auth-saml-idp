@@ -193,7 +193,7 @@ npx better-auth-saml-idp sp-from-metadata https://sp.example.com/saml/metadata -
 npx better-auth-saml-idp smoke https://auth.example.com --sp <the SP's entity ID>
 ```
 
-The [Workers + Hono example](examples/workers-hono/README.md) is a complete, deployable IdP with a sign-in page, D1 migrations and SPs configured from JSON. The [Next.js example](examples/nextjs/README.md) is the same on Node: App Router, `node:sqlite`, and a sign-in page that honours `callbackURL`, `prompt=login` and `acr_values`.
+The [Workers + Hono example](examples/workers-hono/README.md) is a complete, deployable IdP with a sign-in page, D1 migrations and SPs configured from JSON. The [Next.js example](examples/nextjs/README.md) is the same on Node: App Router, `node:sqlite`, and a sign-in page that honours `callbackURL` and `prompt=login`.
 
 ## 📦 Installation
 

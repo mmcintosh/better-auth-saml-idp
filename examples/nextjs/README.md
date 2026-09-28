@@ -24,7 +24,7 @@ pnpm dev                  # http://localhost:3000
 - Entity ID: `http://localhost:3000/api/auth/saml2/idp`
 - SSO URL: `http://localhost:3000/api/auth/saml2/idp/sso` (Redirect and POST)
 
-`pnpm keys` runs the plugin's CLI (`better-auth-saml-idp keygen`) and never prints the private key. It refuses to replace an existing `.env.local` without `--force`. `.env.local` and `data.db` are gitignored.
+`pnpm keys` runs the plugin's CLI (`better-auth-saml-idp keygen`) and never prints the private key. It refuses to replace an existing `.env.local` without `--force`. `.env.local` and `data.db` are gitignored. `next start` loads `.env.local` too: don't build or start a production deployment from a directory where you ran `pnpm keys`, or it runs with the throwaway key and secret. Delete `.env.local` there, or deploy from a clean checkout with the values in your host's secret store.
 
 ### Environment
 
@@ -55,10 +55,9 @@ The plugin only signs assertions for **verified** email addresses (the [account 
 When an SP sends a signed-out user, the plugin redirects to `/sign-in?callbackURL=<its /saml2/idp/resume link>`. The page ([contract](../../docs/guide/flows.md#sp-initiated-sso)):
 - after signing in, goes to `callbackURL` only if it's on this origin (anything else goes to `/`);
 - with `prompt=login` (the SP sent `ForceAuthn`), asks for credentials even when the user is signed in;
-- when the user is already signed in and there's no `prompt=login`, continues to `callbackURL` straight away;
-- when `acr_values` asks for a class other than password sign-in (for example MFA), says that this example can't deliver it. The IdP then answers the SP with `NoAuthnContext`.
+- when the user is already signed in and there's no `prompt=login`, continues to `callbackURL` straight away.
 
-The IdP states `PasswordProtectedTransport` as the authentication class (`authnContextClassRef`), which many SPs request by default. That's only true over HTTPS: deploy behind TLS.
+The IdP states `PasswordProtectedTransport` as the authentication class (`authnContextClassRef`), which many SPs request by default. That's only true over HTTPS: deploy behind TLS. An SP that asks for another class (for example MFA) gets `NoAuthnContext` from the IdP straight away, without the sign-in page: this example has no step-up, like the Workers example. For step-up, declare [`authnContext.levels`](../../docs/guide/flows.md#requestedauthncontext); the IdP then sends users to the page with `acr_values`, which it must honour.
 
 ## Register service providers
 

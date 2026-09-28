@@ -31,8 +31,8 @@ const DEFAULT_ATTRIBUTES = {
 } as const;
 
 /**
- * What this example's sign-in page delivers: a password, over HTTPS in production. The sign-in
- * page compares `acr_values` with the same value.
+ * What this example's sign-in page delivers: a password, over HTTPS in production. An SP that asks
+ * for another class (MFA) is answered NoAuthnContext by the IdP: this example has no step-up.
  */
 const PASSWORD_CLASS = "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport";
 

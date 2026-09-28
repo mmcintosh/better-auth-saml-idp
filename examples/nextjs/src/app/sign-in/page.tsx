@@ -2,15 +2,13 @@
 
 // The IdP's login page (samlIdp's `loginPage`). The plugin sends users here with:
 //  - callbackURL: its absolute /saml2/idp/resume URL, to follow after signing in;
-//  - prompt=login: the SP demanded a fresh sign-in (ForceAuthn), so ask even with a session;
-//  - acr_values: the authentication class the SP asked for.
-// See docs/guide/flows.md and docs/guide/getting-started.md (step 5).
+//  - prompt=login: the SP demanded a fresh sign-in (ForceAuthn), so ask even with a session.
+// No acr_values: this example has no step-up levels (authnContext.levels), so the IdP never sends
+// it; an SP asking for a class the example can't deliver is answered by the IdP itself. See
+// docs/guide/flows.md and docs/guide/getting-started.md (step 5).
 import { useSearchParams } from "next/navigation";
 import { type FormEvent, Suspense, useEffect, useRef, useState } from "react";
 import { authClient } from "../../lib/auth-client";
-
-/** The class this page delivers: `authnContextClassRef` in src/lib/auth.ts. */
-const DELIVERED_CLASS = "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport";
 
 /** callbackURL if it points back to this origin, otherwise "/" (never an open redirect). */
 function safeCallback(raw: string | null): string {
@@ -26,8 +24,6 @@ function safeCallback(raw: string | null): string {
 function SignIn() {
   const params = useSearchParams();
   const promptLogin = params.get("prompt") === "login";
-  const acrValues = (params.get("acr_values") ?? "").split(" ").filter(Boolean);
-  const unsupportedAcr = acrValues.length > 0 && !acrValues.includes(DELIVERED_CLASS);
   const { data: session, isPending } = authClient.useSession();
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [error, setError] = useState("");
@@ -79,12 +75,6 @@ function SignIn() {
       <h1>{mode === "sign-in" ? "Sign in" : "Create an account"}</h1>
       {promptLogin && session && (
         <p className="note">The application asked you to sign in again{session.user.email ? ` (signed in as ${session.user.email})` : ""}.</p>
-      )}
-      {unsupportedAcr && (
-        <p className="note">
-          The application asked for a stronger sign-in than this example offers ({acrValues.join(", ")}). This page only signs you in with a password, so the
-          application will refuse the sign-in.
-        </p>
       )}
       <form onSubmit={onSubmit}>
         <label htmlFor="email">Email</label>

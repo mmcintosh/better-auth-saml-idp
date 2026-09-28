@@ -17,7 +17,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
   - Database: a `samlIdpTenant` table and `tenantId`/`lookupKey` on `samlIdpServiceProvider`, only with tenants on. A registry that already has rows needs a one-time step: [the guide](docs/guide/multi-tenant.md#database) and `auth.api.samlIdpBackfillServiceProviderKeys()`. D1: the example's migration `0008_tenants.sql`.
   - New error codes for the tenant API: `INVALID_TENANT`, `TENANT_EXISTS`, `TENANT_NOT_FOUND`, `TENANT_HAS_SERVICE_PROVIDERS`.
   - With `tenants` unset, schema, routes and every response are unchanged (pinned by snapshots recorded before the change). Additive only: `serviceProviderInfo.tenantId` (`null`) in `authorize`, the `samlTenant` resource in `samlIdpStatements`, and the four error codes.
-- **Next.js example** ([`examples/nextjs`](examples/nextjs/README.md)): App Router on the Node runtime with `node:sqlite`, a sign-in page that honours `callbackURL`, `prompt=login` and `acr_values`, and a migration script. CI builds it, starts it with `next start`, runs the CLI's `inspect` and `smoke` checks against it and completes a sign-in with node-saml as the SP.
+- **Next.js example** ([`examples/nextjs`](examples/nextjs/README.md)): App Router on the Node runtime with `node:sqlite`, a sign-in page that honours `callbackURL` and `prompt=login`, and a migration script. CI builds it, starts it with `next start`, runs the CLI's `inspect` and `smoke` checks against it and completes a sign-in with node-saml as the SP.
 
 ## [1.0.0-rc.1] - 2026-09-28
 
