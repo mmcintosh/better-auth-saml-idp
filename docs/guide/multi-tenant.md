@@ -4,7 +4,7 @@
 
 Give each of your customers (a Better Auth organization) its own SAML identity: its own entity ID, metadata, and SSO and SLO URLs, next to the root IdP you already have. Their IT team configures their SPs (AWS, Google Workspace, Salesforce…) with *their* IdP, and only members of *their* organization can sign in through it.
 
-This is **phase 1** of the design in [multi-tenant-design.md](../review/multi-tenant-design.md) (DECISIONS.md D-052):
+This is **phase 1** of the design in [the multi-tenant design](../design/multi-tenant.md) (DECISIONS.md D-052):
 - **In this version:** per-organization identities; **every tenant signs with your one `signing` key**; only **your** administrators create tenants and manage their SPs.
 - **Not yet:** a signing key per tenant (phase 2), and letting an organization's own administrators manage their SPs (phase 3, which needs per-tenant keys). [Why the order matters](#the-shared-signing-key).
 
