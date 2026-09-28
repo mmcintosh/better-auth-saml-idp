@@ -1478,3 +1478,7 @@ An external review of everything since 4a44664 (`docs/review/review-5-findings.m
   4. no class-ref cap;
   5. switch-only updates re-validating.
 
+
+## D-049: CI runners pinned to ubuntu-24.04 (2026-09-28)
+
+GitHub moves `ubuntu-latest` to Ubuntu 26 from 2026-10-19 (actions/runner-images#14748). Every job in every workflow now runs on `ubuntu-24.04`, which is what `ubuntu-latest` means today, so nothing changes now. The wasm reproducibility check (`wasm/xsd.wasm` rebuilt byte-for-byte), the e2e Docker stack and the release build should change image only deliberately. To move to Ubuntu 26: change all 13 `runs-on` lines together, run CI, the e2e and a release dry run, and record it here.
