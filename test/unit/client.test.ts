@@ -11,6 +11,12 @@ describe("samlIdpClient", () => {
     expectTypeOf(client.samlIdp.serviceProviders.update).toBeFunction();
     expectTypeOf(client.samlIdp.serviceProviders.delete).toBeFunction();
     expectTypeOf(client.samlIdp.serviceProviders.get).toBeFunction();
+    // Tenants (D-052): the same way, from /saml-idp/tenants/*.
+    expectTypeOf(client.samlIdp.tenants).toBeFunction();
+    expectTypeOf(client.samlIdp.tenants.create).toBeFunction();
+    expectTypeOf(client.samlIdp.tenants.update).toBeFunction();
+    expectTypeOf(client.samlIdp.tenants.delete).toBeFunction();
+    expectTypeOf(client.samlIdp.tenants.get).toBeFunction();
   });
 
   it("builds logout and launch URLs under the auth base path", () => {

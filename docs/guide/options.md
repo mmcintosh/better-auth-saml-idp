@@ -9,6 +9,7 @@ Every option `samlIdp()` accepts. Options are validated when `samlIdp()` is call
 - [`accountPolicy`](#accountpolicy)
 - [`registry`](#registry)
 - [`singleLogout`](#singlelogout)
+- [`tenants`](#tenants)
 - [`schema`](#schema)
 - [Service provider options](#service-provider-options)
 - [`encryption`](#encryption)
@@ -35,6 +36,7 @@ Every option `samlIdp()` accepts. Options are validated when `samlIdp()` is call
 | `accountPolicy` | `object` | strict | Who may receive assertions. See [`accountPolicy`](#accountpolicy). |
 | `registry` | `object` | off | The database-backed SP registry and its API. See [`registry`](#registry). |
 | `singleLogout` | `object` | off | SAML Single Logout. See [`singleLogout`](#singlelogout). |
+| `tenants` | `object` | off | An IdP identity per organization (multi-tenant IdP). See [`tenants`](#tenants). |
 | `events` | `object` | none | `{ onAssertionIssued?, onDenied?, onLogout?, onSessionEnded? }` callbacks. They run in the background and can't affect the flow. See [Observability](observability.md). |
 | `auditLog` | `object` | off | `{ enabled, retentionDays? }`: also record events in the `samlIdpAuditEvent` table. See [`auditLog`](#auditlog). |
 | `sessionNotOnOrAfter` | `false \| "idp-session" \| { maxSeconds }` | `false` | `SessionNotOnOrAfter` on assertions: when the SP should end its session. `"idp-session"`: the IdP session's expiry. `{ maxSeconds }` (60 to 30 days): that long after issuance, never past the IdP session. Each SP can override it. See [Single Logout](single-logout.md#when-the-session-ends-without-the-browser). |
@@ -70,7 +72,7 @@ SPs stored in the database, managed at runtime. See [Service providers › Regis
 |---|---|---|---|
 | `enabled` | `boolean` | **required** | Adds the `samlIdpServiceProvider` table and looks SPs up there after the code SPs. |
 | `canManage` | `({ user, session }) => boolean \| Promise<boolean>` | none | Who may use the HTTP API. Must return exactly `true`; a throw denies. |
-| `permissions` | `boolean` | `false` | Check each API action (`list`, `read`, `create`, `update`, `delete` on `samlServiceProvider`) against the admin plugin's access control. See [Organizations and permissions](users-and-access.md#registry-permissions). With `canManage` too, both must allow. |
+| `permissions` | `boolean` | `false` | Check each API action (`list`, `read`, `create`, `update`, `delete` on `samlServiceProvider`, and on `samlTenant` for the [tenant routes](multi-tenant.md#create-a-tenant)) against the admin plugin's access control. See [Organizations and permissions](users-and-access.md#registry-permissions). With `canManage` too, both must allow. |
 | `cacheSeconds` | `number` | `60` | How long each isolate caches a stored SP, and a miss. 0 to 3600. Other isolates see changes within this window. |
 | `authorize` | `(ctx) => AuthorizeResult` | allow | `authorize` for stored SPs (functions can't be stored). |
 
@@ -81,6 +83,18 @@ The API is mounted only when `canManage` or `permissions` is set.
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `enabled` | `boolean` | **required** | Adds the `samlIdpSessionParticipant` table, the `/saml2/idp/slo` and `/saml2/idp/logout` endpoints, and `SingleLogoutService` in metadata. SPs take part with their [`singleLogoutService`](#service-provider-options). |
+
+## `tenants`
+
+An IdP identity per Better Auth organization: its own entity ID, metadata and SSO/SLO URLs, next to the root IdP. See the [Multi-tenant IdP guide](multi-tenant.md).
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | `boolean` | **required** | Adds the [`samlIdpTenant`](schema.md#samlidptenant-with-tenantsenabled) table and tenant columns, the `/saml2/idp/{metadata,sso,slo}/<tenantKey>` routes, and the tenant API (with the registry API). Needs the organization plugin, `registry.enabled` and a pinned `baseURL`; each missing is a startup error. |
+| `keys` | `"shared"` | `"shared"` | What tenants sign with: `signing`, in this version. `"per-tenant"` is a startup error until it exists. |
+| `cacheSeconds` | `number` | `registry.cacheSeconds` | How long each isolate caches a tenant, and a miss. 0 to 3600. |
+
+`delegation` (organization administrators managing their own SPs) is a startup error: it needs per-tenant keys ([why](multi-tenant.md#the-shared-signing-key)).
 
 ## `auditLog`
 
@@ -99,6 +113,7 @@ schema: {
   samlIdpServiceProvider: { modelName: "saml_sps" },
   samlIdpSessionParticipant: { fields: { sessionKey: "session_hash" } },
   samlIdpAuditEvent: { modelName: "saml_audit" },
+  samlIdpTenant: { modelName: "saml_tenants" }, // with tenants
 }
 ```
 
@@ -128,6 +143,7 @@ The same options apply to SPs in `serviceProviders` and to SPs stored in the reg
 | `idpInitiatedRelayState` | `string` | none | RelayState sent with IdP-initiated Responses. Needs `allowIdpInitiated`. |
 | `allowedRelayStates` | `string[]` | `[]` | RelayState values a caller of `/init` may choose, matched exactly. Anything else is replaced by `idpInitiatedRelayState`. Needs `allowIdpInitiated`. |
 | `singleLogoutService` | `{ url, binding?, responseUrl? }` | none | Where the SP receives logout messages. `binding`: `"redirect"` (default) or `"post"`. `responseUrl`: where LogoutResponses go, if not `url` (metadata's `ResponseLocation`). See [Single Logout](single-logout.md). |
+| `tenant` | `string` | none (root IdP) | With [`tenants`](#tenants): the organization id of the tenant this SP belongs to. It's then found only through that tenant's URLs, gets the tenant's identity, and only the organization's members may sign in (`organization` may only add `roles`). Can't change on a stored SP. `entityId` is unique per tenant. See [Multi-tenant IdP](multi-tenant.md#add-sps-to-a-tenant). |
 
 ## `encryption`
 
@@ -182,6 +198,7 @@ createAuthClient({ plugins: [samlIdpClient()] });
 |---|---|
 | `authClient.samlIdp.serviceProviders()` | The registry API: list SPs. Typed from the server plugin. |
 | `authClient.samlIdp.serviceProviders.{get,create,update,delete}` | Get one (`{ query: { id } }`), create, update and delete (see [Registry API](service-providers.md#registry-api)). |
+| `authClient.samlIdp.tenants()`, `.tenants.{get,create,update,delete}` | With [`tenants`](#tenants): the tenant API (see [Create a tenant](multi-tenant.md#create-a-tenant)). |
 | `authClient.samlIdp.logoutUrl({ returnTo? })` | URL of IdP-initiated Single Logout. |
 | `authClient.samlIdp.signOutEverywhere({ returnTo? })` | Navigate there. |
 | `authClient.samlIdp.launchUrl(spId, { relayState? })` | URL of IdP-initiated SSO. |

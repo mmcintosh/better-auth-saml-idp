@@ -65,6 +65,13 @@ SPs stored at runtime. See [Registry](service-providers.md#registry).
 | `updatedAt` | date | | |
 | `updatedBy` | string | | The user id of the last change (optional). |
 
+With `tenants.enabled` ([multi-tenant IdP](multi-tenant.md#database)), two more fields, and `entityId` is no longer unique (it's unique per tenant, through `lookupKey`; databases created before keep the old constraint until you drop it):
+
+| Field | Type | Key | Description |
+|---|---|---|---|
+| `tenantId` | string | index | The SP's tenant (an organization id), or `""` for the root IdP (never NULL). Must match `tenant` in `config`. |
+| `lookupKey` | string | **unique** | `sha256("saml-idp:sp", tenantId, entityId)`: an entity ID once per tenant. Required; on a table with rows, add it nullable and run the backfill first (see the guide). |
+
 <details><summary>Hand-written Drizzle (SQLite/D1)</summary>
 
 ```ts
@@ -140,6 +147,7 @@ One row per [event](observability.md): issued assertions, refusals of a signed-i
 | `userAgent` | string? | | The browser's User-Agent (at most 300 characters). |
 | `details` | string | | The whole event as JSON. It includes the NameID, which may be personal data. |
 | `expiresAt` | date | index | `at` + `auditLog.retentionDays`. Swept automatically. |
+| `tenantId` | string? | index | Only with `tenants.enabled`: the SP's tenant (organization id); null for the root IdP. |
 
 <details><summary>Hand-written Drizzle (SQLite/D1)</summary>
 
@@ -166,6 +174,39 @@ export const samlIdpAuditEvents = sqliteTable(
     index("saml_idp_audit_events_expires_idx").on(t.expiresAt),
   ],
 );
+```
+</details>
+
+## `samlIdpTenant` (with `tenants.enabled`)
+
+Organizations with their own IdP identity ([Multi-tenant IdP](multi-tenant.md)). Created by the host's administrators through the tenant API; only organizations with a row are tenants.
+
+| Field | Type | Key | Description |
+|---|---|---|---|
+| `id` | string | primary | Row id. |
+| `organizationId` | string | **unique** | The organization (organization plugin). |
+| `tenantKey` | string | **unique** | The tenant's name in its URLs and entity ID; the organization id unless another was chosen. Never changes. |
+| `enabled` | boolean | | A disabled tenant is treated as nonexistent. |
+| `createdAt` | date | | |
+| `updatedAt` | date | | |
+| `updatedBy` | string | | The user id of the last change (optional). |
+
+<details><summary>Hand-written Drizzle (SQLite/D1)</summary>
+
+```ts
+export const samlIdpTenants = sqliteTable("saml_idp_tenants", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().unique(),
+  tenantKey: text("tenant_key").notNull().unique(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  updatedBy: text("updated_by"),
+});
+// and on samlIdpServiceProviders:
+//   tenantId: text("tenant_id").notNull().default(""),
+//   lookupKey: text("lookup_key").notNull().unique(),
+// and on samlIdpAuditEvents: tenantId: text("tenant_id"),
 ```
 </details>
 
