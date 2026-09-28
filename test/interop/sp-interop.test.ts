@@ -1,5 +1,5 @@
 // Phase 3 (amended): independent SP implementations must accept our assertions end to end.
-//  - @better-auth/sso — Better Auth's own SAML SP (dogfooding; better-auth #6254)
+//  - @better-auth/sso — Better Auth's own SAML SP (dogfooding)
 //  - @node-saml/node-saml — a second, unrelated implementation with strict settings
 // The IdP runs on the ADDENDUM-01 host (workerd: withCloudflare + D1/Drizzle; node: node:sqlite).
 import { sso } from "@better-auth/sso";

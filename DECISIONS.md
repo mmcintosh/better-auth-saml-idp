@@ -338,7 +338,7 @@ Smaller verified items, also fixed:
 - The owner's IdP account was verified by hand in D1, because the example sends no email in production.
 
 **Result:** Zero Trust's identity-provider **Test** returned
-`{"email":"mmcintosh@infowall.ai","name":"Mark McIntosh","givenName":"Mark","surName":"McIntosh","saml_attributes":{"email":"mmcintosh@infowall.ai"}}`.
+the owner's email, name, `givenName` and `surName`, with `saml_attributes.email` (values omitted here).
 The IdP logs show the matching sequence: SSO → sign-in → resume, with the assertion auto-posted to Cloudflare.
 
 **Real-world finding: Cloudflare Access sends a RelayState longer than 80 bytes.** The first attempt failed with `RELAY_STATE_TOO_LONG`. The plugin's default follows SAML Bindings §3.4.3 ("MUST NOT exceed 80 bytes"), and none of the IdPs in the comparison research is documented as enforcing that limit. The example now sets `relayStateMaxBytes: 1024`, the plugin's hard cap, and that made the login work. **Decided (owner, 2026-09-25):** the plugin default is now **1024**, with `relayStateMaxBytes: 80` as the strict-spec opt-in. The example no longer needs to set it.
@@ -845,7 +845,6 @@ The goal is for the plugin to feel native to Better Auth, using its own plugins'
   - Registry calls are typed from the server plugin (`authClient.saml2.idp.serviceProviders.*`, checked by `expectTypeOf` under `tsc`).
   - `logoutUrl` / `signOutEverywhere` / `launchUrl` / `launch` build the navigation URLs from the client's `baseURL` and `basePath`.
 - **Better Auth CLI.** `npx auth generate` (the CLI moved from `@better-auth/cli` to the `auth` package) was checked from a packed tarball in a clean project. It emits all three plugin tables with their UNIQUE constraints and indexes, for whatever is enabled.
-- **Docs.** `docs/better-auth/saml-idp.mdx` follows Better Auth's plugin-page format (Steps, `package-install`, migrate/generate tabs). `docs/better-auth/community-plugin-entry.ts` is the proposed entry for their Community Plugins list, which currently has no SAML plugin. It hasn't been submitted.
 
 ## D-032: The guide, and background work on Workers (2026-09-26)
 
@@ -1273,7 +1272,7 @@ A free Salesforce Developer Edition org (My Domain `orgfarm-63501b2853-dev-ed.de
 
 ## D-043: Sessions that end without Single Logout (2026-09-27)
 
-From the fresh-eyes design review (`docs/review/session-end-review.md`), for the conexxus-auth merge: an admin disable or a factor change deletes sessions with no browser, so SPs can't be told through the front channel.
+From a fresh-eyes design review for a host integration: an admin disable or a factor change deletes sessions with no browser, so SPs can't be told through the front channel.
 
 - **Already guaranteed (verified in code, pinned by a test):** no new assertion once the session or user is gone. Issuance re-reads both from the database.
 - **New: `events.onSessionEnded`.** A `session.delete` database hook marks the session's participant rows ended, and emits `session.ended`:
@@ -1283,7 +1282,7 @@ From the fresh-eyes design review (`docs/review/session-end-review.md`), for the
   - The hook is an observer: errors are logged and never block the delete.
   - Nothing is emitted for sessions with no participants.
   - Audit: `revoked` and `signed-out` rows only; `expired` never.
-- **Found while building, missed by the review:** Better Auth deletes sessions stored only in `secondaryStorage` without database hooks (`internal-adapter.mjs` `deleteSession`). The plugin warns at startup in that setup. better-auth-cloudflare forces database sessions when geolocation tracking is on, and both conexxus-auth and the example keep sessions in D1.
+- **Found while building, missed by the review:** Better Auth deletes sessions stored only in `secondaryStorage` without database hooks (`internal-adapter.mjs` `deleteSession`). The plugin warns at startup in that setup. better-auth-cloudflare forces database sessions when geolocation tracking is on, and hosts like the example keep sessions in D1.
 - **Tracking:** `sessionTracking = singleLogout.enabled || events.onSessionEnded`. `onSessionEnded` alone records participants, so hosts without SLO get the event.
 - **Schema:** participant rows gain `userId` (indexed) and `endedAt`. D1 migration `0007` (test D1: `0006`). Ended rows stay until `expiresAt`. SLO ignores them. `sso` and `init` sweep them too when tracking is on.
 - **`auth.api.samlIdpListSessionParticipants({ body: { userId } })`** lists a user's SP sessions, live or ended. It's `createAuthEndpoint.serverOnly`: no URL.
@@ -1320,14 +1319,14 @@ From the fresh-eyes design review (`docs/review/session-end-review.md`), for the
 
 ## D-044: `authorize` can give a reason and ask for re-authentication (2026-09-27)
 
-From the session-end review's section 5, to fit conexxus-auth's policy gate (`canUseClient` → `{ allow } | { allow: false, reason, reauthenticate? }`). It lands before 1.0 because it widens a public return type. That's additive: `true` still works.
+From the same review, to fit a host's policy gate that answers `{ allow } | { allow: false, reason, reauthenticate? }`. It lands before 1.0 because it widens a public return type. That's additive: `true` still works.
 
 - **Return type:** `AuthorizeResult = boolean | { allow: true } | { allow: false; reason?; reauthenticate? }`. Only `true` and `{ allow: true }` allow. Truthy non-`true` values and malformed objects deny, as before.
 - **`reason`:** appended to the denial detail. It's log-safe here, for the info line, and again in `fail()`, for events and logs.
 - **`session`:** `authorize` now receives the session row re-read just before signing: the same read that proves the session still exists. So host fields such as `mfaCompletedAt` are current.
 - **`reauthenticate: true`:**
   - IsPassive gets `Responder/NoPassive` to the ACS.
-  - If this request already forced a fresh sign-in and the new session is still refused (`request.forceAuthn && session.createdAt >= request.createdAt`), the result is `ACCESS_DENIED`, with no loop. That matches conexxus's "no loops" rule.
+  - If this request already forced a fresh sign-in and the new session is still refused (`request.forceAuthn && session.createdAt >= request.createdAt`), the result is `ACCESS_DENIED`, with no loop.
   - Otherwise the request is re-parked with `forceAuthn: true, createdAt: now`, and the user goes to the login page with `prompt=login` (the existing ForceAuthn path). Resume refuses any session older than that (`REAUTHENTICATION_REQUIRED`), then `authorize` runs again.
 - **Not done:** an SP `label` in `ServiceProviderInfo`. `id` serves as the label. Also not done: an opt-in to send the denial to the SP as `RequestDenied`.
 - **Tests:**

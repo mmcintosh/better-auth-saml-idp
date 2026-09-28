@@ -56,7 +56,7 @@ For the maintainer claiming the badge at <https://www.bestpractices.dev>: sign i
 | `build_floss_tools` | Met. All build tools are FLOSS |
 | `test` | Met. `pnpm test` (Vitest) on Node and on workerd with D1; documented in CONTRIBUTING |
 | `test_invocation` | Met (suggested). `pnpm test` |
-| `test_most` | Met (suggested). About 1,200 tests: unit, integration, SP interop, fuzzing, Playwright e2e against Keycloak and SimpleSAMLphp; the adapter matrix on Postgres, MySQL and MongoDB |
+| `test_most` | Met (suggested). About 1,200 tests: unit, integration, SP interop, fuzzing, Playwright e2e against Keycloak and SimpleSAMLphp; the adapter matrix on Postgres, MySQL and MongoDB, including Prisma and Drizzle; the built package smoke-tested on Bun and Deno; the Next.js example built, started and signed in through on every CI run |
 | `test_continuous_integration` | Met (suggested). GitHub Actions on every push and pull request (.github/workflows/ci.yml) |
 | `test_policy` | Met. CONTRIBUTING: "Tests with every change. A bug fix comes with the test that would have caught it." |
 | `tests_are_added` | Met. Every DECISIONS entry since D-001 lists its tests; recent features also record mutation checks (DECISIONS.md) |
