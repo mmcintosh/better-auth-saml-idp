@@ -1,4 +1,4 @@
-// Checks every relative link and #anchor in the README and docs/ (GitHub heading slugs).
+// Checks every relative link and #anchor in the README, the examples' READMEs and docs/ (GitHub heading slugs).
 //   node scripts/check-links.mjs
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
@@ -8,7 +8,7 @@ const slug = (h) => h.trim().toLowerCase().replace(/<[^>]+>/g, "").replace(/[^\p
 const headings = (f) => [...strip(readFileSync(f, "utf8")).matchAll(/^#{1,6} (.+)$/gm)].map((m) => slug(m[1]));
 const walk = (d) => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : [join(d, f)]));
 
-const files = ["README.md", "CHANGELOG.md", ...walk("docs").filter((f) => f.endsWith(".md"))];
+const files = ["README.md", "CHANGELOG.md", "examples/workers-hono/README.md", "examples/nextjs/README.md", ...walk("docs").filter((f) => f.endsWith(".md"))];
 const bad = [];
 let count = 0;
 for (const f of files) {

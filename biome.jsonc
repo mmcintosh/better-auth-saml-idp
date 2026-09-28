@@ -8,6 +8,9 @@
 			"scripts/**/*.mjs",
 			"e2e/**/*.mjs",
 			"examples/workers-hono/src/**",
+			"examples/nextjs/src/**",
+			"examples/nextjs/scripts/**",
+			"examples/nextjs/next.config.ts",
 			"!src/saml/schemas.generated.ts",
 			"!test/spike"
 		]

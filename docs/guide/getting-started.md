@@ -64,7 +64,7 @@ npx auth migrate     # Kysely-based adapters
 npx auth generate    # Drizzle or Prisma: generates the schema; then run your migration
 ```
 
-This adds `samlIdpSeenRequest`, plus the registry and Single Logout tables if you enable them. See the [schema](schema.md). On D1, use the example's [migrations](../../examples/workers-hono/migrations/).
+This adds `samlIdpSeenRequest`, plus the registry and Single Logout tables if you enable them. See the [schema](schema.md). On D1, use the Workers example's [migrations](../../examples/workers-hono/migrations/). The [Next.js example](../../examples/nextjs/README.md#database) runs `getMigrations` from a script instead.
 
 ## 5. Return users from your sign-in page
 
@@ -87,6 +87,8 @@ await authClient.signIn.email({ email, password, callbackURL });
 const params = new URLSearchParams(location.search);
 if (session && params.get("prompt") !== "login") location.assign(params.get("callbackURL")!); // skip only without prompt=login
 ```
+
+The [Next.js example](../../examples/nextjs/src/app/sign-in/page.tsx) has a complete sign-in page that does all of this.
 
 Only users with a **verified email** receive assertions (see [Account policy](users-and-access.md#account-policy)). If your app doesn't verify emails yet, that's the first thing to add.
 

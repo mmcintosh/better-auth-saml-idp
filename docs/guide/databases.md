@@ -17,7 +17,7 @@ The database-dependent behaviours run against a real server in CI (`test/adapter
 
 | Database | Adapter | Tables | Status |
 |---|---|---|---|
-| SQLite | Kysely (`node:sqlite`) | `npx auth migrate` | ✅ CI (the whole suite) |
+| SQLite | Kysely (`node:sqlite`) | `npx auth migrate` ([Next.js example](../../examples/nextjs/README.md#database): `getMigrations` in a script) | ✅ CI (the whole suite) |
 | Cloudflare D1 | Drizzle | migrations ([example](../../examples/workers-hono/migrations/)) | ✅ CI (the whole suite, workerd) and live |
 | PostgreSQL 17 | Kysely (a `pg` pool) | `npx auth migrate` | ✅ CI |
 | MySQL 8.4 | Kysely (a `mysql2` pool) | `npx auth migrate` | ✅ CI |
