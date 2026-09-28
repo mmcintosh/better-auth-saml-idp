@@ -273,6 +273,22 @@ describe("tenants: routing and isolation (D-052)", () => {
     expect(issuer(form.xml)).toBe(w.A.metadata);
   });
 
+  it("a POST continuation re-entered at another tenant's URL, or the root's, is refused", async () => {
+    const w = await world({ code: standard });
+    await w.join(w.orgA.id);
+    await w.join(w.orgB.id);
+    for (const other of [w.B.sso, SSO_URL]) {
+      const post = await w.browser.fetch(w.A.sso, {
+        method: "POST",
+        crossSite: true,
+        headers: { "content-type": "application/x-www-form-urlencoded", origin: "https://sp.test" },
+        body: new URLSearchParams({ SAMLRequest: btoa(authnRequestXml({ issuer: AWS.entityId, acsUrl: AWS.acs, destination: w.A.sso }).xml) }).toString(),
+      });
+      const cid = new URL(post.headers.get("location")!).searchParams.get("cid");
+      expect(await code(await w.browser.fetch(`${other}?cid=${cid}`)), other).toBe("UNKNOWN_SERVICE_PROVIDER");
+    }
+  });
+
   it("signed out: the login page is told the tenant; after sign-in the Response is the tenant's", async () => {
     const w = await world({ code: standard });
     await w.join(w.orgA.id);
