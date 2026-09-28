@@ -91,7 +91,8 @@ jobs:
       - id: tag
         env: { VERSION: "${{ needs.package.outputs.version }}" }
         run: case "$VERSION" in *-*) echo "tag=next" >> "$GITHUB_OUTPUT" ;; *) echo "tag=latest" >> "$GITHUB_OUTPUT" ;; esac
-      - run: npm stage publish out/*.tgz --provenance --access public --tag "$TAG"
+      # "./": without it, npm reads out/<file>.tgz as GitHub shorthand (user/repo) and tries git.
+      - run: npm stage publish ./out/*.tgz --provenance --access public --tag "$TAG"
         env: { TAG: "${{ steps.tag.outputs.tag }}" }
       - env: { GH_TOKEN: "${{ github.token }}", VERSION: "${{ needs.package.outputs.version }}", TAG: "${{ steps.tag.outputs.tag }}" }
         run: |
