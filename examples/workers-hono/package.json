@@ -15,12 +15,12 @@
     "better-auth-cloudflare": "file:../../vendor/better-auth-cloudflare-0.3.1-main-dbe08c51b.tgz",
     "better-auth-saml-idp": "workspace:*",
     "drizzle-orm": "^0.45.3",
-    "hono": "^4.13.9"
+    "hono": "^4.13.10"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260924.1",
-    "@types/node": "^26.6.2",
+    "@cloudflare/workers-types": "^5.20260928.1",
+    "@types/node": "^26.6.3",
     "typescript": "^7.0.2",
-    "wrangler": "^4.139.0"
+    "wrangler": "^4.143.0"
   }
 }

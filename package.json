@@ -6,7 +6,7 @@
   "dependencies": {
     "@xmldom/xmldom": "^0.9.12",
     "samlify": "2.13.1",
-    "xml-crypto": "^6.3.1",
+    "xml-crypto": "^6.3.2",
     "zod": "^4.6.5"
   },
   "devDependencies": {
@@ -18,11 +18,11 @@
     "@better-auth/utils": "0.4.2",
     "@biomejs/biome": "^2.5.14",
     "@cloudflare/vitest-pool-workers": "0.22.0",
-    "@cloudflare/workers-types": "^5.20260924.1",
+    "@cloudflare/workers-types": "^5.20260928.1",
     "@node-saml/node-saml": "^5.1.0",
     "@playwright/test": "^1.63.0",
     "@prisma/client": "6.19.3",
-    "@types/node": "^26.6.2",
+    "@types/node": "^26.6.3",
     "@types/pg": "^8.23.1",
     "better-auth": "1.7.5",
     "better-auth-cloudflare": "file:vendor/better-auth-cloudflare-0.3.1-main-dbe08c51b.tgz",
@@ -30,14 +30,14 @@
     "esbuild": "^0.28.2",
     "fast-check": "^4.10.2",
     "libxml2-wasm": "0.7.2",
-    "mongodb": "^7.6.0",
+    "mongodb": "^7.7.0",
     "mysql2": "^3.24.4",
     "pg": "^8.23.0",
     "prisma": "6.19.3",
     "publint": "^0.3.24",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11",
-    "wrangler": "^4.139.0"
+    "wrangler": "^4.143.0"
   },
   "scripts": {
     "test": "vitest run",
