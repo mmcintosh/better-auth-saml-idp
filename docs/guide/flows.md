@@ -75,7 +75,34 @@ A valid request from a known SP that the IdP can't honour gets a signed SAML Res
 
 ### RequestedAuthnContext
 
-The IdP asserts exactly one `AuthnContextClassRef`: the `authnContextClassRef` option, `unspecified` by default. A request's `RequestedAuthnContext` is satisfied when that value is listed (with `Comparison` `exact`, `minimum` or `maximum`). `Comparison="better"` and `AuthnContextDeclRef` are never satisfied, because the IdP has no ordering between classes. Set `authnContextClassRef` to what your sign-in really guarantees, for example `urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport` for password sign-in over TLS. Mapping requested contexts to 2FA (step-up) is on the roadmap.
+Two ways to say how users authenticated:
+
+**A fixed class** (`authnContextClassRef`, `unspecified` by default). Every assertion states it. A request's `RequestedAuthnContext` is satisfied when that value is listed (with `Comparison` `exact`, `minimum` or `maximum`). `Comparison="better"` and `AuthnContextDeclRef` are never satisfied, because there's no ordering between classes. Set it to what your sign-in really guarantees, for example `urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport` for password sign-in over TLS.
+
+**Step-up levels** (`authnContext`), as Keycloak does with levels of authentication. List the classes your sign-in can deliver, weakest first, and say which one the current session achieved:
+
+```ts
+const PASSWORD = "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport";
+const MFA = "https://refeds.org/profile/mfa";
+
+samlIdp({
+  // …
+  authnContext: {
+    levels: [PASSWORD, MFA],
+    // Better Auth's two-factor plugin only creates a session after the second factor, so a
+    // session of a user with 2FA on passed it (see the caveat below).
+    current: ({ user }) => (user.twoFactorEnabled === true ? MFA : PASSWORD),
+  },
+});
+```
+
+For each SP request:
+- **Already met:** the assertion states the class the session achieved. Comparisons follow SAML Core §3.3.2.2.1 on your level order: `exact` (listed), `minimum` (at least as strong), `better` (stronger), `maximum` (no stronger). Classes outside `levels` only match exactly.
+- **Reachable but not met:** the user goes back to your `loginPage` with `prompt=login` and `acr_values=<the weakest class that would do>`. Your page must then require what that class means (for example the second factor, or enrolling one), and a fresh session is required. On the new session the request is judged again.
+- **Not met after that,** or not reachable by any level: the SP gets `NoAuthnContext`, with no loops. An IsPassive request that would need a step-up gets `NoPassive`.
+- `current` runs on the user and session as re-read just before signing. It must return one of `levels`; anything else, or a throw, issues nothing (`INTERNAL_ERROR`).
+- **Be precise about what a session proves.** With Better Auth's two-factor "trust this device" option, a user with 2FA on may sign in without the second factor. If your app has that, or any way to create sessions without credentials, record when the second factor was actually completed (a session field) and have `current` read it.
+- `authnContext` and `authnContextClassRef` are exclusive.
 
 ## IdP-initiated SSO
 

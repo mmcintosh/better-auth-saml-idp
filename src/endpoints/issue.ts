@@ -5,7 +5,7 @@ import { ERROR_STATUS, SAML_IDP_ERROR_CODES, type SamlIdpErrorCode } from "../er
 import { warnUserWritableFields } from "../attributes";
 import { emit } from "../events";
 import { autoPostResponse, errorPage } from "../saml/post-form";
-import { logSafe, type SamlStatus } from "../saml/request";
+import { logSafe, type SamlStatus, satisfiesAuthnContext, stepUpTarget } from "../saml/request";
 import { buildSignedErrorResponse, buildSignedResponse, hasNonXmlChars, newSamlId } from "../saml/response";
 import type { SpMetadataCache } from "../saml/sp-metadata-refresh";
 import type { SpDirectory } from "../saml/sp-directory";
@@ -241,6 +241,34 @@ export async function issueResponse(
     return fail(ctx, state, "ACCESS_DENIED", why, who);
   }
 
+  // Step-up (D-047): which authentication class did this session achieve, and is it enough?
+  let achievedClass: string | undefined;
+  const levels = state.options.authnContext;
+  if (levels) {
+    try {
+      achievedClass = await levels.current({ user, session: principal.session as any });
+    } catch (e) {
+      ctx.context.logger.error(`[saml-idp] authnContext.current() threw for SP ${sp.id}`, e);
+      return fail(ctx, state, "INTERNAL_ERROR", undefined, who);
+    }
+    if (typeof achievedClass !== "string" || !levels.levels.includes(achievedClass)) {
+      ctx.context.logger.error(`[saml-idp] authnContext.current() returned a class that isn't in levels, for SP ${sp.id}`);
+      return fail(ctx, state, "INTERNAL_ERROR", undefined, who);
+    }
+    const requested = request.authnContext;
+    if (requested && !satisfiesAuthnContext(requested, achievedClass, levels.levels)) {
+      const target = stepUpTarget(requested, levels.levels);
+      const noContext = { code: "Responder" as const, subCode: "NoAuthnContext" as const, message: "The requested authentication context is not available" };
+      if (!target) return samlError(ctx, state, request, noContext, user.id);
+      if (request.isPassive)
+        return samlError(ctx, state, request, { code: "Responder", subCode: "NoPassive", message: "Stepping up authentication needs the user" }, user.id);
+      // Loop guard: this request already made the user sign in again, and it still isn't enough.
+      if (request.forceAuthn && new Date(session.session.createdAt).getTime() >= request.createdAt) return samlError(ctx, state, request, noContext, user.id);
+      ctx.context.logger.info(`[saml-idp] SP ${sp.id} needs ${logSafe(target, 200)}; session has ${logSafe(achievedClass, 200)}: asking the user to sign in again`);
+      return parkForLogin(ctx, state, { ...request, forceAuthn: true, createdAt: now.getTime() }, { acr: target });
+    }
+  }
+
   // Re-checked here, not only at startup/registry save: a field can become user-writable later.
   const fieldProblem = sp.nameIdField === undefined ? undefined : nameIdFieldProblem(sp.nameIdField, ctx.context.options as any);
   if (fieldProblem) {
@@ -286,6 +314,7 @@ export async function issueResponse(
     authnInstant: new Date(session.session.createdAt),
     sessionIndex,
     sessionNotOnOrAfter: sessionEnd(sp.sessionNotOnOrAfter, new Date(session.session.expiresAt), now),
+    ...(achievedClass ? { authnContextClassRef: achievedClass } : {}),
     now,
   }, sp.sign, sp.encryption);
   ctx.context.logger.info(

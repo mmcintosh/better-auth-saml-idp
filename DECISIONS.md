@@ -1408,3 +1408,50 @@ Before the first release candidate, two independent reviews ran over everything 
 4. no separators in `logSafe`;
 5. no `truncated`.
 
+## D-047: Step-up authentication (2026-09-27)
+
+Roadmap D3 ("map RequestedAuthnContext to the host's 2FA state, as Keycloak does with levels of authentication"). The roadmap expected an upstream change: Better Auth sessions don't record how the user authenticated. Instead, the host says it: `authnContext: { levels, current }`.
+- **`levels`:** AuthnContextClassRef URIs the host's sign-in can deliver, weakest first (1–10, unique). This is the ordering SAML itself lacks.
+- **`current({ user, session })`:** the class this session achieved. It runs on the user and session re-read just before signing, and must return one of `levels`; anything else, or a throw, gives `INTERNAL_ERROR`.
+- **Matching:** `satisfiesAuthnContext` implements SAML Core §3.3.2.2.1 on that order:
+  - `exact`: the achieved class is listed;
+  - `minimum`: at least as strong as a listed class;
+  - `better`: stronger than a listed class;
+  - `maximum`: no stronger than a listed class.
+
+  Classes outside `levels` only match exactly, and DeclRefs never match. `stepUpTarget` is the weakest level that would satisfy the request.
+- **Flow:**
+  - **At request time:** a RequestedAuthnContext that no level can satisfy gets `NoAuthnContext` at once. Otherwise the request, with its context, is stored with the pending request.
+  - **At issuance:** if the achieved class satisfies the request, the assertion states the achieved class. If not, but a level can:
+    - `NoPassive` for IsPassive;
+    - the loop guard (the request already forced a fresh sign-in, and the session is newer) gives `NoAuthnContext`;
+    - otherwise the request is re-parked as ForceAuthn from now, and the user goes to `loginPage?…&prompt=login&acr_values=<target>` (OpenID Connect's parameter name, so login pages can share handling).
+
+  This reuses the ForceAuthn and D-044 re-authentication path. Resume refuses sessions older than the re-park.
+- **Exclusive with `authnContextClassRef`:** a fixed class keeps the previous behaviour exactly.
+- **Caveat, documented:** a session only proves what `current` says. Better Auth's two-factor plugin creates sessions after the second factor, but "trust this device", or credential-less session minting (D-046 S-1), can bypass it. Hosts should record when the factor was actually completed.
+- **Tests** (`test/integration/step-up.test.ts`, both runtimes):
+  - the comparison table, including the equal-level boundaries;
+  - step-up targets;
+  - config validation;
+  - end to end:
+    - no request states the achieved class;
+    - minimum MFA on a password session goes to login with `prompt=login` and `acr_values`, a stale return is refused, and after MFA it's issued as MFA;
+    - an already sufficient session is issued at once;
+    - the loop guard gives `NoAuthnContext`;
+    - IsPassive gives `NoPassive`;
+    - an unreachable class is refused before any sign-in round (signed out);
+    - `current` returning an out-of-levels class, or throwing, gives `INTERNAL_ERROR`.
+- **Mutation proof:** eleven mutations, each caught:
+  1. minimum `>`;
+  2. better `>=`;
+  3. maximum `<`. This survived until the equal-level rows were added;
+  4. unknown classes compared by level;
+  5. no early refusal;
+  6. no loop guard;
+  7. no IsPassive branch;
+  8. no `acr_values`;
+  9. the achieved class not asserted;
+  10. no levels check;
+  11. no exclusivity check.
+

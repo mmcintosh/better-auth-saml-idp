@@ -31,6 +31,7 @@ Every option `samlIdp()` accepts. Options are validated when `samlIdp()` is call
 | `pendingRequestTtlSeconds` | `number` | `600` | How long a request waits while the user signs in (the `resume` link's lifetime). 60 to 3600. |
 | `relayStateMaxBytes` | `number` | `1024` | Largest RelayState accepted, in UTF-8 bytes. 80 (the spec's limit) to 1024. Cloudflare Access sends more than 80. |
 | `authnContextClassRef` | `string` | `urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified` | The authentication context asserted, and matched against an SP's `RequestedAuthnContext`. Set it to what your sign-in actually guarantees, for example `…:PasswordProtectedTransport`. |
+| `authnContext` | `{ levels: string[]; current: ({ user, session }) => string }` | none | Step-up: the classes your sign-in can deliver (weakest first) and which one this session achieved. SPs' `RequestedAuthnContext` is judged against them, and the user is sent to sign in again (`prompt=login`, `acr_values`) when more is needed. Exclusive with `authnContextClassRef`. See [RequestedAuthnContext](flows.md#requestedauthncontext). |
 | `accountPolicy` | `object` | strict | Who may receive assertions. See [`accountPolicy`](#accountpolicy). |
 | `registry` | `object` | off | The database-backed SP registry and its API. See [`registry`](#registry). |
 | `singleLogout` | `object` | off | SAML Single Logout. See [`singleLogout`](#singlelogout). |

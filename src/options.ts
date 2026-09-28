@@ -203,6 +203,17 @@ const optionsSchema = z
     pendingRequestTtlSeconds: z.number().int().min(60).max(3600).optional(),
     relayStateMaxBytes: z.number().int().min(80).max(RELAY_STATE_HARD_CAP).optional(),
     authnContextClassRef: z.string().min(1).max(1024).optional(),
+    authnContext: z
+      .object({
+        levels: z
+          .array(z.string().min(1).max(1024))
+          .min(1)
+          .max(10)
+          .refine((l) => new Set(l).size === l.length, { message: "levels must be unique" }),
+        current: fn<(ctx: { user: SamlIdpUser; session: any }) => string | Promise<string>>(),
+      })
+      .strict()
+      .optional(),
     accountPolicy: z
       .object({
         requireEmailVerified: z.boolean().optional(),
@@ -530,6 +541,10 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
   if (usesSha1 && o.signing.allowInsecureSha1)
     warnings.push("signing: SHA-1 is enabled (allowInsecureSha1). Only use this for SPs that cannot do SHA-256.");
 
+  // One source of truth for the asserted class: a fixed one, or step-up levels (D-047).
+  if (o.authnContext && o.authnContextClassRef !== undefined)
+    issues.push("authnContextClassRef: set either authnContextClassRef or authnContext, not both");
+
   const lifetime = o.assertionLifetimeSeconds ?? 300;
   if (lifetime > 300) warnings.push(`assertionLifetimeSeconds is ${lifetime}; the recommended maximum is 300`);
 
@@ -575,6 +590,7 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
     pendingRequestTtlSeconds: o.pendingRequestTtlSeconds ?? 600,
     relayStateMaxBytes: o.relayStateMaxBytes ?? RELAY_STATE_HARD_CAP,
     authnContextClassRef: o.authnContextClassRef ?? AUTHN_CONTEXT_UNSPECIFIED,
+    authnContext: o.authnContext,
     accountPolicy: {
       requireEmailVerified: o.accountPolicy?.requireEmailVerified ?? true,
       allowImpersonatedSessions: o.accountPolicy?.allowImpersonatedSessions ?? false,

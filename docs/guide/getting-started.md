@@ -81,7 +81,7 @@ const callbackURL = new URLSearchParams(location.search).get("callbackURL") ?? "
 await authClient.signIn.email({ email, password, callbackURL });
 ```
 
-`callbackURL` is always an absolute URL on your IdP's own origin, and the resume link only works in the browser that started the sign-in. Users who are already signed in skip the page entirely, **unless the SP demanded a fresh sign-in (ForceAuthn)**: then the URL also carries `prompt=login`, and your page must ask for credentials even if the user is signed in. A session older than the request is refused with `REAUTHENTICATION_REQUIRED`.
+`callbackURL` is always an absolute URL on your IdP's own origin, and the resume link only works in the browser that started the sign-in. Users who are already signed in skip the page entirely, **unless the SP demanded a fresh sign-in (ForceAuthn)**: then the URL also carries `prompt=login`, and your page must ask for credentials even if the user is signed in. A session older than the request is refused with `REAUTHENTICATION_REQUIRED`. With [step-up levels](flows.md#requestedauthncontext), the URL may also carry `acr_values=<class>`: ask for what that class means (for example the second factor).
 
 ```ts
 const params = new URLSearchParams(location.search);

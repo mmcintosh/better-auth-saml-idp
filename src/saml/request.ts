@@ -380,6 +380,29 @@ export function authnContextStatus(info: AuthnRequestInfo, ours: string): SamlSt
   return { code: "Responder", subCode: "NoAuthnContext", message: "The requested authentication context is not available" };
 }
 
+/**
+ * Step-up (D-047): does the class this session achieved satisfy the SP's RequestedAuthnContext,
+ * given the IdP's `levels` (weakest first)? SAML Core §3.3.2.2.1: exact = listed; minimum = at
+ * least as strong as one listed; better = stronger than one listed; maximum = no stronger than
+ * one listed. Classes outside `levels` only ever match exactly. DeclRefs are never satisfied.
+ */
+export function satisfiesAuthnContext(r: Pick<RequestedAuthnContext, "comparison" | "classRefs" | "hasDeclRefs">, achieved: string, levels: readonly string[]): boolean {
+  if (r.hasDeclRefs) return false;
+  if (r.comparison === "exact") return r.classRefs.includes(achieved);
+  const a = levels.indexOf(achieved);
+  if (a < 0) return r.comparison !== "better" && r.classRefs.includes(achieved);
+  return r.classRefs.some((c) => {
+    const i = levels.indexOf(c);
+    if (i < 0) return r.comparison !== "better" && c === achieved;
+    return r.comparison === "minimum" ? a >= i : r.comparison === "better" ? a > i : a <= i;
+  });
+}
+
+/** The weakest of the IdP's `levels` that would satisfy the request, or undefined if none can (D-047). */
+export function stepUpTarget(r: Pick<RequestedAuthnContext, "comparison" | "classRefs" | "hasDeclRefs">, levels: readonly string[]): string | undefined {
+  return levels.find((level) => satisfiesAuthnContext(r, level, levels));
+}
+
 // ---------------------------------------------------------------------------------------
 // Signatures
 // ---------------------------------------------------------------------------------------

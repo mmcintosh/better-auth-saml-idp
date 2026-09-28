@@ -4,6 +4,7 @@ import * as z from "zod";
 import { idpBaseURL, SSO_PATH } from "../saml/idp";
 import {
   authnContextStatus,
+  stepUpTarget,
   checkRelayState,
   checkRequestSignature,
   decodeAuthnRequest,
@@ -42,7 +43,7 @@ const params = z.object({
 });
 
 /** Where the browser goes to sign in, carrying the resume URL as `callbackURL`. */
-export function loginRedirectUrl(ctx: GenericEndpointContext, state: PluginState, rid: string, opts: { reauthenticate?: boolean } = {}): string {
+export function loginRedirectUrl(ctx: GenericEndpointContext, state: PluginState, rid: string, opts: { reauthenticate?: boolean; acr?: string } = {}): string {
   const base = idpBaseURL(state.options, ctx.context.baseURL);
   const login = new URL(state.options.loginPage, new URL(base).origin);
   login.searchParams.set("callbackURL", `${base}${RESUME_PATH}?rid=${rid}`);
@@ -50,6 +51,8 @@ export function loginRedirectUrl(ctx: GenericEndpointContext, state: PluginState
   // step refuses the old session with REAUTHENTICATION_REQUIRED. `prompt=login`, as in OpenID
   // Connect, so the host's page can tell (R4-L5).
   if (opts.reauthenticate) login.searchParams.set("prompt", "login");
+  // Step-up (D-047): the authentication class needed, as OpenID Connect's acr_values names it.
+  if (opts.acr) login.searchParams.set("acr_values", opts.acr);
   return login.toString();
 }
 
@@ -84,14 +87,14 @@ async function proceed(ctx: GenericEndpointContext, state: PluginState, sp: Reso
  * Store the request as a single-use pending value bound to this browser, and send the user to
  * the login page; `/resume?rid=` picks it up afterwards (R1). Shared with IdP-initiated SSO.
  */
-export async function parkForLogin(ctx: GenericEndpointContext, state: PluginState, req: ValidatedRequest): Promise<never> {
+export async function parkForLogin(ctx: GenericEndpointContext, state: PluginState, req: ValidatedRequest, opts: { acr?: string } = {}): Promise<never> {
   const binding = await bindingValue(ctx, true);
   const rid = await storePending(
     ctx.context.internalAdapter,
     { ...req, bindingHash: await sha256b64url(binding) },
     state.options.pendingRequestTtlSeconds,
   );
-  throw ctx.redirect(loginRedirectUrl(ctx, state, rid, { reauthenticate: req.forceAuthn }));
+  throw ctx.redirect(loginRedirectUrl(ctx, state, rid, { reauthenticate: req.forceAuthn, acr: opts.acr }));
 }
 
 export const ssoEndpoint = (state: PluginState) =>
@@ -158,6 +161,7 @@ export const ssoEndpoint = (state: PluginState) =>
           isPassive: info.isPassive,
           subject: info.subject,
           createdAt: now.getTime(),
+          ...(info.requestedAuthnContext ? { authnContext: info.requestedAuthnContext } : {}),
         };
       } catch (e) {
         if (e instanceof SamlRequestError) return fail(ctx, state, e.code, e.detail);
@@ -170,7 +174,15 @@ export const ssoEndpoint = (state: PluginState) =>
         return fail(ctx, state, "DUPLICATE_REQUEST_ID", `SP ${sp.id}`, { spId: sp.id });
 
       // The SP and ACS URL are trusted from here on: unsatisfiable requests get a SAML status.
-      const status = nameIdPolicyStatus(info, sp) ?? authnContextStatus(info, options.authnContextClassRef);
+      // With step-up levels (D-047), only a request no level could ever satisfy is refused here;
+      // whether this session meets it is judged at issuance.
+      const status =
+        nameIdPolicyStatus(info, sp) ??
+        (options.authnContext
+          ? info.requestedAuthnContext && !stepUpTarget(info.requestedAuthnContext, options.authnContext.levels)
+            ? { code: "Responder" as const, subCode: "NoAuthnContext" as const, message: "The requested authentication context is not available" }
+            : undefined
+          : authnContextStatus(info, options.authnContextClassRef));
       if (status) return samlError(ctx, state, req, status);
 
       if (isPost) {

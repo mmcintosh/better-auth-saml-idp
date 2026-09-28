@@ -13,7 +13,6 @@ Our own column links to the tests that prove each entry. The roadmap derived fro
 
 ## Where we trail
 
-- **Step-up authentication.** RequestedAuthnContext is matched exactly; there's no mapping to the host's 2FA state yet.
 - **SP onboarding.** No bundled admin UI: hosts build one on the registry API.
 
 ## Feature matrix
@@ -51,7 +50,7 @@ Products: **better-auth-saml-idp** (This plugin, pre-release); **Shibboleth IdP*
 | Feature | better-auth-saml-idp | Shibboleth IdP | SimpleSAMLphp | Keycloak | Zitadel | authentik | Logto | Ory Polis | Microsoft Entra ID | Okta | Google Workspace | Auth0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Rejects replayed AuthnRequest IDs | ✅ Yes<br><sub>DB unique key; concurrency and cross-instance tested</sub> | ✅ Yes<br><sub>replay cache</sub> | ❔ Not documented | ❔ Not documented | 🟡 Partial<br><sub>stores ID, no rejection found</sub> | ❔ Not documented | 🟡 Partial<br><sub>stores ID, no rejection found</sub> | ❔ Not documented | ❔ Not documented | ❔ Not documented | ❔ Not documented | ❔ Not documented |
-| ForceAuthn, IsPassive, RequestedAuthnContext | ✅ Yes<br><sub>ForceAuthn verified live with Cloudflare Access; RequestedAuthnContext exact match</sub> | ✅ Yes | 🟡 Partial | ✅ Yes<br><sub>step-up via LoA</sub> | ❌ No | 🟡 Partial<br><sub>ForceAuthn only</sub> | 🟡 Partial<br><sub>ForceAuthn only</sub> | ❌ No | ✅ Yes<br><sub>RequestedAuthnContext exact only</sub> | 🟡 Partial<br><sub>ForceAuthn setting</sub> | ❔ Not documented | 🟡 Partial<br><sub>no IsPassive</sub> |
+| ForceAuthn, IsPassive, RequestedAuthnContext | ✅ Yes<br><sub>ForceAuthn verified live with Cloudflare Access; RequestedAuthnContext exact, or all four comparisons on step-up levels</sub> | ✅ Yes | 🟡 Partial | ✅ Yes<br><sub>step-up via LoA</sub> | ❌ No | 🟡 Partial<br><sub>ForceAuthn only</sub> | 🟡 Partial<br><sub>ForceAuthn only</sub> | ❌ No | ✅ Yes<br><sub>RequestedAuthnContext exact only</sub> | 🟡 Partial<br><sub>ForceAuthn setting</sub> | ❔ Not documented | 🟡 Partial<br><sub>no IsPassive</sub> |
 | SAML error status Responses | ✅ Yes<br><sub>NoPassive, NoAuthnContext, UnknownPrincipal, InvalidNameIDPolicy</sub> | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ❌ No<br><sub>SSO errors are HTML pages</sub> | ❌ No | ❌ No | ✅ Yes | ❔ Not documented | 🟡 Partial<br><sub>mostly error pages</sub> | ❔ Not documented |
 
 ### Identity and access
@@ -61,7 +60,7 @@ Products: **better-auth-saml-idp** (This plugin, pre-release); **Shibboleth IdP*
 | NameID formats per SP | ✅ Yes<br><sub>email, persistent (per-SP HMAC), transient, unspecified</sub> | ✅ Yes | ✅ Yes | ✅ Yes | ❌ No<br><sub>fixed; labelled email, carries username</sub> | ✅ Yes | ✅ Yes | 🟡 Partial<br><sub>passes upstream NameID</sub> | ✅ Yes | ✅ Yes | 🟡 Partial | ✅ Yes |
 | Attribute mapping | ✅ Yes<br><sub>per SP: declarative map (JSON-friendly) or a function</sub> | ✅ Yes<br><sub>declarative + scripts</sub> | ✅ Yes | ✅ Yes<br><sub>mappers + scripts</sub> | 🟡 Partial<br><sub>fixed set + Actions</sub> | ✅ Yes<br><sub>Python mappings</sub> | ✅ Yes<br><sub>declarative</sub> | 🟡 Partial | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
 | Per-SP access control | ✅ Yes<br><sub>authorize() hook, deny = no assertion</sub> | ✅ Yes | 🟡 Partial<br><sub>via authproc filters</sub> | 🟡 Partial<br><sub>via conditional flows</sub> | ✅ Yes<br><sub>per project</sub> | ✅ Yes<br><sub>policy bindings</sub> | ❔ Not documented | 🟡 Partial<br><sub>routing only</sub> | ✅ Yes<br><sub>app assignment</sub> | ✅ Yes<br><sub>app assignment</sub> | ✅ Yes<br><sub>per OU or group</sub> | ❔ Not documented |
-| MFA and step-up for SAML | 🟡 Partial<br><sub>host's Better Auth 2FA; no step-up mapping yet</sub> | ✅ Yes | 🟡 Partial<br><sub>via modules</sub> | ✅ Yes | 🟡 Partial<br><sub>MFA, no step-up</sub> | 🟡 Partial<br><sub>ForceAuthn step-up</sub> | 🟡 Partial<br><sub>MFA, no step-up</sub> | ❌ No<br><sub>delegated upstream</sub> | ✅ Yes<br><sub>Conditional Access (P1)</sub> | ✅ Yes<br><sub>policies</sub> | ❔ Not documented | 🟡 Partial |
+| MFA and step-up for SAML | ✅ Yes<br><sub>host's Better Auth 2FA; step-up via authnContext levels (prompt=login + acr_values)</sub> | ✅ Yes | 🟡 Partial<br><sub>via modules</sub> | ✅ Yes | 🟡 Partial<br><sub>MFA, no step-up</sub> | 🟡 Partial<br><sub>ForceAuthn step-up</sub> | 🟡 Partial<br><sub>MFA, no step-up</sub> | ❌ No<br><sub>delegated upstream</sub> | ✅ Yes<br><sub>Conditional Access (P1)</sub> | ✅ Yes<br><sub>policies</sub> | ❔ Not documented | 🟡 Partial |
 
 ### Operations
 

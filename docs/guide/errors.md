@@ -58,7 +58,7 @@ When a request is valid and the SP and ACS URL are trusted, a request that can't
 | Status (top / second level) | When |
 |---|---|
 | `Responder` / `NoPassive` | `IsPassive="true"` and the user has no session. |
-| `Responder` / `NoAuthnContext` | `RequestedAuthnContext` can't be satisfied: our `authnContextClassRef` isn't listed (`exact`, `minimum`, `maximum`), `Comparison="better"`, or `AuthnContextDeclRef` is used. |
+| `Responder` / `NoAuthnContext` | `RequestedAuthnContext` can't be satisfied. With a fixed `authnContextClassRef`: it isn't listed (`exact`, `minimum`, `maximum`), `Comparison="better"`, or `AuthnContextDeclRef` is used. With `authnContext` levels: no level can deliver it, or the session still didn't after the user signed in again ([step-up](flows.md#requestedauthncontext)). |
 | `Responder` / `UnknownPrincipal` | The request's `Subject` names someone other than the signed-in user. |
 | `Requester` / `InvalidNameIDPolicy` | `NameIDPolicy@Format` isn't the SP's `nameIdFormat` (or `unspecified`). |
 

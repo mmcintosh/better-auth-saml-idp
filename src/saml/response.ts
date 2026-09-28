@@ -71,6 +71,8 @@ export interface BuildResponseInput {
   attributes: Record<string, SamlAttributeValue>;
   authnInstant: Date;
   sessionIndex: string;
+  /** The class this session achieved (step-up, D-047); default `options.authnContextClassRef`. */
+  authnContextClassRef?: string;
   /** When the SP should end its session (D-043); omitted when undefined. */
   sessionNotOnOrAfter?: Date;
   now: Date;
@@ -122,7 +124,7 @@ export function buildResponseXml(options: ResolvedSamlIdpOptions, input: BuildRe
     `<saml:AudienceRestriction><saml:Audience>${e(input.audience)}</saml:Audience></saml:AudienceRestriction>` +
     `</saml:Conditions>` +
     `<saml:AuthnStatement AuthnInstant="${instant(input.authnInstant)}" SessionIndex="${e(input.sessionIndex)}"${input.sessionNotOnOrAfter ? ` SessionNotOnOrAfter="${instant(input.sessionNotOnOrAfter)}"` : ""}>` +
-    `<saml:AuthnContext><saml:AuthnContextClassRef>${e(options.authnContextClassRef)}</saml:AuthnContextClassRef></saml:AuthnContext>` +
+    `<saml:AuthnContext><saml:AuthnContextClassRef>${e(input.authnContextClassRef ?? options.authnContextClassRef)}</saml:AuthnContextClassRef></saml:AuthnContext>` +
     `</saml:AuthnStatement>` +
     attributeStatement(input.attributes) +
     `</saml:Assertion>` +

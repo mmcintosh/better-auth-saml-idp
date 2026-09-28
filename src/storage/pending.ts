@@ -26,6 +26,8 @@ export interface ValidatedRequest {
   subject: { nameId: string; format: string | undefined } | undefined;
   /** ms since epoch; ForceAuthn requires a session created after this. */
   createdAt: number;
+  /** The SP's RequestedAuthnContext, judged at issuance against the session (step-up, D-047). */
+  authnContext?: { comparison: "exact" | "minimum" | "maximum" | "better"; classRefs: string[]; hasDeclRefs: boolean };
 }
 
 export interface PendingRequest extends ValidatedRequest {

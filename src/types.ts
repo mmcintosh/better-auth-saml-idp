@@ -245,6 +245,14 @@ export interface SigningConfig {
   sign?: SignedParts;
 }
 
+/** See `SamlIdpOptions.authnContext`. */
+export interface AuthnContextOptions {
+  /** AuthnContextClassRef URIs your sign-in can deliver, weakest first (1 to 10, unique). */
+  levels: string[];
+  /** The class this session achieved: one of `levels`. Runs on the user and session as re-read just before signing. */
+  current: (ctx: { user: SamlIdpUser; session: Session }) => string | Promise<string>;
+}
+
 /** See `SamlIdpOptions.sessionNotOnOrAfter`. */
 export type SessionLimit = false | "idp-session" | { maxSeconds: number };
 
@@ -298,6 +306,17 @@ export interface SamlIdpOptions {
    * Set it to what your sign-in actually guarantees, e.g. `...:PasswordProtectedTransport`.
    */
   authnContextClassRef?: string;
+  /**
+   * Step-up authentication (D-047), instead of a fixed `authnContextClassRef`: the classes your
+   * sign-in can deliver, weakest first, and which one the current session achieved. An SP's
+   * `RequestedAuthnContext` (exact, minimum, better or maximum) is judged against `levels`:
+   * - already met: the assertion states the achieved class;
+   * - reachable but not met: the user goes back to `loginPage` with `prompt=login` and
+   *   `acr_values=<the weakest class that would do>`, and is judged again on the new session;
+   * - still not met after that, or not reachable at all: the SP gets `NoAuthnContext`
+   *   (`NoPassive` for IsPassive requests).
+   */
+  authnContext?: AuthnContextOptions;
   /**
    * Who may receive assertions. Defaults are strict: an IdP vouches for identities.
    */
@@ -438,6 +457,7 @@ export interface ResolvedSamlIdpOptions {
   pendingRequestTtlSeconds: number;
   relayStateMaxBytes: number;
   authnContextClassRef: string;
+  authnContext: AuthnContextOptions | undefined;
   accountPolicy: Required<NonNullable<SamlIdpOptions["accountPolicy"]>>;
   serviceProviders: ResolvedServiceProvider[];
   schemaValidator: SchemaValidator;

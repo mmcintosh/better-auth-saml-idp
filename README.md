@@ -77,7 +77,7 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 
 **Later: Considered**
 
-- [ ] **Step-up authentication**: Map RequestedAuthnContext to the host's Better Auth 2FA state, as Keycloak does with levels of authentication.
+- [x] **Step-up authentication**: authnContext levels: RequestedAuthnContext judged against the session's achieved class; the user is sent to sign in again (prompt=login, acr_values) when more is needed, as Keycloak does with levels of authentication (D-047).
 - [x] **Declarative attribute mapping**: Per-SP map from attribute name to user field, constant, split list or first/last name; usable from JSON configuration.
 - [ ] **Upstreaming**: Propose integration with @better-auth/sso on better-auth #6254 once v1 is stable.
 
@@ -310,6 +310,7 @@ npx better-auth-saml-idp smoke https://auth.example.com --sp <SP entity ID>
 | `signMetadata` | boolean | `false` | Sign the metadata document |
 | `sessionNotOnOrAfter` | `false` / `"idp-session"` / `{ maxSeconds }` | `false` | Tell SPs when to end their session; each SP can override it ([Single Logout](docs/guide/single-logout.md#when-the-session-ends-without-the-browser)) |
 | `authnContextClassRef` | string | `…:unspecified` | What your sign-in guarantees |
+| `authnContext` | object | none | Step-up levels instead: `{ levels, current }`; an SP asking for more sends the user to sign in again ([guide](docs/guide/flows.md#requestedauthncontext)) |
 | `accountPolicy` | object | strict | `requireEmailVerified: true`, `allowImpersonatedSessions: false`, `allowAnonymousUsers: false` |
 | `assertionLifetimeSeconds` | number | `300` | Assertion validity window |
 | `clockSkewSeconds` | number | `60` | Tolerance for `NotBefore` and `IssueInstant` |
