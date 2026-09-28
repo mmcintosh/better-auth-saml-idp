@@ -15,6 +15,7 @@ import {
   type EncryptionKeyAlgorithm,
   KEY_ALGORITHMS,
 } from "../../src/saml/encrypt";
+import { rootIdentity } from "../../src/saml/identity";
 import { buildSignedResponse, type BuildResponseInput } from "../../src/saml/response";
 import { libxml2Validator } from "../../src/saml/validator";
 import type { SamlIdpOptions, ServiceProviderConfig } from "../../src/types";
@@ -190,7 +191,7 @@ describe("buildSignedResponse with encryption (sign-then-encrypt)", () => {
         serviceProviders: [spWith({ certificate: keys.sp.certificate })],
       }),
     );
-    return { options, res: buildSignedResponse(options, input(), undefined, options.serviceProviders[0]!.encryption) };
+    return { options, res: buildSignedResponse(options, rootIdentity(options, "https://auth.test/api/auth"), input(), undefined, options.serviceProviders[0]!.encryption) };
   }
 
   function signatureOf(xml: string, rootLocalName: string) {
@@ -244,7 +245,7 @@ describe("buildSignedResponse with encryption (sign-then-encrypt)", () => {
     const options = resolveOptions(
       baseOptions({ serviceProviders: [spWith({ certificate: keys.sp.certificate, keyAlgorithm: "rsa-oaep-sha256" })] }),
     );
-    const res = buildSignedResponse(options, input(), undefined, options.serviceProviders[0]!.encryption);
+    const res = buildSignedResponse(options, rootIdentity(options, "https://auth.test/api/auth"), input(), undefined, options.serviceProviders[0]!.encryption);
     expect(await libxml2Validator().validate(res.xml, "protocol")).toEqual({
       valid: false,
       errors: [
@@ -262,7 +263,7 @@ describe("buildSignedResponse with encryption (sign-then-encrypt)", () => {
 
   it("the per-SP choice passed in wins over the global one", () => {
     const { options } = build(); // global: both
-    const res = buildSignedResponse(options, input(), "assertion", options.serviceProviders[0]!.encryption);
+    const res = buildSignedResponse(options, rootIdentity(options, "https://auth.test/api/auth"), input(), "assertion", options.serviceProviders[0]!.encryption);
     expect(signatureOf(res.xml, "Response")).toBeUndefined();
     const assertion = decryptWithNode(res.xml, keys.sp.privateKey);
     expect(verify(assertion, signatureOf(assertion, "Assertion"))).toBe(true);
@@ -271,7 +272,7 @@ describe("buildSignedResponse with encryption (sign-then-encrypt)", () => {
   it("every sign choice leaves the encrypted assertion covered by at least one signature", () => {
     const { options } = build();
     for (const parts of ["both", "response", "assertion"] as const) {
-      const res = buildSignedResponse(options, input(), parts, options.serviceProviders[0]!.encryption);
+      const res = buildSignedResponse(options, rootIdentity(options, "https://auth.test/api/auth"), input(), parts, options.serviceProviders[0]!.encryption);
       const responseSig = signatureOf(res.xml, "Response");
       const assertion = decryptWithNode(res.xml, keys.sp.privateKey);
       const assertionSig = signatureOf(assertion, "Assertion");
@@ -289,7 +290,7 @@ describe("buildSignedResponse with encryption (sign-then-encrypt)", () => {
 
   it("without encryption the Response is unchanged (plaintext assertion, encrypted: false)", () => {
     const options = resolveOptions(baseOptions());
-    const res = buildSignedResponse(options, input());
+    const res = buildSignedResponse(options, rootIdentity(options, "https://auth.test/api/auth"), input());
     expect(res.encrypted).toBe(false);
     expect(res.xml).toContain("<saml:Assertion ID=");
     expect(res.xml).not.toContain("EncryptedAssertion");

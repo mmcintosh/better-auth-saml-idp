@@ -8,10 +8,11 @@ import type { BetterAuthPluginDBSchema } from "better-auth/db";
  * "serial" or "uuid", which ignore forced ids), so replay protection never depends on it.
  * Hosts' hand-written schemas should also add UNIQUE(spId, requestId) (see README).
  */
-export function samlIdpSchema(opts: { registry?: boolean; sessionTracking?: boolean; auditLog?: boolean } = {}) {
+export function samlIdpSchema(opts: { registry?: boolean; sessionTracking?: boolean; auditLog?: boolean; tenants?: boolean } = {}) {
   return {
-    ...(opts.registry ? registrySchema() : {}),
-    ...(opts.auditLog ? auditSchema() : {}),
+    ...(opts.registry ? (opts.tenants ? tenantRegistrySchema() : registrySchema()) : {}),
+    ...(opts.tenants ? tenantSchema() : {}),
+    ...(opts.auditLog ? auditSchema(opts.tenants === true) : {}),
     ...(opts.sessionTracking ? logoutSchema() : {}),
     samlIdpSeenRequest: {
       fields: {
@@ -54,10 +55,67 @@ function registrySchema() {
 }
 
 /**
- * The audit log (D-038): one row per event, with the fields worth querying as columns and the
- * whole event as JSON in `details`. Rows expire after `auditLog.retentionDays`.
+ * The registry with tenants (D-052). Entity IDs are unique per tenant, not globally: the same SP
+ * (AWS, Google) can be registered in several. `lookupKey` is a hash of (tenantId, entityId) and
+ * UNIQUE, as the replay key is (a composite of a possibly long entity ID doesn't index
+ * everywhere). `tenantId` is "" for the root IdP's SPs, never NULL. `lookupKey` is required, so
+ * its UNIQUE index can be declared for MongoDB too (Better Auth allows unique indexes on required
+ * fields only). A table that already has rows needs it added by hand: nullable, backfilled
+ * (`samlIdpBackfillServiceProviderKeys`), then constrained; the multi-tenant guide has the steps.
+ * Rows without it are found by no lookup until then.
  */
-function auditSchema() {
+function tenantRegistrySchema() {
+  return {
+    samlIdpServiceProvider: {
+      fields: {
+        spId: { type: "string", required: true, unique: true, input: false },
+        entityId: { type: "string", required: true, input: false, index: true },
+        config: { type: "string", required: true, input: false },
+        enabled: { type: "boolean", required: true, input: false },
+        createdAt: { type: "date", required: true, input: false },
+        updatedAt: { type: "date", required: true, input: false },
+        updatedBy: { type: "string", required: false, input: false },
+        tenantId: { type: "string", required: true, defaultValue: "", input: false, index: true },
+        lookupKey: { type: "string", required: true, unique: true, input: false },
+      },
+      indexes: [
+        { fields: ["spId"], unique: true, name: "saml_idp_service_provider_sp_id_unique" },
+        { fields: ["lookupKey"], unique: true, name: "saml_idp_service_provider_lookup_key_unique" },
+      ],
+    },
+  } satisfies BetterAuthPluginDBSchema;
+}
+
+/**
+ * Tenants (D-052): which organizations have their own IdP identity. Only organizations with a
+ * row are tenants; the host's administrators create them. `tenantKey` names the tenant in its
+ * URLs and entity ID, so it never changes once set.
+ */
+function tenantSchema() {
+  return {
+    samlIdpTenant: {
+      fields: {
+        organizationId: { type: "string", required: true, unique: true, input: false },
+        tenantKey: { type: "string", required: true, unique: true, input: false },
+        enabled: { type: "boolean", required: true, input: false },
+        createdAt: { type: "date", required: true, input: false },
+        updatedAt: { type: "date", required: true, input: false },
+        updatedBy: { type: "string", required: false, input: false },
+      },
+      indexes: [
+        { fields: ["organizationId"], unique: true, name: "saml_idp_tenant_organization_id_unique" },
+        { fields: ["tenantKey"], unique: true, name: "saml_idp_tenant_tenant_key_unique" },
+      ],
+    },
+  } satisfies BetterAuthPluginDBSchema;
+}
+
+/**
+ * The audit log (D-038): one row per event, with the fields worth querying as columns and the
+ * whole event as JSON in `details`. Rows expire after `auditLog.retentionDays`. With tenants
+ * (D-052), the event's tenant is a column too (null for the root IdP).
+ */
+function auditSchema(tenants: boolean) {
   return {
     samlIdpAuditEvent: {
       fields: {
@@ -70,6 +128,7 @@ function auditSchema() {
         userAgent: { type: "string", required: false, input: false },
         details: { type: "string", required: true, input: false },
         expiresAt: { type: "date", required: true, input: false, index: true },
+        ...(tenants ? { tenantId: { type: "string", required: false, input: false, index: true } } : {}),
       },
     },
   } satisfies BetterAuthPluginDBSchema;

@@ -1,17 +1,22 @@
 import type { ResolvedServiceProvider } from "../types";
 
 export interface SpRegistry {
-  /** Look up an SP by the exact entity ID from an AuthnRequest `<Issuer>`. */
-  byEntityId(entityId: string): ResolvedServiceProvider | undefined;
+  /**
+   * Look up an SP by the exact entity ID from an AuthnRequest `<Issuer>`, within one tenant
+   * (D-052): `""` is the root IdP. An SP of another tenant is never found.
+   */
+  byEntityId(entityId: string, tenantId?: string): ResolvedServiceProvider | undefined;
   byId(id: string): ResolvedServiceProvider | undefined;
   all(): readonly ResolvedServiceProvider[];
 }
 
+const scoped = (tenantId: string, entityId: string) => `${tenantId}\u0000${entityId}`;
+
 export function createSpRegistry(sps: ResolvedServiceProvider[]): SpRegistry {
-  const byEntity = new Map(sps.map((sp) => [sp.entityId, sp]));
+  const byEntity = new Map(sps.map((sp) => [scoped(sp.tenantId ?? "", sp.entityId), sp]));
   const byId = new Map(sps.map((sp) => [sp.id, sp]));
   return {
-    byEntityId: (entityId) => byEntity.get(entityId),
+    byEntityId: (entityId, tenantId = "") => byEntity.get(scoped(tenantId, entityId)),
     byId: (id) => byId.get(id),
     all: () => sps,
   };

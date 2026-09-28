@@ -1,11 +1,13 @@
 import { createAuthEndpoint } from "better-auth/api";
-import type { Idp } from "../saml/idp";
+import { type IdpIdentity, rootIdentity, tenantIdentity } from "../saml/identity";
+import { type Idp, idpBaseURL, METADATA_PATH } from "../saml/idp";
 import { newSamlId, signElement } from "../saml/response";
+import type { TenantDirectory } from "../saml/tenant-directory";
 import { parseXmlStrict } from "../saml/xml";
 import type { ResolvedSamlIdpOptions } from "../types";
 import { XMLSerializer } from "@xmldom/xmldom";
 
-export const METADATA_PATH = "/saml2/idp/metadata";
+export { METADATA_PATH };
 
 const MD = "urn:oasis:names:tc:SAML:2.0:metadata";
 
@@ -34,7 +36,7 @@ const metadataXml = new WeakMap<Idp, string>();
  * Metadata XML for an IdP, optionally signed. The EntityDescriptor gets an ID to reference, and
  * the ds:Signature becomes its first child (SAML metadata schema: Signature precedes Extensions).
  */
-export function renderMetadata(idp: Idp, options: ResolvedSamlIdpOptions): string {
+export function renderMetadata(idp: Idp, options: ResolvedSamlIdpOptions, identity: IdpIdentity): string {
   const xml = schemaOrder(idp.getMetadata());
   if (!options.signMetadata) return xml;
   const withId = xml.replace(/<((?:\w+:)?EntityDescriptor)\b/, `<$1 ID="${newSamlId()}"`);
@@ -42,9 +44,59 @@ export function renderMetadata(idp: Idp, options: ResolvedSamlIdpOptions): strin
     withId,
     "/*[local-name(.)='EntityDescriptor']",
     { reference: "/*[local-name(.)='EntityDescriptor']", action: "prepend" },
-    options.signing,
+    identity.signing,
   );
 }
+
+function metadataResponse(idp: Idp, options: ResolvedSamlIdpOptions, identity: IdpIdentity): Response {
+  let xml = metadataXml.get(idp);
+  if (xml === undefined) {
+    xml = renderMetadata(idp, options, identity);
+    metadataXml.set(idp, xml);
+  }
+  return new Response(xml, {
+    headers: {
+      "Content-Type": "application/samlmetadata+xml; charset=utf-8",
+      // Contents depend on the request's host unless `baseURL` is pinned: never let a
+      // shared cache serve one host's metadata for another.
+      "Cache-Control": "private, max-age=300",
+      Vary: "Host, X-Forwarded-Host, X-Forwarded-Proto",
+    },
+  });
+}
+
+/**
+ * A tenant's metadata (D-052): `/saml2/idp/metadata/<tenantKey>`. An unknown key, a disabled
+ * tenant and an organization that isn't a tenant all get this same answer, so the URL can't be
+ * used to learn which of them it is (multi-tenant design §5.2).
+ */
+const notFound = () => new Response("Not Found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
+
+export const tenantMetadataEndpoint = (
+  state: { options: ResolvedSamlIdpOptions; tenants: TenantDirectory | undefined },
+  getIdp: (identity: IdpIdentity) => Idp,
+) =>
+  createAuthEndpoint(
+    `${METADATA_PATH}/:tenant`,
+    {
+      method: "GET",
+      metadata: {
+        isAction: false,
+        openapi: {
+          operationId: "getSamlIdpTenantMetadata",
+          summary: "SAML IdP metadata of a tenant",
+          description: "Returns the SAML 2.0 Identity Provider metadata document of one tenant (an organization's own IdP identity)",
+          responses: { "200": { description: "SAML metadata XML" }, "404": { description: "No such tenant" } },
+        },
+      },
+    },
+    async (ctx) => {
+      const tenant = state.tenants && (await state.tenants.byKey(ctx.context.adapter as any, String(ctx.params?.tenant ?? "")));
+      if (!tenant) return notFound();
+      const identity = tenantIdentity(state.options, idpBaseURL(state.options, ctx.context.baseURL), tenant);
+      return metadataResponse(getIdp(identity), state.options, identity);
+    },
+  );
 
 export const metadataEndpoint = (getIdp: (baseURL: string) => Idp, options: ResolvedSamlIdpOptions) =>
   createAuthEndpoint(
@@ -62,21 +114,5 @@ export const metadataEndpoint = (getIdp: (baseURL: string) => Idp, options: Reso
         },
       },
     },
-    async (ctx) => {
-      const idp = getIdp(ctx.context.baseURL);
-      let xml = metadataXml.get(idp);
-      if (xml === undefined) {
-        xml = renderMetadata(idp, options);
-        metadataXml.set(idp, xml);
-      }
-      return new Response(xml, {
-        headers: {
-          "Content-Type": "application/samlmetadata+xml; charset=utf-8",
-          // Contents depend on the request's host unless `baseURL` is pinned: never let a
-          // shared cache serve one host's metadata for another.
-          "Cache-Control": "private, max-age=300",
-          Vary: "Host, X-Forwarded-Host, X-Forwarded-Proto",
-        },
-      });
-    },
+    async (ctx) => metadataResponse(getIdp(ctx.context.baseURL), options, rootIdentity(options, idpBaseURL(options, ctx.context.baseURL))),
   );

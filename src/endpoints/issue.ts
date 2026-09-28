@@ -9,6 +9,9 @@ import { logSafe, type SamlStatus, satisfiesAuthnContext, stepUpTarget } from ".
 import { buildSignedErrorResponse, buildSignedResponse, hasNonXmlChars, newSamlId } from "../saml/response";
 import type { SpMetadataCache } from "../saml/sp-metadata-refresh";
 import type { SpDirectory } from "../saml/sp-directory";
+import { type IdpIdentity, identityFor, rootIdentity, tenantIdentity } from "../saml/identity";
+import { idpBaseURL } from "../saml/idp";
+import type { TenantDirectory } from "../saml/tenant-directory";
 import { hasOrganizationPlugin, loadMemberships, matchOrganization, warnClaimableOrganizations } from "../organizations";
 import { recordParticipant, sessionIndexOf } from "../storage/participants";
 import { base64url, type ValidatedRequest } from "../storage/pending";
@@ -30,10 +33,31 @@ export interface PluginState {
   options: ResolvedSamlIdpOptions;
   directory: SpDirectory;
   metadata: SpMetadataCache;
+  /** With `tenants.enabled` (D-052). */
+  tenants: TenantDirectory | undefined;
 }
 
 /** Log sink for SP lookups (a stored SP that no longer validates is logged, not thrown). */
 export const lookupLog = (ctx: GenericEndpointContext) => ({ error: (m: string) => ctx.context.logger.error(m) });
+
+/** The IdP identity this SP deals with (D-052); undefined when its tenant is gone or disabled. */
+export function spIdentity(ctx: GenericEndpointContext, state: PluginState, sp: Pick<ResolvedServiceProvider, "tenantId">): Promise<IdpIdentity | undefined> {
+  return identityFor(state, ctx.context.adapter as any, ctx.context.baseURL, sp);
+}
+
+/**
+ * The identity a protocol URL belongs to (D-052): the root's (`tenantKey` undefined), or an
+ * enabled tenant's. Undefined for any other key, disabled and unknown alike.
+ */
+export async function routeIdentity(ctx: GenericEndpointContext, state: PluginState, tenantKey: string | undefined): Promise<IdpIdentity | undefined> {
+  const base = idpBaseURL(state.options, ctx.context.baseURL);
+  if (tenantKey === undefined) return rootIdentity(state.options, base);
+  const tenant = state.tenants && (await state.tenants.byKey(ctx.context.adapter as any, tenantKey));
+  return tenant ? tenantIdentity(state.options, base, tenant) : undefined;
+}
+
+/** The tenant field of events and requests: present only for a tenant's SP (D-052). */
+export const tenantOf = (sp: { tenantId?: string | null }) => (sp.tenantId ? { tenantId: sp.tenantId } : {});
 
 /** Find an SP by id: code first, then the database registry. */
 export function spById(ctx: GenericEndpointContext, state: PluginState, id: string) {
@@ -60,11 +84,18 @@ export function fail(
   state: Pick<PluginState, "options">,
   code: SamlIdpErrorCode,
   detail?: string,
-  who: { spId?: string; userId?: string } = {},
+  who: { spId?: string; userId?: string; tenantId?: string } = {},
 ): Response {
   const safe = detail ? logSafe(detail, 300) : undefined;
   ctx.context.logger.debug(`[saml-idp] ${code}${safe ? `: ${safe}` : ""}`);
-  emit(ctx, state.options, { type: "denied", code, ...(who.spId ? { spId: who.spId } : {}), ...(who.userId ? { userId: who.userId } : {}), ...(safe ? { detail: safe } : {}) });
+  emit(ctx, state.options, {
+    type: "denied",
+    code,
+    ...(who.spId ? { spId: who.spId } : {}),
+    ...(who.userId ? { userId: who.userId } : {}),
+    ...(safe ? { detail: safe } : {}),
+    ...tenantOf(who),
+  });
   const logout = code === "LOGOUT_NOT_SUPPORTED" || code === "LOGOUT_STATE_NOT_FOUND" || code === "INVALID_RETURN_TO";
   return errorPage(ERROR_STATUS[code], code, SAML_IDP_ERROR_CODES[code].message, logout ? "Sign-out could not be completed" : undefined);
 }
@@ -76,6 +107,7 @@ export function fail(
 export function samlError(
   ctx: GenericEndpointContext,
   state: PluginState,
+  identity: IdpIdentity,
   req: Pick<ValidatedRequest, "requestId" | "acsUrl" | "relayState" | "spId">,
   status: SamlStatus,
   userId?: string,
@@ -88,8 +120,9 @@ export function samlError(
     spId: req.spId,
     ...(userId ? { userId } : {}),
     ...(status.message ? { detail: logSafe(status.message, 300) } : {}),
+    ...tenantOf(identity),
   });
-  const res = buildSignedErrorResponse(state.options, { requestId: req.requestId, acsUrl: req.acsUrl, status, now: new Date() });
+  const res = buildSignedErrorResponse(identity, { requestId: req.requestId, acsUrl: req.acsUrl, status, now: new Date() });
   return autoPostResponse(req.acsUrl, res.base64, req.relayState);
 }
 
@@ -156,10 +189,15 @@ async function eligiblePrincipal(
  * NameID per format when the host supplies no `nameId` function (review finding #11):
  * persistent → opaque, stable, per-SP, never re-assigned (HMAC of user id, keyed with the
  * Better Auth secret); transient → one-time random; otherwise the (verified) email.
+ *
+ * A tenant SP's persistent NameID also covers the tenant (D-052): one SP (AWS) registered in two
+ * tenants would otherwise get the same value for a member of both organizations, letting the two
+ * link the person across them. The root IdP's derivation is unchanged, so existing values stay.
  */
 function defaultNameId(ctx: GenericEndpointContext, sp: ResolvedServiceProvider, user: SamlIdpUser): string {
   if (sp.nameIdFormat === NAMEID_FORMAT.persistent) {
-    const mac = createHmac("sha256", ctx.context.secret).update(`saml-idp:persistent\u0000${sp.entityId}\u0000${user.id}`).digest();
+    const input = sp.tenantId === undefined ? `saml-idp:persistent\u0000${sp.entityId}\u0000${user.id}` : `saml-idp:persistent\u0000${sp.tenantId}\u0000${sp.entityId}\u0000${user.id}`;
+    const mac = createHmac("sha256", ctx.context.secret).update(input).digest();
     return base64url(new Uint8Array(mac));
   }
   if (sp.nameIdFormat === NAMEID_FORMAT.transient) return newSamlId();
@@ -181,6 +219,7 @@ export function serviceProviderInfo(sp: ResolvedServiceProvider): ServiceProvide
     acsUrls: Object.freeze([...sp.acsUrls]),
     nameIdFormat: sp.nameIdFormat,
     organization: sp.organization ? Object.freeze({ ...sp.organization, ...(sp.organization.roles ? { roles: Object.freeze([...sp.organization.roles]) } : {}) }) : undefined,
+    tenantId: sp.tenantId ?? null,
   });
 }
 
@@ -193,10 +232,23 @@ export async function issueResponse(
 ): Promise<Response> {
   sp = await prepareSp(ctx, state, sp); // the encryption certificate may come from metadata
   const now = new Date();
+  // Which IdP answers (D-052): the SP's tenant's identity, and it must be the one the request was
+  // made to. A tenant disabled or removed since, or an SP moved to another tenant (only possible
+  // by editing the database), gets nothing: never the root identity instead.
+  const identity = await spIdentity(ctx, state, sp);
+  if (!identity) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", `SP ${sp.id}: its tenant doesn't exist or is disabled`, { spId: sp.id, ...tenantOf(sp) });
+  if ((request.tenantId ?? null) !== identity.tenantId)
+    return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", `SP ${sp.id} isn't in the tenant the request was made to any more`, { spId: sp.id, ...tenantOf(sp) });
+  // A tenant's identity is for its organization's members only (D-052, maintainer decision 2):
+  // resolving a tenant SP always sets that rule; refuse rather than issue if it's ever missing.
+  if (identity.tenantId !== null && sp.organization?.id !== identity.tenantId) {
+    ctx.context.logger.error(`[saml-idp] SP ${sp.id} is in tenant ${identity.tenantId} without its membership rule; not issuing`);
+    return fail(ctx, state, "INTERNAL_ERROR", undefined, { spId: sp.id, ...tenantOf(sp) });
+  }
   const principal = await eligiblePrincipal(ctx, state, session, now);
-  if ("code" in principal) return fail(ctx, state, principal.code, principal.detail, { spId: sp.id, userId: session.user.id });
+  if ("code" in principal) return fail(ctx, state, principal.code, principal.detail, { spId: sp.id, userId: session.user.id, ...tenantOf(sp) });
   const user = principal.user;
-  const who = { spId: sp.id, userId: user.id };
+  const who = { spId: sp.id, userId: user.id, ...tenantOf(sp) };
 
   // Organization plugin (D-031): memberships for the SP's organization rule, attributes and
   // authorize(). An SP that requires an organization fails closed without the plugin.
@@ -229,7 +281,7 @@ export async function issueResponse(
     const why = `authorize() denied user ${user.id} for SP ${sp.id}${denial?.reason ? `: ${logSafe(String(denial.reason), 200)}` : ""}`;
     if (denial?.reauthenticate === true) {
       if (request.isPassive)
-        return samlError(ctx, state, request, { code: "Responder", subCode: "NoPassive", message: "The identity provider requires the user to sign in again" }, user.id);
+        return samlError(ctx, state, identity, request, { code: "Responder", subCode: "NoPassive", message: "The identity provider requires the user to sign in again" }, user.id);
       // Loop guard: this request already made the user sign in again, and the fresh session
       // is still refused. Deny instead of sending them round once more.
       const freshForThis = request.forceAuthn && new Date(session.session.createdAt).getTime() >= request.createdAt;
@@ -261,11 +313,11 @@ export async function issueResponse(
       const noContext = { code: "Responder" as const, subCode: "NoAuthnContext" as const, message: "The requested authentication context is not available" };
       // "maximum": the session is already stronger than asked, and signing in again can't lower
       // what current() reports, so a round would be a dead end (review 5 R5-4).
-      if (!target || requested.comparison === "maximum") return samlError(ctx, state, request, noContext, user.id);
+      if (!target || requested.comparison === "maximum") return samlError(ctx, state, identity, request, noContext, user.id);
       if (request.isPassive)
-        return samlError(ctx, state, request, { code: "Responder", subCode: "NoPassive", message: "Stepping up authentication needs the user" }, user.id);
+        return samlError(ctx, state, identity, request, { code: "Responder", subCode: "NoPassive", message: "Stepping up authentication needs the user" }, user.id);
       // Loop guard: this request already made the user sign in again, and it still isn't enough.
-      if (request.forceAuthn && new Date(session.session.createdAt).getTime() >= request.createdAt) return samlError(ctx, state, request, noContext, user.id);
+      if (request.forceAuthn && new Date(session.session.createdAt).getTime() >= request.createdAt) return samlError(ctx, state, identity, request, noContext, user.id);
       ctx.context.logger.info(`[saml-idp] SP ${sp.id} needs ${logSafe(target, 200)}; session has ${logSafe(achievedClass, 200)}: asking the user to sign in again`);
       return parkForLogin(ctx, state, { ...request, forceAuthn: true, createdAt: now.getTime() }, { acr: target });
     }
@@ -302,11 +354,11 @@ export async function issueResponse(
   if (request.subject) {
     const formatOk = !request.subject.format || request.subject.format === sp.nameIdFormat || request.subject.format === NAMEID_FORMAT.unspecified;
     if (!formatOk || request.subject.nameId !== nameId)
-      return samlError(ctx, state, request, { code: "Responder", subCode: "UnknownPrincipal", message: "The signed-in user is not the requested subject" }, user.id);
+      return samlError(ctx, state, identity, request, { code: "Responder", subCode: "UnknownPrincipal", message: "The signed-in user is not the requested subject" }, user.id);
   }
 
   const sessionIndex = sessionIndexOf(ctx.context.secret, session.session.id, sp.id);
-  const signed = buildSignedResponse(state.options, {
+  const signed = buildSignedResponse(state.options, identity, {
     requestId: request.requestId,
     acsUrl: request.acsUrl,
     audience: sp.entityId,
@@ -347,6 +399,7 @@ export async function issueResponse(
     nameId,
     attributes: Object.keys(attributes),
     encrypted: signed.encrypted,
+    ...tenantOf(sp),
   });
   return autoPostResponse(request.acsUrl, signed.base64, request.relayState);
 }

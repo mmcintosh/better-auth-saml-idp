@@ -6,7 +6,7 @@ import { confirmPage } from "../saml/post-form";
 import { sweepExpired } from "../storage/sweep";
 import type { ValidatedRequest } from "../storage/pending";
 import type { ResolvedServiceProvider } from "../types";
-import { fail, issueResponse, type PluginState, spById } from "./issue";
+import { fail, issueResponse, type PluginState, spById, tenantOf } from "./issue";
 import { parkForLogin } from "./sso";
 
 export const INIT_PATH = "/saml2/idp/init";
@@ -87,6 +87,8 @@ export const initEndpoint = (state: PluginState) =>
         isPassive: false,
         subject: undefined,
         createdAt: Date.now(),
+        // Issued under the SP's tenant identity (D-052); the URL stays the same for every tenant.
+        ...tenantOf(sp),
       };
       // The session store, not the cookie cache: a revoked session must not get an assertion (R4-2).
       const session = await getAuthoritativeSessionFromCtx(ctx);

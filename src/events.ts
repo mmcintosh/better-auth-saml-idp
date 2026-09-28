@@ -35,6 +35,8 @@ export interface AssertionIssuedEvent extends EventBase {
   /** Names of the attributes sent (not their values). */
   attributes: string[];
   encrypted: boolean;
+  /** The SP's tenant (an organization id, D-052); absent for the root IdP. */
+  tenantId?: string;
 }
 
 /**
@@ -52,6 +54,8 @@ export interface DeniedEvent extends EventBase {
   userId?: string;
   /** Why, as in the debug log (log-safe, at most 300 characters). */
   detail?: string;
+  /** The tenant (an organization id, D-052) of the SP concerned, when it has one. */
+  tenantId?: string;
 }
 
 /** An IdP session was ended by Single Logout. */
@@ -65,6 +69,8 @@ export interface LogoutEvent extends EventBase {
   sessionId: string;
   /** The other SPs that will be sent a LogoutRequest, in order. */
   notifying: string[];
+  /** The tenant (D-052) of the SP whose LogoutRequest started it, when it has one. */
+  tenantId?: string;
 }
 
 /**
@@ -91,6 +97,8 @@ export interface SessionEndedEvent extends EventBase {
     nameId: string;
     nameIdFormat: string;
     sessionIndex: string;
+    /** The SP's tenant (D-052), when it has one and is still configured. */
+    tenantId?: string;
   }[];
   /** More SPs took part than the event lists (the cap is 200); all of them were marked ended. */
   truncated: boolean;
@@ -117,7 +125,7 @@ export interface AuditLogOptions {
 
 export const AUDIT_MODEL = "samlIdpAuditEvent";
 
-type Emitter = { events?: SamlIdpEventHandlers; auditLog?: { retentionDays: number } };
+type Emitter = { events?: SamlIdpEventHandlers; auditLog?: { retentionDays: number }; tenants?: unknown };
 
 /** The request's client IP, as Better Auth reads it. */
 function clientIp(ctx: GenericEndpointContext): string | undefined {
@@ -188,7 +196,7 @@ function deliver(sink: Sink, options: Emitter, full: SamlIdpEvent): void {
     }
     if (audit && options.auditLog) {
       try {
-        await sink.adapter.create({ model: AUDIT_MODEL, data: auditRow(full, options.auditLog.retentionDays) });
+        await sink.adapter.create({ model: AUDIT_MODEL, data: auditRow(full, options.auditLog.retentionDays, options.tenants !== undefined) });
       } catch (e) {
         sink.logger.error(`[saml-idp] could not write the audit log (${full.type})`, e);
       }
@@ -198,11 +206,13 @@ function deliver(sink: Sink, options: Emitter, full: SamlIdpEvent): void {
 }
 
 /** The table row: indexed columns for querying, the rest of the event as JSON. */
-export function auditRow(event: SamlIdpEvent, retentionDays: number) {
+export function auditRow(event: SamlIdpEvent, retentionDays: number, tenants = false) {
   const { type, at, ipAddress, userAgent, ...rest } = event;
   const spId = "spId" in rest ? rest.spId : undefined;
   const userId = "userId" in rest ? rest.userId : undefined;
   const code = event.type === "denied" ? event.code : undefined;
+  // The column exists only with tenants (D-052); null for the root IdP.
+  const tenantId = "tenantId" in rest ? rest.tenantId : undefined;
   return {
     type,
     at,
@@ -213,5 +223,6 @@ export function auditRow(event: SamlIdpEvent, retentionDays: number) {
     userAgent: userAgent ?? null,
     details: JSON.stringify(rest),
     expiresAt: new Date(at.getTime() + retentionDays * 86_400_000),
+    ...(tenants ? { tenantId: tenantId ?? null } : {}),
   };
 }

@@ -39,6 +39,8 @@ export interface ServiceProviderInfo {
   readonly nameIdFormat: string;
   /** The SP's organization rule, if it has one. */
   readonly organization: Readonly<{ slug?: string; id?: string; roles?: readonly string[] }> | undefined;
+  /** The SP's tenant (an organization id, D-052), or null for an SP of the root IdP. */
+  readonly tenantId: string | null;
 }
 
 /**
@@ -64,6 +66,44 @@ export interface ServiceProviderRecord {
   updatedAt: Date | null;
   /** The user who last saved it. */
   updatedBy: string | null;
+  /**
+   * Only with `tenants.enabled` (D-052): the SP's tenant (an organization id), or null for an SP
+   * of the root IdP. Absent otherwise, so records are unchanged without tenants.
+   */
+  tenantId?: string | null;
+}
+
+/**
+ * A tenant (D-052) as the registry API returns it: an organization with its own IdP identity.
+ * The URLs are what the tenant's SPs are configured with; the entity ID is the metadata URL.
+ */
+export interface TenantRecord {
+  organizationId: string;
+  /** In the tenant's URLs. The organization id unless another was chosen at creation; never changes. */
+  tenantKey: string;
+  entityId: string;
+  metadataUrl: string;
+  ssoUrl: string;
+  /** Null without `singleLogout`. */
+  sloUrl: string | null;
+  /** A disabled tenant's URLs answer as if it didn't exist, and its SPs can't sign in. */
+  enabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  /** The user who last saved it. */
+  updatedBy: string | null;
+}
+
+/** See `SamlIdpOptions.tenants`. */
+export interface TenantOptions {
+  enabled: boolean;
+  /**
+   * What tenants sign with. Only `"shared"` in this version: every tenant signs with `signing`,
+   * so only the host's administrators may manage tenant SPs (D-052). Per-tenant keys are planned.
+   */
+  keys?: "shared";
+  /** How long an isolate caches a tenant, and a miss. Default `registry.cacheSeconds` (60 s); 0 to 3600. */
+  cacheSeconds?: number;
 }
 
 /**
@@ -211,6 +251,13 @@ export interface ServiceProviderConfig {
   encryption?: ServiceProviderEncryptionConfig;
   /** Override the global `sessionNotOnOrAfter` for this SP. */
   sessionNotOnOrAfter?: SessionLimit;
+  /**
+   * With `tenants.enabled` (D-052): the organization id of the tenant this SP belongs to. The SP
+   * then sees the tenant's IdP identity (entity ID, SSO and SLO URLs), is found only through the
+   * tenant's URLs, and only members of that organization may sign in to it. `organization` may
+   * only narrow that with `roles` (`{ id: <this tenant>, roles }`). Omit for the root IdP.
+   */
+  tenant?: string;
 }
 
 export interface ServiceProviderEncryptionConfig {
@@ -344,11 +391,15 @@ export interface SamlIdpOptions {
     };
     samlIdpServiceProvider?: {
       modelName?: string;
-      fields?: Partial<Record<"spId" | "entityId" | "config" | "enabled" | "createdAt" | "updatedAt" | "updatedBy", string>>;
+      fields?: Partial<Record<"spId" | "entityId" | "config" | "enabled" | "createdAt" | "updatedAt" | "updatedBy" | "tenantId" | "lookupKey", string>>;
     };
     samlIdpAuditEvent?: {
       modelName?: string;
-      fields?: Partial<Record<"type" | "at" | "spId" | "userId" | "code" | "ipAddress" | "userAgent" | "details" | "expiresAt", string>>;
+      fields?: Partial<Record<"type" | "at" | "spId" | "userId" | "code" | "ipAddress" | "userAgent" | "details" | "expiresAt" | "tenantId", string>>;
+    };
+    samlIdpTenant?: {
+      modelName?: string;
+      fields?: Partial<Record<"organizationId" | "tenantKey" | "enabled" | "createdAt" | "updatedAt" | "updatedBy", string>>;
     };
   };
   /**
@@ -409,6 +460,17 @@ export interface SamlIdpOptions {
   sessionNotOnOrAfter?: SessionLimit;
   /** Validator run on every inbound SAML message. Default: `libxml2Validator()`. */
   schemaValidator?: SchemaValidator;
+  /**
+   * Multi-tenant IdP (D-052), off by default: an IdP identity per Better Auth organization, next
+   * to the root one. A tenant has its own entity ID, metadata, and SSO and SLO URLs
+   * (`/saml2/idp/{metadata,sso,slo}/<tenantKey>`); in this version all tenants sign with
+   * `signing`. The host's administrators create tenants through the registry API; SPs join one
+   * with `tenant`, and only the organization's members may sign in to them. Needs the
+   * organization plugin, `registry.enabled` and a pinned `baseURL`. Adds the `samlIdpTenant`
+   * table and columns to `samlIdpServiceProvider` (and `samlIdpAuditEvent`); see the
+   * multi-tenant guide.
+   */
+  tenants?: TenantOptions;
 }
 
 /** A service provider after option validation, with defaults applied. */
@@ -441,6 +503,8 @@ export interface ResolvedServiceProvider {
   encryption?: import("./saml/encrypt").AssertionEncryption;
   /** Effective `sessionNotOnOrAfter` (per-SP override, else the global setting). */
   sessionNotOnOrAfter: SessionLimit;
+  /** The tenant's organization id (D-052); undefined for an SP of the root IdP. */
+  tenantId: string | undefined;
 }
 
 export interface ResolvedSamlIdpOptions {
@@ -470,6 +534,8 @@ export interface ResolvedSamlIdpOptions {
   events: import("./events").SamlIdpEventHandlers | undefined;
   auditLog: { retentionDays: number } | undefined;
   registry: { canManage: NonNullable<SamlIdpOptions["registry"]>["canManage"]; permissions: boolean; cacheMs: number; authorize: ResolvedServiceProvider["authorize"] | undefined } | undefined;
+  /** Multi-tenant IdP (D-052); undefined when off. */
+  tenants: { cacheMs: number } | undefined;
   /** Non-fatal configuration warnings, logged once at startup. */
   warnings: string[];
 }

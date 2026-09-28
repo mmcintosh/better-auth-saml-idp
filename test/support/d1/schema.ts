@@ -1,4 +1,5 @@
 // Drizzle schema for the D1 test host: better-auth core + better-auth-cloudflare geolocation
+// + organization plugin (tenant tests, D-052)
 // + admin plugin + saml-idp. Mirrors better-auth-cloudflare's examples/hono conventions
 // (usePlural, snake_case columns). Field maps use Drizzle property keys (ADDENDUM-01 R5).
 import { sql } from "drizzle-orm";
@@ -43,6 +44,8 @@ export const sessions = sqliteTable(
     longitude: text("longitude"),
     // admin plugin
     impersonatedBy: text("impersonated_by"),
+    // organization plugin (migration 0007)
+    activeOrganizationId: text("active_organization_id"),
   },
   (t) => [index("sessions_userId_idx").on(t.userId)],
 );
@@ -113,6 +116,9 @@ export const samlIdpServiceProviders = sqliteTable("saml_idp_service_providers",
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   updatedBy: text("updated_by"),
+  // tenants (D-052, migration 0007): "" for the root IdP; lookupKey is UNIQUE (NULL until backfilled)
+  tenantId: text("tenant_id").notNull().default(""),
+  lookupKey: text("lookup_key").unique(),
 });
 
 /** Which SPs got assertions in which session: for Single Logout (D-028) and `events.onSessionEnded` (D-043). */
@@ -151,6 +157,7 @@ export const samlIdpAuditEvents = sqliteTable(
     userAgent: text("user_agent"),
     details: text("details").notNull(),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    tenantId: text("tenant_id"), // D-052, migration 0007
   },
   (t) => [
     index("saml_idp_audit_events_at_idx").on(t.at),
@@ -161,4 +168,62 @@ export const samlIdpAuditEvents = sqliteTable(
   ],
 );
 
-export const schema = { users, sessions, accounts, verifications, rateLimits, samlIdpSeenRequests, samlIdpServiceProviders, samlIdpSessionParticipants, samlIdpAuditEvents };
+/** Tenants (only needed with `tenants.enabled`; D-052, migration 0007). */
+export const samlIdpTenants = sqliteTable("saml_idp_tenants", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().unique(),
+  tenantKey: text("tenant_key").notNull().unique(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  updatedBy: text("updated_by"),
+});
+
+// organization plugin (migration 0007): tenants are organizations, so tenant tests need these on D1.
+export const organizations = sqliteTable("organizations", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  logo: text("logo"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  metadata: text("metadata"),
+});
+
+export const members = sqliteTable(
+  "members",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [index("members_organization_idx").on(t.organizationId), index("members_user_idx").on(t.userId)],
+);
+
+export const invitations = sqliteTable("invitations", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  role: text("role"),
+  status: text("status").notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  inviterId: text("inviter_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+});
+
+export const schema = {
+  users,
+  sessions,
+  accounts,
+  verifications,
+  rateLimits,
+  organizations,
+  members,
+  invitations,
+  samlIdpSeenRequests,
+  samlIdpServiceProviders,
+  samlIdpSessionParticipants,
+  samlIdpAuditEvents,
+  samlIdpTenants,
+};

@@ -8,6 +8,7 @@ import { describe, expect, inject, it } from "vitest";
 import { compileAttributeMap } from "../../src/attributes";
 import { resolveOptions } from "../../src/options";
 import { decodeAuthnRequest, logSafe, parseAuthnRequest, parseRedirectQuery, SamlRequestError } from "../../src/saml/request";
+import { rootIdentity } from "../../src/saml/identity";
 import { buildSignedResponse, escapeXml } from "../../src/saml/response";
 import { libxml2Validator } from "../../src/saml/validator";
 import { parseXmlStrict, XmlParseError } from "../../src/saml/xml";
@@ -194,7 +195,7 @@ describe("fuzz: whatever the user data, the issued Response is valid and verifie
         const attributes = Object.fromEntries(attrs);
         let built: ReturnType<typeof buildSignedResponse>;
         try {
-          built = buildSignedResponse(options, {
+          built = buildSignedResponse(options, rootIdentity(options, "https://auth.test/api/auth"), {
             requestId: "_r1",
             acsUrl: "https://sp.test/acs",
             audience: "https://sp.test/metadata",

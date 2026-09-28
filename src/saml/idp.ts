@@ -1,5 +1,6 @@
 import * as samlify from "samlify";
-import type { ResolvedSamlIdpOptions, SignatureAlgorithm } from "../types";
+import type { ResolvedSamlIdpOptions, ResolvedServiceProvider, SignatureAlgorithm } from "../types";
+import { type IdpIdentity, rootIdentity } from "./identity";
 
 export const BINDING_REDIRECT = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect";
 export const BINDING_POST = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
@@ -11,6 +12,7 @@ export const SIGNATURE_ALGORITHM_URI: Record<SignatureAlgorithm, string> = {
 };
 
 export const SSO_PATH = "/saml2/idp/sso";
+export const METADATA_PATH = "/saml2/idp/metadata";
 
 export type Idp = ReturnType<typeof samlify.IdentityProvider>;
 
@@ -33,31 +35,33 @@ function quietly<T>(build: () => T): T {
   }
 }
 
-/** Builds the samlify IdentityProvider for a given Better Auth base URL. */
-export function createIdp(options: ResolvedSamlIdpOptions, baseURL: string): Idp {
-  const ssoUrl = `${baseURL.replace(/\/+$/, "")}${SSO_PATH}`;
-  const nameIdFormats = [...new Set(options.serviceProviders.map((sp) => sp.nameIdFormat))];
+/**
+ * Builds the samlify IdentityProvider for one IdP identity (the root, or a tenant's, D-052),
+ * advertising the NameID formats of that identity's SPs in code.
+ */
+export function createIdp(options: ResolvedSamlIdpOptions, identity: IdpIdentity, serviceProviders: readonly ResolvedServiceProvider[]): Idp {
+  const nameIdFormats = [...new Set(serviceProviders.map((sp) => sp.nameIdFormat))];
   return quietly(() => samlify.IdentityProvider({
-    entityID: options.entityId,
-    privateKey: options.signing.privateKey,
-    signingCert: [options.signing.certificate, ...options.signing.additionalCertificates],
+    entityID: identity.entityId,
+    privateKey: identity.signing.privateKey,
+    signingCert: [identity.signing.certificate, ...identity.signing.additionalCertificates],
     isAssertionEncrypted: false,
     // Per-SP enforcement happens in the sso endpoint; metadata advertises the strict
     // setting only if every SP requires it.
     // Only a promise we can keep: with a registry, SPs added later may not sign.
     wantAuthnRequestsSigned:
-      options.registry === undefined && options.serviceProviders.length > 0 && options.serviceProviders.every((sp) => sp.requestSignatures === "require"),
-    requestSignatureAlgorithm: SIGNATURE_ALGORITHM_URI[options.signing.signatureAlgorithm],
+      options.registry === undefined && serviceProviders.length > 0 && serviceProviders.every((sp) => sp.requestSignatures === "require"),
+    requestSignatureAlgorithm: SIGNATURE_ALGORITHM_URI[identity.signing.signatureAlgorithm],
     nameIDFormat: nameIdFormats,
     singleSignOnService: [
-      { Binding: BINDING_REDIRECT, Location: ssoUrl },
-      { Binding: BINDING_POST, Location: ssoUrl },
+      { Binding: BINDING_REDIRECT, Location: identity.ssoUrl },
+      { Binding: BINDING_POST, Location: identity.ssoUrl },
     ],
     ...(options.singleLogout
       ? {
           singleLogoutService: [
-            { Binding: BINDING_REDIRECT, Location: `${baseURL.replace(/\/+$/, "")}/saml2/idp/slo` },
-            { Binding: BINDING_POST, Location: `${baseURL.replace(/\/+$/, "")}/saml2/idp/slo` },
+            { Binding: BINDING_REDIRECT, Location: identity.sloUrl },
+            { Binding: BINDING_POST, Location: identity.sloUrl },
           ],
         }
       : {}),
@@ -89,20 +93,40 @@ const MAX_CACHED_BASE_URLS = 32;
  * every Host header a client sends (review finding #7).
  */
 export function idpCache(options: ResolvedSamlIdpOptions) {
-  const cache = new Map<string, Idp>();
+  const cache = lru(MAX_CACHED_BASE_URLS);
+  // The root IdP's SPs in code; without tenants, all of them.
+  const rootSps = options.serviceProviders.filter((sp) => sp.tenantId === undefined);
   return (requestBaseURL: string) => {
     const baseURL = idpBaseURL(options, requestBaseURL);
-    let idp = cache.get(baseURL);
+    return cache(baseURL, () => createIdp(options, rootIdentity(options, baseURL), rootSps));
+  };
+}
+
+const MAX_CACHED_TENANTS = 256;
+
+/** samlify IdP per tenant (D-052), bounded like the root's: tenants are unbounded in number. */
+export function tenantIdpCache(options: ResolvedSamlIdpOptions) {
+  const cache = lru(MAX_CACHED_TENANTS);
+  return (identity: IdpIdentity) =>
+    cache(`${identity.entityId}\u0000${identity.tenantId}`, () =>
+      createIdp(options, identity, options.serviceProviders.filter((sp) => sp.tenantId === identity.tenantId)),
+    );
+}
+
+function lru(max: number) {
+  const cache = new Map<string, Idp>();
+  return (key: string, build: () => Idp) => {
+    let idp = cache.get(key);
     if (idp) {
-      cache.delete(baseURL); // refresh LRU position
+      cache.delete(key); // refresh LRU position
     } else {
-      idp = createIdp(options, baseURL);
-      if (cache.size >= MAX_CACHED_BASE_URLS) {
+      idp = build();
+      if (cache.size >= max) {
         const oldest = cache.keys().next();
         if (!oldest.done) cache.delete(oldest.value);
       }
     }
-    cache.set(baseURL, idp);
+    cache.set(key, idp);
     return idp;
   };
 }

@@ -28,6 +28,11 @@ export interface ValidatedRequest {
   createdAt: number;
   /** The SP's RequestedAuthnContext, judged at issuance against the session (step-up, D-047). */
   authnContext?: { comparison: "exact" | "minimum" | "maximum" | "better"; classRefs: string[]; hasDeclRefs: boolean };
+  /**
+   * The tenant (organization id) the request was made to (D-052); absent for the root IdP. An
+   * SP whose tenant differs by the time the request resumes gets nothing.
+   */
+  tenantId?: string;
 }
 
 export interface PendingRequest extends ValidatedRequest {

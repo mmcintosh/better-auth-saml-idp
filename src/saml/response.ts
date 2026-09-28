@@ -4,6 +4,7 @@ import type { SamlStatus } from "./request";
 import type { DigestAlgorithm, ResolvedSamlIdpOptions, SamlAttributeValue, SignatureAlgorithm, SignedParts } from "../types";
 import { SIGNATURE_ALGORITHM_URI } from "./idp";
 import { type AssertionEncryption, encryptAssertionInResponse } from "./encrypt";
+import type { IdpIdentity } from "./identity";
 
 const DIGEST_URI: Record<DigestAlgorithm, string> = {
   sha256: "http://www.w3.org/2001/04/xmlenc#sha256",
@@ -99,7 +100,7 @@ function attributeStatement(attributes: Record<string, SamlAttributeValue>): str
 const inResponseToAttr = (requestId: string | undefined) => (requestId === undefined ? "" : ` InResponseTo="${escapeXml(requestId)}"`);
 
 /** The unsigned Response document, with every field from SPEC §6 step 7. */
-export function buildResponseXml(options: ResolvedSamlIdpOptions, input: BuildResponseInput) {
+export function buildResponseXml(options: ResolvedSamlIdpOptions, identity: IdpIdentity, input: BuildResponseInput) {
   const responseId = newSamlId();
   const assertionId = newSamlId();
   const issueInstant = instant(input.now);
@@ -110,10 +111,10 @@ export function buildResponseXml(options: ResolvedSamlIdpOptions, input: BuildRe
   const xml =
     `<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"` +
     ` ID="${responseId}" Version="2.0" IssueInstant="${issueInstant}" Destination="${e(input.acsUrl)}"${inResponseTo}>` +
-    `<saml:Issuer>${e(options.entityId)}</saml:Issuer>` +
+    `<saml:Issuer>${e(identity.entityId)}</saml:Issuer>` +
     `<samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>` +
     `<saml:Assertion ID="${assertionId}" Version="2.0" IssueInstant="${issueInstant}">` +
-    `<saml:Issuer>${e(options.entityId)}</saml:Issuer>` +
+    `<saml:Issuer>${e(identity.entityId)}</saml:Issuer>` +
     `<saml:Subject>` +
     `<saml:NameID Format="${e(input.nameIdFormat)}">${e(input.nameId)}</saml:NameID>` +
     `<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">` +
@@ -183,15 +184,16 @@ function sign(xml: string, target: "Assertion" | "Response", signing: Signing): 
  */
 export function buildSignedResponse(
   options: ResolvedSamlIdpOptions,
+  identity: IdpIdentity,
   input: BuildResponseInput,
   parts: SignedParts = options.signing.sign,
   encryption?: AssertionEncryption,
 ) {
-  const built = buildResponseXml(options, input);
+  const built = buildResponseXml(options, identity, input);
   let xml = built.xml;
-  if (parts !== "response") xml = sign(xml, "Assertion", options.signing);
+  if (parts !== "response") xml = sign(xml, "Assertion", identity.signing);
   if (encryption) xml = encryptAssertionInResponse(xml, encryption);
-  if (parts !== "assertion") xml = sign(xml, "Response", options.signing);
+  if (parts !== "assertion") xml = sign(xml, "Response", identity.signing);
   return { ...built, xml, base64: toBase64(xml), encrypted: encryption !== undefined };
 }
 
@@ -209,7 +211,7 @@ const STATUS = "urn:oasis:names:tc:SAML:2.0:status:";
  * validated ACS URL so the SP learns why (NoPassive, NoAuthnContext, …). Always signed.
  */
 export function buildSignedErrorResponse(
-  options: ResolvedSamlIdpOptions,
+  identity: IdpIdentity,
   input: { requestId: string | undefined; acsUrl: string; status: SamlStatus; now: Date },
 ) {
   const e = escapeXml;
@@ -218,10 +220,10 @@ export function buildSignedErrorResponse(
   const xml =
     `<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"` +
     ` ID="${responseId}" Version="2.0" IssueInstant="${instant(input.now)}" Destination="${e(input.acsUrl)}"${inResponseToAttr(input.requestId)}>` +
-    `<saml:Issuer>${e(options.entityId)}</saml:Issuer>` +
+    `<saml:Issuer>${e(identity.entityId)}</saml:Issuer>` +
     `<samlp:Status><samlp:StatusCode Value="${STATUS}${input.status.code}">${sub}</samlp:StatusCode>` +
     `<samlp:StatusMessage>${e(input.status.message)}</samlp:StatusMessage></samlp:Status>` +
     `</samlp:Response>`;
-  const signed = sign(xml, "Response", options.signing);
+  const signed = sign(xml, "Response", identity.signing);
   return { xml: signed, responseId, base64: toBase64(signed) };
 }

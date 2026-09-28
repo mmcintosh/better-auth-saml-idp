@@ -130,6 +130,7 @@ const serviceProviderShape = z.object({
       })
       .strict()
       .optional(),
+    tenant: z.string().min(1).max(256).optional(),
 });
 
 type SpRefinable = Pick<
@@ -267,6 +268,8 @@ const optionsSchema = z
                 createdAt: z.string().min(1),
                 updatedAt: z.string().min(1),
                 updatedBy: z.string().min(1),
+                tenantId: z.string().min(1),
+                lookupKey: z.string().min(1),
               })
               .partial()
               .strict()
@@ -278,7 +281,18 @@ const optionsSchema = z
           .object({
             modelName: z.string().min(1).optional(),
             fields: z
-              .object(Object.fromEntries(["type", "at", "spId", "userId", "code", "ipAddress", "userAgent", "details", "expiresAt"].map((f) => [f, z.string().min(1)])))
+              .object(Object.fromEntries(["type", "at", "spId", "userId", "code", "ipAddress", "userAgent", "details", "expiresAt", "tenantId"].map((f) => [f, z.string().min(1)])))
+              .partial()
+              .strict()
+              .optional(),
+          })
+          .strict()
+          .optional(),
+        samlIdpTenant: z
+          .object({
+            modelName: z.string().min(1).optional(),
+            fields: z
+              .object(Object.fromEntries(["organizationId", "tenantKey", "enabled", "createdAt", "updatedAt", "updatedBy"].map((f) => [f, z.string().min(1)])))
               .partial()
               .strict()
               .optional(),
@@ -308,6 +322,16 @@ const optionsSchema = z
         permissions: z.boolean().optional(),
         cacheSeconds: z.number().int().min(0).max(3600).optional(),
         authorize: fn<ResolvedServiceProvider["authorize"]>().optional(),
+      })
+      .strict()
+      .optional(),
+    tenants: z
+      .object({
+        enabled: z.boolean(),
+        // "per-tenant" and `delegation` are recognised only to refuse them with a reason (below).
+        keys: z.enum(["shared", "per-tenant"]).optional(),
+        delegation: z.unknown().optional(),
+        cacheSeconds: z.number().int().min(0).max(3600).optional(),
       })
       .strict()
       .optional(),
@@ -414,6 +438,22 @@ interface SpDefaults {
   sessionNotOnOrAfter: SessionLimit;
   relayStateMaxBytes: number;
   authorize?: ResolvedServiceProvider["authorize"];
+  /** `tenants.enabled` (D-052). */
+  tenants: boolean;
+}
+
+/**
+ * A tenant SP's organization rule (D-052): membership of the tenant's organization is implied
+ * and can't be turned off; an explicit rule may only name the same organization by id, to add
+ * `roles`. A slug could name another organization later (slugs change), so it is refused.
+ */
+function tenantOrganization(sp: ParsedServiceProvider, path: string, d: SpDefaults, issues: string[]): ResolvedServiceProvider["organization"] {
+  if (sp.tenant === undefined) return sp.organization;
+  if (!d.tenants) issues.push(`${path}.tenant: requires tenants.enabled`);
+  const rule = sp.organization;
+  if (rule && (rule.slug !== undefined || rule.id !== sp.tenant))
+    issues.push(`${path}.organization: a tenant SP's members are its tenant's; give { id: "${sp.tenant}", roles } to narrow by role, or leave it out`);
+  return { id: sp.tenant, ...(rule?.roles ? { roles: rule.roles } : {}) };
 }
 
 /** Per-SP checks and defaults, shared by code SPs and database-registry SPs. */
@@ -483,7 +523,7 @@ function resolveServiceProvider(sp: ParsedServiceProvider, path: string, d: SpDe
         }
       : undefined,
     requestSignatures: sp.requestSignatures ?? (sp.spCertificates !== undefined || sp.metadata !== undefined ? "verify-if-signed" : "ignore"),
-    organization: sp.organization,
+    organization: tenantOrganization(sp, path, d, issues),
     singleLogoutService: sp.singleLogoutService
       ? {
           url: sp.singleLogoutService.url,
@@ -499,6 +539,7 @@ function resolveServiceProvider(sp: ParsedServiceProvider, path: string, d: SpDe
     sign: sp.sign ?? d.sign,
     sessionNotOnOrAfter: sp.sessionNotOnOrAfter ?? d.sessionNotOnOrAfter,
     ...(encryption ? { encryption } : {}),
+    tenantId: sp.tenant,
   };
 }
 
@@ -518,7 +559,7 @@ export function resolveStoredServiceProvider(
   const serviceProvider = resolveServiceProvider(
     parsed.data,
     "serviceProvider",
-    { sign: options.signing.sign, sessionNotOnOrAfter: options.sessionNotOnOrAfter, relayStateMaxBytes: options.relayStateMaxBytes, authorize },
+    { sign: options.signing.sign, sessionNotOnOrAfter: options.sessionNotOnOrAfter, relayStateMaxBytes: options.relayStateMaxBytes, authorize, tenants: options.tenants !== undefined },
     issues,
     warnings,
   );
@@ -548,21 +589,39 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
   const lifetime = o.assertionLifetimeSeconds ?? 300;
   if (lifetime > 300) warnings.push(`assertionLifetimeSeconds is ${lifetime}; the recommended maximum is 300`);
 
+  // Ids are global (every stored row and replay key is per spId); entity IDs are unique per
+  // tenant, since one SP (AWS, Google) can be registered in several (D-052).
   const ids = new Set<string>();
   const entityIds = new Set<string>();
   for (const [i, sp] of o.serviceProviders.entries()) {
+    const scoped = `${sp.tenant ?? ""}\u0000${sp.entityId}`;
     if (ids.has(sp.id)) issues.push(`serviceProviders.${i}.id: duplicate id "${sp.id}"`);
-    if (entityIds.has(sp.entityId)) issues.push(`serviceProviders.${i}.entityId: duplicate entityId "${sp.entityId}"`);
+    if (entityIds.has(scoped)) issues.push(`serviceProviders.${i}.entityId: duplicate entityId "${sp.entityId}"${sp.tenant === undefined ? "" : ` in tenant "${sp.tenant}"`}`);
     ids.add(sp.id);
-    entityIds.add(sp.entityId);
+    entityIds.add(scoped);
+  }
+
+  const tenants = o.tenants?.enabled ? o.tenants : undefined;
+  if (tenants) {
+    if (tenants.keys === "per-tenant") issues.push('tenants.keys: "per-tenant" is not available in this version; tenants sign with `signing` ("shared")');
+    // Multi-tenant design §5.1: under one shared key, only the Issuer string tells tenants apart,
+    // so an organization's own administrators must not manage its SPs until each tenant has its key.
+    if (tenants.delegation !== undefined)
+      issues.push('tenants.delegation: requires tenants.keys: "per-tenant"; with a shared signing key only the host\'s administrators may manage tenant SPs');
+    if (!o.registry?.enabled) issues.push("tenants.enabled: requires registry.enabled (tenants and their SPs are stored in the database)");
   }
 
   const spDefaults: SpDefaults = {
     sign: o.signing.sign ?? "both",
     sessionNotOnOrAfter: o.sessionNotOnOrAfter ?? false,
     relayStateMaxBytes: o.relayStateMaxBytes ?? RELAY_STATE_HARD_CAP,
+    tenants: tenants !== undefined,
   };
   const serviceProviders = o.serviceProviders.map((sp, i) => resolveServiceProvider(sp, `serviceProviders.${i}`, spDefaults, issues, warnings));
+  for (const [i, sp] of serviceProviders.entries()) {
+    const other = serviceProviders.slice(0, i).find((o2) => overlaps(o2, sp));
+    if (other) warnings.push(`serviceProviders.${i}: ${overlapWarning(other)}`);
+  }
 
   if (o.serviceProviders.length === 0 && !o.registry?.enabled)
     warnings.push("serviceProviders is empty: every AuthnRequest will be rejected");
@@ -608,6 +667,23 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
     registry: o.registry?.enabled
       ? { canManage: o.registry.canManage, permissions: o.registry.permissions ?? false, cacheMs: (o.registry.cacheSeconds ?? 60) * 1000, authorize: o.registry.authorize }
       : undefined,
+    tenants: tenants ? { cacheMs: (tenants.cacheSeconds ?? o.registry?.cacheSeconds ?? 60) * 1000 } : undefined,
     warnings,
   };
+}
+
+/**
+ * Two SPs in different tenants (or a tenant and the root) with the same entity ID and an ACS URL
+ * in common: an assertion one identity issues is addressed exactly as one the other would be.
+ * Under the shared key only the SP's check of the Issuer tells them apart (multi-tenant design
+ * §5.1). Legitimate for SPs such as AWS, which use one entity ID for every customer; worth a
+ * warning either way.
+ */
+export function overlaps(a: Pick<ResolvedServiceProvider, "entityId" | "acsUrls" | "tenantId">, b: Pick<ResolvedServiceProvider, "entityId" | "acsUrls" | "tenantId">): boolean {
+  return (a.tenantId ?? "") !== (b.tenantId ?? "") && a.entityId === b.entityId && a.acsUrls.some((u) => b.acsUrls.includes(u));
+}
+
+export function overlapWarning(other: Pick<ResolvedServiceProvider, "id" | "tenantId">): string {
+  const where = other.tenantId === undefined ? "the root IdP" : `tenant ${other.tenantId}`;
+  return `same entity ID and an ACS URL as SP ${other.id} in ${where}. Tenants share one signing key, so only the SP's check of the assertion's Issuer keeps one tenant's assertions out of the other's account: make sure it checks it, or keep the SP in one tenant`;
 }

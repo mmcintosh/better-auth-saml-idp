@@ -12,7 +12,7 @@ type _ResolvedOptions = Pkg.ResolvedSamlIdpOptions;
 // @ts-expect-error internal
 type _ResolvedSp = Pkg.ResolvedServiceProvider;
 // And these must stay exported.
-type _Public = [Pkg.SamlIdpOptions, Pkg.ServiceProviderConfig, Pkg.StoredServiceProviderConfig, Pkg.ServiceProviderInfo, Pkg.ServiceProviderRecord, Pkg.RequestSignaturePolicy, Pkg.SignedParts, Pkg.NameIdSource, Pkg.SamlIdpErrorCode, Pkg.SamlIdpEventHandlers];
+type _Public = [Pkg.TenantOptions, Pkg.TenantRecord, Pkg.SamlIdpOptions, Pkg.ServiceProviderConfig, Pkg.StoredServiceProviderConfig, Pkg.ServiceProviderInfo, Pkg.ServiceProviderRecord, Pkg.RequestSignaturePolicy, Pkg.SignedParts, Pkg.NameIdSource, Pkg.SamlIdpErrorCode, Pkg.SamlIdpEventHandlers];
 
 describe("public API: authorize() receives a read-only ServiceProviderInfo", () => {
   it("exactly the public fields, frozen", async () => {
@@ -35,7 +35,9 @@ describe("public API: authorize() receives a read-only ServiceProviderInfo", () 
     const browser = new Browser(auth);
     await browser.signUp();
     await readAutoPost(await browser.fetch(await redirectUrl(authnRequestXml().xml)));
-    expect(Object.keys(seen!).sort()).toEqual(["acsUrls", "entityId", "id", "nameIdFormat", "organization"]);
+    // D-052 added tenantId (null for the root IdP), deliberately: the view is additive.
+    expect(Object.keys(seen!).sort()).toEqual(["acsUrls", "entityId", "id", "nameIdFormat", "organization", "tenantId"]);
+    expect(seen!.tenantId).toBeNull();
     expect(seen).toMatchObject({ id: "test-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS] });
     expect(Object.isFrozen(seen)).toBe(true);
     expect(Object.isFrozen(seen!.acsUrls)).toBe(true);

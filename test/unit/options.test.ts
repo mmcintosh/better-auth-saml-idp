@@ -53,7 +53,7 @@ describe("resolveOptions: defaults", () => {
     const user = { id: "u1", email: "a@example.com", name: "A", emailVerified: true, createdAt: new Date(), updatedAt: new Date() };
     expect(s!.nameId).toBeUndefined(); // default is per format, computed at issuance
     expect(s!.attributes(user, { organizations: [], organization: undefined })).toEqual({});
-    expect(await s!.authorize({ user, session: {} as any, serviceProvider: s!, organizations: [] })).toBe(true);
+    expect(await s!.authorize({ user, session: {} as any, serviceProvider: { ...s!, tenantId: null }, organizations: [] })).toBe(true);
   });
 
   it("accepts an http loopback ACS URL for local development", () => {

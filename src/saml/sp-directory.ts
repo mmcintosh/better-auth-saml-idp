@@ -2,7 +2,13 @@
 // `samlIdpServiceProvider` table. Code always wins. Stored SPs are re-validated on every load
 // (a row edited by hand can't bypass the option schema) and cached per isolate, misses too, so
 // requests naming unknown issuers don't each cost a database read.
+//
+// With tenants (D-052), an entity ID is looked up within one tenant only: the route's. A stored
+// SP is then found by `lookupKey` (a hash of tenant and entity ID), and the row's tenant is
+// checked against the route's after loading, so tenant B's URL can never reach tenant A's SP,
+// whatever the SP's Issuer says.
 import { resolveStoredServiceProvider } from "../options";
+import { sha256b64url } from "../storage/pending";
 import type { ResolvedSamlIdpOptions, ResolvedServiceProvider } from "../types";
 import { createSpRegistry } from "./sp-registry";
 
@@ -18,6 +24,10 @@ export interface StoredSpRow {
   createdAt: Date;
   updatedAt: Date;
   updatedBy?: string | null;
+  /** With tenants (D-052): "" for the root IdP. */
+  tenantId?: string | null;
+  /** With tenants (D-052): `lookupKeyOf(tenantId, entityId)`; null until backfilled. */
+  lookupKey?: string | null;
 }
 
 export type DirectoryAdapter = {
@@ -30,6 +40,9 @@ export interface DirectoryLogger {
 
 /** SQLite/D1 may hand booleans back as 0/1 (or "0"/"1"). */
 export const isEnabled = (v: StoredSpRow["enabled"]) => v === true || v === 1 || v === "1" || v === "true";
+
+/** The UNIQUE per-tenant key of a stored SP (D-052); `tenantId` is "" for the root IdP. */
+export const lookupKeyOf = (tenantId: string, entityId: string) => sha256b64url(`saml-idp:sp\u0000${tenantId}\u0000${entityId}`);
 
 export class SpDirectory {
   private readonly code;
@@ -51,15 +64,17 @@ export class SpDirectory {
     return this.code.all();
   }
 
-  /** Is this id or entity ID taken by an SP defined in code? */
-  inCode(id: string, entityId: string): boolean {
-    return this.code.byId(id) !== undefined || this.code.byEntityId(entityId) !== undefined;
+  /** Is this id (global), or this entity ID in this tenant, taken by an SP defined in code? */
+  inCode(id: string, entityId: string, tenantId: string): boolean {
+    return this.code.byId(id) !== undefined || this.code.byEntityId(entityId, tenantId) !== undefined;
   }
 
-  byEntityId(adapter: DirectoryAdapter, entityId: string, log: DirectoryLogger): Promise<ResolvedServiceProvider | undefined> {
-    const sp = this.code.byEntityId(entityId);
+  /** The SP with this entity ID in one tenant: "" for the root IdP, else the tenant's organization id. */
+  byEntityId(adapter: DirectoryAdapter, entityId: string, log: DirectoryLogger, tenantId: string): Promise<ResolvedServiceProvider | undefined> {
+    const sp = this.code.byEntityId(entityId, tenantId);
     if (sp || !this.registryEnabled) return Promise.resolve(sp);
-    return this.stored(adapter, "entityId", entityId, log);
+    if (!this.options.tenants) return this.stored(adapter, "entityId", entityId, log);
+    return this.storedInTenant(adapter, tenantId, entityId, log);
   }
 
   byId(adapter: DirectoryAdapter, id: string, log: DirectoryLogger): Promise<ResolvedServiceProvider | undefined> {
@@ -93,7 +108,12 @@ export class SpDirectory {
       log.error(`[saml-idp] registry: SP row ${row.spId} has mismatched id/entityId columns; ignored`);
       return undefined;
     }
-    if (this.inCode(r.serviceProvider.id, r.serviceProvider.entityId)) return undefined; // code wins
+    // So must the tenant column (D-052): it is what tenant lookups filter on.
+    if (this.options.tenants && (row.tenantId ?? "") !== (r.serviceProvider.tenantId ?? "")) {
+      log.error(`[saml-idp] registry: SP row ${row.spId} has a tenantId column that doesn't match its config; ignored`);
+      return undefined;
+    }
+    if (this.inCode(r.serviceProvider.id, r.serviceProvider.entityId, r.serviceProvider.tenantId ?? "")) return undefined; // code wins
     return r.serviceProvider;
   }
 
@@ -107,10 +127,29 @@ export class SpDirectory {
     // Exact match only: a case-insensitive or PAD SPACE collation (e.g. MySQL) could return a row
     // for "HTTPS://SP.example " when "https://sp.example" was stored (review 2).
     if (sp && (field === "entityId" ? sp.entityId : sp.id) !== value) sp = undefined;
-    if (cacheMs > 0) {
-      if (this.cache.size >= MAX_CACHE_ENTRIES) this.cache.clear();
-      this.cache.set(key, { sp, expires: this.now() + cacheMs });
-    }
+    this.remember(key, sp, cacheMs);
     return sp;
+  }
+
+  /** A stored SP of one tenant, by its lookup key; the loaded row must be of that tenant (D-052). */
+  private async storedInTenant(adapter: DirectoryAdapter, tenantId: string, entityId: string, log: DirectoryLogger) {
+    const lookupKey = await lookupKeyOf(tenantId, entityId);
+    const key = `lookupKey\u0000${lookupKey}`;
+    const cacheMs = this.options.registry?.cacheMs ?? 0;
+    const hit = this.cache.get(key);
+    if (hit && hit.expires > this.now()) return hit.sp;
+    const row = (await adapter.findOne({ model: SP_MODEL, where: [{ field: "lookupKey", value: lookupKey }] })) as StoredSpRow | null;
+    let sp = row && row.lookupKey === lookupKey ? this.fromRow(row, log) : undefined;
+    // Never trust the key alone: the SP found must be of the route's tenant, with exactly this
+    // entity ID (a hand-edited row, or a collation surprise, must not cross tenants).
+    if (sp && (sp.entityId !== entityId || (sp.tenantId ?? "") !== tenantId)) sp = undefined;
+    this.remember(key, sp, cacheMs);
+    return sp;
+  }
+
+  private remember(key: string, sp: ResolvedServiceProvider | undefined, cacheMs: number) {
+    if (cacheMs <= 0) return;
+    if (this.cache.size >= MAX_CACHE_ENTRIES) this.cache.clear();
+    this.cache.set(key, { sp, expires: this.now() + cacheMs });
   }
 }

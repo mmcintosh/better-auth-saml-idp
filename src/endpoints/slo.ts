@@ -19,7 +19,7 @@ import { recordRequestId } from "../storage/seen";
 import { sweepExpired } from "../storage/sweep";
 import type { ResolvedServiceProvider } from "../types";
 import { isDriveByCrossSite } from "./init";
-import { fail, lookupLog, type PluginState, prepareSp, spById } from "./issue";
+import { fail, lookupLog, type PluginState, prepareSp, routeIdentity, spById, spIdentity, tenantOf } from "./issue";
 
 export const LOGOUT_PATH = "/saml2/idp/logout";
 const STATE_PREFIX = "saml-idp-logout:";
@@ -76,7 +76,6 @@ async function consume<T>(adapter: Adapter, prefix: string, id: string | undefin
  */
 const mustSign = (sp: ResolvedServiceProvider) => sp.requestSignatures !== "ignore";
 
-const sloUrl = (ctx: GenericEndpointContext, state: PluginState) => `${idpBaseURL(state.options, ctx.context.baseURL)}${SLO_PATH}`;
 
 /** End the IdP session: the Better Auth session row, its cookies, and its participant list. */
 /** Participants of a session; `partial` when they couldn't all be listed (so logout can't claim Success). */
@@ -109,17 +108,22 @@ async function endSession(ctx: GenericEndpointContext, session: { session: { id:
   return { participants, partial };
 }
 
-/** Send the browser to the next SP, or finish with the originator. */
+/**
+ * Send the browser to the next SP, or finish with the originator. There is one IdP session
+ * across tenants (D-052), so one logout reaches SPs of several; each is sent a LogoutRequest
+ * from its own tenant's identity, the one it got its assertion from.
+ */
 async function nextHop(ctx: GenericEndpointContext, state: PluginState, ls: LogoutState): Promise<Response | never> {
   while (ls.remaining.length) {
     const p = ls.remaining.shift() as Participant;
     const sp = await spById(ctx, state, p.spId);
-    if (!sp?.singleLogoutService) {
+    const identity = sp && (await spIdentity(ctx, state, sp));
+    if (!sp?.singleLogoutService || !identity) {
       ls.partial = true; // can't reach it: the originator is told it was partial
       continue;
     }
     const { id, xml } = buildLogoutRequest({
-      issuer: state.options.entityId,
+      issuer: identity.entityId,
       destination: sp.singleLogoutService.url,
       nameId: p.nameId,
       nameIdFormat: p.nameIdFormat,
@@ -131,20 +135,23 @@ async function nextHop(ctx: GenericEndpointContext, state: PluginState, ls: Logo
     const sid = await store(ctx.context.internalAdapter, STATE_PREFIX, ls);
     // The reply needs no cookies (its state is in RelayState), so either binding works.
     if (sp.singleLogoutService.binding === "post")
-      return autoPostResponse(sp.singleLogoutService.url, signedPostMessage(xml, "LogoutRequest", state.options.signing), sid, "SAMLRequest");
-    throw ctx.redirect(redirectBindingUrl(sp.singleLogoutService.url, "SAMLRequest", xml, sid, state.options.signing));
+      return autoPostResponse(sp.singleLogoutService.url, signedPostMessage(xml, "LogoutRequest", identity.signing), sid, "SAMLRequest");
+    throw ctx.redirect(redirectBindingUrl(sp.singleLogoutService.url, "SAMLRequest", xml, sid, identity.signing));
   }
   return finish(ctx, state, ls);
 }
 
+/** Answer the originating SP, from its own tenant's identity (D-052). */
 async function finish(ctx: GenericEndpointContext, state: PluginState, ls: LogoutState): Promise<Response | never> {
   if (ls.origin.kind === "idp") throw ctx.redirect(ls.origin.returnTo);
   const sp = await spById(ctx, state, ls.origin.spId);
   if (!sp?.singleLogoutService) return fail(ctx, state, "LOGOUT_NOT_SUPPORTED", `originating SP ${ls.origin.spId} has no SLO endpoint any more`, { spId: ls.origin.spId });
+  const identity = await spIdentity(ctx, state, sp);
+  if (!identity) return fail(ctx, state, "LOGOUT_NOT_SUPPORTED", `originating SP ${sp.id}'s tenant doesn't exist or is disabled`, { spId: sp.id, ...tenantOf(sp) });
   // Metadata's ResponseLocation, when the SP has one, is where responses go (Metadata §2.2.2).
   const responseUrl = sp.singleLogoutService.responseUrl ?? sp.singleLogoutService.url;
   const xml = buildLogoutResponse({
-    issuer: state.options.entityId,
+    issuer: identity.entityId,
     destination: responseUrl,
     inResponseTo: ls.origin.requestId,
     status: ls.partial ? ["Success", "PartialLogout"] : ["Success"],
@@ -152,8 +159,8 @@ async function finish(ctx: GenericEndpointContext, state: PluginState, ls: Logou
   });
   ctx.context.logger.info(`[saml-idp] logout: answering SP ${sp.id}${ls.partial ? " (partial)" : ""}`);
   if (sp.singleLogoutService.binding === "post")
-    return autoPostResponse(responseUrl, signedPostMessage(xml, "LogoutResponse", state.options.signing), ls.origin.relayState);
-  throw ctx.redirect(redirectBindingUrl(responseUrl, "SAMLResponse", xml, ls.origin.relayState, state.options.signing));
+    return autoPostResponse(responseUrl, signedPostMessage(xml, "LogoutResponse", identity.signing), ls.origin.relayState);
+  throw ctx.redirect(redirectBindingUrl(responseUrl, "SAMLResponse", xml, ls.origin.relayState, identity.signing));
 }
 
 /**
@@ -178,7 +185,7 @@ async function handleLogoutRequest(ctx: GenericEndpointContext, state: PluginSta
   }
   const ended = await endSession(ctx, session);
   const remaining = ended.participants.filter((p) => p.spId !== sp.id);
-  emit(ctx, state.options, { type: "logout", initiatedBy: "sp", spId: sp.id, userId: session.user.id, sessionId: session.session.id, notifying: remaining.map((p) => p.spId) });
+  emit(ctx, state.options, { type: "logout", initiatedBy: "sp", spId: sp.id, userId: session.user.id, sessionId: session.session.id, notifying: remaining.map((p) => p.spId), ...tenantOf(sp) });
   return nextHop(ctx, state, { origin, remaining, partial: ended.partial });
 }
 
@@ -190,6 +197,112 @@ function rawFrom(ctx: GenericEndpointContext, isPost: boolean, param: "SAMLReque
   return parseRedirectQuery(ctx.request ? new URL(ctx.request.url).search.slice(1) : "", param);
 }
 
+const sloMetadata = (operationId: string, summary: string) => ({
+  // A browser navigation (or an SP's POST), not something to call from the client (API decision 2).
+  isAction: false as const,
+  allowedMediaTypes: ["application/x-www-form-urlencoded"],
+  openapi: { operationId, summary },
+});
+
+type SloContext = GenericEndpointContext & { query?: z.infer<typeof params>; body?: z.infer<typeof params> };
+
+/**
+ * A logout message at the root SLO URL (`tenantKey` undefined) or a tenant's (D-052). An SP's
+ * LogoutRequest is looked up in the URL's tenant only, as AuthnRequests are. A participant's
+ * LogoutResponse is matched to the hop in its RelayState, and its Destination is checked against
+ * the SLO URL of that SP's tenant: the identity that sent the LogoutRequest it answers.
+ */
+async function handleSlo(ctx: SloContext, state: PluginState, tenantKey?: string) {
+  const { options } = state;
+  await sweepExpired(ctx.context.adapter as any, (what, e) => ctx.context.logger.warn(`[saml-idp] cleanup of expired ${what} failed`, e), Date.now(), { participants: true, auditLog: state.options.auditLog !== undefined });
+  const isPost = ctx.request?.method === "POST";
+  const input = ((isPost ? ctx.body : ctx.query) ?? {}) as z.infer<typeof params>;
+  const route = await routeIdentity(ctx, state, tenantKey);
+  if (!route) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", "logout: unknown tenant");
+  const routeTenant = route.tenantId ?? "";
+  const now = new Date();
+  const parseOpts = { now, clockSkewSeconds: options.clockSkewSeconds, sloUrl: route.sloUrl };
+  const sigOpts = { allowInsecureSha1: options.signing.allowInsecureSha1 };
+
+  try {
+    // Re-entry of an HTTP-POST LogoutRequest on a same-site GET (cookies now present).
+    if (!isPost && input.cid !== undefined) {
+      const req = await consume<PendingLogoutRequest>(ctx.context.internalAdapter, CONTINUE_PREFIX, input.cid);
+      if (!req) return fail(ctx, state, "LOGOUT_STATE_NOT_FOUND", "unknown or used logout continuation");
+      const sp = await spById(ctx, state, req.spId);
+      if (!sp?.singleLogoutService) return fail(ctx, state, "LOGOUT_NOT_SUPPORTED", `SP ${req.spId}`, { spId: req.spId });
+      if ((sp.tenantId ?? "") !== routeTenant) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", `logout: SP ${sp.id} changed tenant`, { spId: sp.id });
+      return await handleLogoutRequest(ctx, state, sp, req);
+    }
+
+    // A participant's answer to our LogoutRequest: continue the chain whatever it says.
+    if (input.SAMLResponse !== undefined) {
+      const raw = rawFrom(ctx, isPost, "SAMLResponse");
+      const ls = await consume<LogoutState>(ctx.context.internalAdapter, STATE_PREFIX, raw.relayState);
+      if (!ls?.current) return fail(ctx, state, "LOGOUT_STATE_NOT_FOUND", "unknown or used logout state");
+      const sp = await spById(ctx, state, ls.current.spId);
+      try {
+        const sent = sp && (await spIdentity(ctx, state, sp));
+        if (!sp || !sent) throw new Error("its SP or tenant is gone");
+        const xml = await decodeAuthnRequest(raw);
+        const info = await parseLogoutResponse(xml, options.schemaValidator, { ...parseOpts, sloUrl: sent.sloUrl });
+        if (info.issuer !== sp.entityId || info.inResponseTo !== ls.current.requestId) throw new Error("not the answer we're waiting for");
+        const ready = await prepareSp(ctx, state, sp);
+        if (mustSign(ready)) {
+          if (ready.spCertificates.length === 0) throw new Error("no certificate available to verify it");
+          verifyMessageSignature(raw, xml, ready.spCertificates, sigOpts);
+        }
+        if (isSigned(raw, xml) && info.destination === undefined) throw new Error("signed without Destination");
+        if (info.status[0] !== "Success" || info.status[1] === "PartialLogout") ls.partial = true;
+      } catch (e) {
+        ls.partial = true;
+        ctx.context.logger.warn(`[saml-idp] logout: SP ${ls.current.spId} answered badly (${(e as Error).message}); continuing`);
+      }
+      ls.current = undefined;
+      return await nextHop(ctx, state, ls);
+    }
+
+    // An SP's LogoutRequest.
+    const raw = rawFrom(ctx, isPost, "SAMLRequest");
+    checkRelayState(raw.relayState, options.relayStateMaxBytes);
+    const xml = await decodeAuthnRequest(raw);
+    const info = await parseLogoutRequest(xml, options.schemaValidator, parseOpts);
+    const found = await state.directory.byEntityId(ctx.context.adapter as any, info.issuer, lookupLog(ctx), routeTenant);
+    if (!found) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", `logout: issuer not registered (${info.issuer.length} chars)`);
+    const sp = await prepareSp(ctx, state, found);
+    if (!sp.singleLogoutService) return fail(ctx, state, "LOGOUT_NOT_SUPPORTED", `SP ${sp.id} has no singleLogoutService`, { spId: sp.id, ...tenantOf(sp) });
+    // Profiles §4.4.4.1: a LogoutRequest must be authenticated. With SP certificates: a valid
+    // signature. Without: only the session binding in handleLogoutRequest (SessionIndex).
+    const signed = isSigned(raw, xml);
+    if (mustSign(sp)) {
+      if (!signed) throw new SamlRequestError("UNSIGNED_SAML_REQUEST", "LogoutRequest must be signed");
+      // Certificates from a metadata URL that failed to load: fail closed, as for AuthnRequests.
+      if (sp.spCertificates.length === 0) throw new SamlRequestError("UNSIGNED_SAML_REQUEST", "no SP certificate available to verify the LogoutRequest");
+      verifyMessageSignature(raw, xml, sp.spCertificates, sigOpts);
+    }
+    // Bindings §3.4.5.2 / §3.5.5.2: a signed message must say where it's going.
+    if (signed && info.destination === undefined) throw new SamlRequestError("INVALID_SAML_REQUEST", "a signed LogoutRequest needs a Destination");
+    const expiresAt = new Date(now.getTime() + (300 + 2 * options.clockSkewSeconds) * 1000);
+    if (!(await recordRequestId(ctx.context.adapter as any, sp.id, `logout:${info.id}`, expiresAt))) return fail(ctx, state, "DUPLICATE_REQUEST_ID", `SP ${sp.id}`, { spId: sp.id, ...tenantOf(sp) });
+    const req: PendingLogoutRequest = {
+      spId: sp.id,
+      requestId: info.id,
+      relayState: raw.relayState,
+      nameId: info.nameId,
+      sessionIndexes: info.sessionIndexes,
+      signed: mustSign(sp) && signed,
+    };
+    if (isPost) {
+      const cid = await store(ctx.context.internalAdapter, CONTINUE_PREFIX, req);
+      return new Response(null, { status: 303, headers: { Location: `${route.sloUrl}?cid=${cid}`, "Cache-Control": "no-store" } });
+    }
+    return await handleLogoutRequest(ctx, state, sp, req);
+  } catch (e) {
+    if (e instanceof SamlRequestError) return fail(ctx, state, e.code, e.detail);
+    throw e;
+  }
+}
+
 export const sloEndpoint = (state: PluginState) =>
   createAuthEndpoint(
     SLO_PATH,
@@ -197,98 +310,24 @@ export const sloEndpoint = (state: PluginState) =>
       method: ["GET", "POST"],
       query: params.optional(),
       body: params.optional(),
-      metadata: {
-        // A browser navigation (or an SP's POST), not something to call from the client (API decision 2).
-        isAction: false,
-        allowedMediaTypes: ["application/x-www-form-urlencoded"],
-        openapi: { operationId: "samlIdpSingleLogout", summary: "SAML Single Logout endpoint (HTTP-Redirect and HTTP-POST bindings)" },
-      },
+      metadata: sloMetadata("samlIdpSingleLogout", "SAML Single Logout endpoint (HTTP-Redirect and HTTP-POST bindings)"),
     },
-    async (ctx) => {
-      const { options } = state;
-      await sweepExpired(ctx.context.adapter as any, (what, e) => ctx.context.logger.warn(`[saml-idp] cleanup of expired ${what} failed`, e), Date.now(), { participants: true, auditLog: state.options.auditLog !== undefined });
-      const isPost = ctx.request?.method === "POST";
-      const input = ((isPost ? ctx.body : ctx.query) ?? {}) as z.infer<typeof params>;
-      const now = new Date();
-      const parseOpts = { now, clockSkewSeconds: options.clockSkewSeconds, sloUrl: sloUrl(ctx, state) };
-      const sigOpts = { allowInsecureSha1: options.signing.allowInsecureSha1 };
-
-      try {
-        // Re-entry of an HTTP-POST LogoutRequest on a same-site GET (cookies now present).
-        if (!isPost && input.cid !== undefined) {
-          const req = await consume<PendingLogoutRequest>(ctx.context.internalAdapter, CONTINUE_PREFIX, input.cid);
-          if (!req) return fail(ctx, state, "LOGOUT_STATE_NOT_FOUND", "unknown or used logout continuation");
-          const sp = await spById(ctx, state, req.spId);
-          if (!sp?.singleLogoutService) return fail(ctx, state, "LOGOUT_NOT_SUPPORTED", `SP ${req.spId}`, { spId: req.spId });
-          return await handleLogoutRequest(ctx, state, sp, req);
-        }
-
-        // A participant's answer to our LogoutRequest: continue the chain whatever it says.
-        if (input.SAMLResponse !== undefined) {
-          const raw = rawFrom(ctx, isPost, "SAMLResponse");
-          const ls = await consume<LogoutState>(ctx.context.internalAdapter, STATE_PREFIX, raw.relayState);
-          if (!ls?.current) return fail(ctx, state, "LOGOUT_STATE_NOT_FOUND", "unknown or used logout state");
-          const sp = await spById(ctx, state, ls.current.spId);
-          try {
-            const xml = await decodeAuthnRequest(raw);
-            const info = await parseLogoutResponse(xml, options.schemaValidator, parseOpts);
-            if (!sp || info.issuer !== sp.entityId || info.inResponseTo !== ls.current.requestId) throw new Error("not the answer we're waiting for");
-            const ready = await prepareSp(ctx, state, sp);
-            if (mustSign(ready)) {
-              if (ready.spCertificates.length === 0) throw new Error("no certificate available to verify it");
-              verifyMessageSignature(raw, xml, ready.spCertificates, sigOpts);
-            }
-            if (isSigned(raw, xml) && info.destination === undefined) throw new Error("signed without Destination");
-            if (info.status[0] !== "Success" || info.status[1] === "PartialLogout") ls.partial = true;
-          } catch (e) {
-            ls.partial = true;
-            ctx.context.logger.warn(`[saml-idp] logout: SP ${ls.current.spId} answered badly (${(e as Error).message}); continuing`);
-          }
-          ls.current = undefined;
-          return await nextHop(ctx, state, ls);
-        }
-
-        // An SP's LogoutRequest.
-        const raw = rawFrom(ctx, isPost, "SAMLRequest");
-        checkRelayState(raw.relayState, options.relayStateMaxBytes);
-        const xml = await decodeAuthnRequest(raw);
-        const info = await parseLogoutRequest(xml, options.schemaValidator, parseOpts);
-        const found = await state.directory.byEntityId(ctx.context.adapter as any, info.issuer, lookupLog(ctx));
-        if (!found) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", `logout: issuer not registered (${info.issuer.length} chars)`);
-        const sp = await prepareSp(ctx, state, found);
-        if (!sp.singleLogoutService) return fail(ctx, state, "LOGOUT_NOT_SUPPORTED", `SP ${sp.id} has no singleLogoutService`, { spId: sp.id });
-        // Profiles §4.4.4.1: a LogoutRequest must be authenticated. With SP certificates: a valid
-        // signature. Without: only the session binding in handleLogoutRequest (SessionIndex).
-        const signed = isSigned(raw, xml);
-        if (mustSign(sp)) {
-          if (!signed) throw new SamlRequestError("UNSIGNED_SAML_REQUEST", "LogoutRequest must be signed");
-          // Certificates from a metadata URL that failed to load: fail closed, as for AuthnRequests.
-          if (sp.spCertificates.length === 0) throw new SamlRequestError("UNSIGNED_SAML_REQUEST", "no SP certificate available to verify the LogoutRequest");
-          verifyMessageSignature(raw, xml, sp.spCertificates, sigOpts);
-        }
-        // Bindings §3.4.5.2 / §3.5.5.2: a signed message must say where it's going.
-        if (signed && info.destination === undefined) throw new SamlRequestError("INVALID_SAML_REQUEST", "a signed LogoutRequest needs a Destination");
-        const expiresAt = new Date(now.getTime() + (300 + 2 * options.clockSkewSeconds) * 1000);
-        if (!(await recordRequestId(ctx.context.adapter as any, sp.id, `logout:${info.id}`, expiresAt))) return fail(ctx, state, "DUPLICATE_REQUEST_ID", `SP ${sp.id}`, { spId: sp.id });
-        const req: PendingLogoutRequest = {
-          spId: sp.id,
-          requestId: info.id,
-          relayState: raw.relayState,
-          nameId: info.nameId,
-          sessionIndexes: info.sessionIndexes,
-          signed: mustSign(sp) && signed,
-        };
-        if (isPost) {
-          const cid = await store(ctx.context.internalAdapter, CONTINUE_PREFIX, req);
-          return new Response(null, { status: 303, headers: { Location: `${sloUrl(ctx, state)}?cid=${cid}`, "Cache-Control": "no-store" } });
-        }
-        return await handleLogoutRequest(ctx, state, sp, req);
-      } catch (e) {
-        if (e instanceof SamlRequestError) return fail(ctx, state, e.code, e.detail);
-        throw e;
-      }
-    },
+    async (ctx) => handleSlo(ctx, state),
   );
+
+/** A tenant's SLO URL (D-052): `/saml2/idp/slo/<tenantKey>`. */
+export const tenantSloEndpoint = (state: PluginState) =>
+  createAuthEndpoint(
+    `${SLO_PATH}/:tenant`,
+    {
+      method: ["GET", "POST"],
+      query: params.optional(),
+      body: params.optional(),
+      metadata: sloMetadata("samlIdpTenantSingleLogout", "SAML Single Logout endpoint of a tenant (HTTP-Redirect and HTTP-POST bindings)"),
+    },
+    async (ctx) => handleSlo(ctx, state, String(ctx.params?.tenant ?? "")),
+  );
+
 
 /** Where IdP-initiated logout may send the browser afterwards: a same-origin path or a trusted origin. */
 function safeReturnTo(ctx: GenericEndpointContext, state: PluginState, returnTo: string | undefined): string | undefined {

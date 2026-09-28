@@ -3,19 +3,22 @@ import type { BetterAuthPlugin } from "better-auth";
 import { mergeSchema } from "better-auth/db";
 import { initEndpoint } from "./endpoints/init";
 import { warnUserWritableFields } from "./attributes";
-import { warnClaimableOrganizations } from "./organizations";
-import { metadataEndpoint } from "./endpoints/metadata";
+import { hasOrganizationPlugin, warnClaimableOrganizations } from "./organizations";
+import { metadataEndpoint, tenantMetadataEndpoint } from "./endpoints/metadata";
 import { resumeEndpoint } from "./endpoints/resume";
-import { ssoEndpoint } from "./endpoints/sso";
+import { ssoEndpoint, tenantSsoEndpoint } from "./endpoints/sso";
 import { SAML_IDP_ERROR_CODES } from "./errors";
 import { nameIdFieldProblem } from "./nameid";
 import { resolveOptions, SamlIdpConfigError } from "./options";
-import { idpCache, SSO_PATH, withBasePath } from "./saml/idp";
+import { idpCache, SSO_PATH, tenantIdpCache, withBasePath } from "./saml/idp";
+import { TenantDirectory } from "./saml/tenant-directory";
+import { backfillEndpoint, tenantEndpoints } from "./endpoints/tenants";
+import { tenantOf } from "./endpoints/issue";
 import { samlIdpSchema } from "./schema";
 import { SpMetadataCache } from "./saml/sp-metadata-refresh";
 import { SpDirectory } from "./saml/sp-directory";
 import { registryEndpoints } from "./endpoints/registry";
-import { logoutEndpoint, sloEndpoint } from "./endpoints/slo";
+import { logoutEndpoint, sloEndpoint, tenantSloEndpoint } from "./endpoints/slo";
 import { SLO_PATH } from "./saml/logout";
 import { consumeEndingBySlo, endParticipants, extendParticipants, forgetUserParticipants } from "./storage/participants";
 import { emitWithoutRequest } from "./events";
@@ -27,7 +30,7 @@ export { NAMEID_FORMAT } from "./types";
 export { SamlIdpConfigError } from "./options";
 export { libxml2Validator } from "./saml/validator";
 export { serviceProviderFromMetadata, SpMetadataError } from "./saml/sp-metadata";
-export { samlIdpStatements, type SamlServiceProviderAction } from "./access";
+export { samlIdpStatements, type SamlServiceProviderAction, type SamlTenantAction } from "./access";
 export type { SpFromMetadataOptions, SpFromMetadataResult } from "./saml/sp-metadata";
 // An explicit list (API decision 1, before 1.0): what's here is supported; the plugin's resolved
 // internals (ResolvedSamlIdpOptions, ResolvedServiceProvider) are not exported and may change.
@@ -53,6 +56,8 @@ export type {
   ServiceProviderEncryptionConfig,
   ServiceProviderInfo,
   ServiceProviderRecord,
+  TenantOptions,
+  TenantRecord,
   SignatureAlgorithm,
   SignedParts,
   SigningConfig,
@@ -65,7 +70,8 @@ export const samlIdp = (options: SamlIdpOptions) => {
   const resolved = resolveOptions(options);
   const directory = new SpDirectory(resolved.serviceProviders, resolved);
   const getIdp = idpCache(resolved);
-  const state = { options: resolved, directory, metadata: new SpMetadataCache(resolved.schemaValidator) };
+  const tenants = resolved.tenants ? new TenantDirectory(resolved.tenants.cacheMs) : undefined;
+  const state = { options: resolved, directory, metadata: new SpMetadataCache(resolved.schemaValidator), tenants };
 
   return {
     id: "saml-idp",
@@ -88,6 +94,17 @@ export const samlIdp = (options: SamlIdpOptions) => {
           ctx.logger.warn(
             `[saml-idp] samlIdp baseURL resolves to ${resolved.baseURL} but Better Auth's is ${ctx.baseURL}: the IdP's metadata and Destination check use ${resolved.baseURL}. Usually both should be the same; or leave samlIdp's unset.`,
           );
+      }
+      if (resolved.tenants) {
+        // A tenant's entity ID names a customer and is pinned by its SPs: it must never follow a
+        // Host header (D-052). Better Auth's own baseURL (option or BETTER_AUTH_URL) pins it too.
+        if (!resolved.baseURL && typeof ctx.baseURL === "string" && ctx.baseURL) resolved.baseURL = ctx.baseURL.replace(/\/+$/, "");
+        const tenantIssues = [
+          ...(resolved.baseURL ? [] : ["tenants.enabled: requires a pinned baseURL (samlIdp({ baseURL }) or Better Auth's baseURL): tenant entity IDs must not follow the request's Host header"]),
+          // Membership of the tenant's organization is what a tenant is (maintainer decision 2).
+          ...(hasOrganizationPlugin(ctx.options.plugins as { id: string }[] | undefined) ? [] : ["tenants.enabled: requires Better Auth's organization plugin (tenants are organizations)"]),
+        ];
+        if (tenantIssues.length) throw new SamlIdpConfigError(tenantIssues);
       }
       if (!resolved.baseURL && !ctx.options.baseURL)
         ctx.logger.warn(
@@ -142,7 +159,10 @@ export const samlIdp = (options: SamlIdpOptions) => {
                         session.expiresAt && new Date(session.expiresAt).getTime() <= now.getTime() ? "expired" : hookCtx?.path === "/sign-out" ? "signed-out" : "revoked";
                       const log = { error: (m: string) => ctx.logger.error(m) };
                       const participants = await Promise.all(
-                        ended.map(async (p) => ({ ...p, entityId: (await directory.byId(ctx.adapter as any, p.spId, log))?.entityId })),
+                        ended.map(async (p) => {
+                          const sp = await directory.byId(ctx.adapter as any, p.spId, log);
+                          return { ...p, entityId: sp?.entityId, ...tenantOf(sp ?? {}) };
+                        }),
                       );
                       emitWithoutRequest(sink, resolved, { type: "session.ended", userId: String(session.userId ?? ""), sessionId: session.id, reason, participants, truncated });
                     } catch (e) {
@@ -171,10 +191,23 @@ export const samlIdp = (options: SamlIdpOptions) => {
       ...(resolved.registry?.canManage || resolved.registry?.permissions ? registryEndpoints(state) : {}),
       ...(resolved.singleLogout ? { samlIdpSingleLogout: sloEndpoint(state), samlIdpLogout: logoutEndpoint(state) } : {}),
       ...(resolved.sessionTracking ? { samlIdpListSessionParticipants: listSessionParticipantsEndpoint(state) } : {}),
+      // Multi-tenant IdP (D-052): no route exists unless it's on.
+      ...(resolved.tenants
+        ? {
+            getSamlIdpTenantMetadata: tenantMetadataEndpoint(state, tenantIdpCache(resolved)),
+            samlIdpTenantSingleSignOn: tenantSsoEndpoint(state),
+            ...(resolved.singleLogout ? { samlIdpTenantSingleLogout: tenantSloEndpoint(state) } : {}),
+            ...(resolved.registry?.canManage || resolved.registry?.permissions ? tenantEndpoints(state) : {}),
+            samlIdpBackfillServiceProviderKeys: backfillEndpoint(state),
+          }
+        : {}),
     },
     // A fresh schema object per plugin: mergeSchema mutates its first argument, so a shared
     // module-level object would leak one instance's renames into every other (finding #10).
-    schema: mergeSchema(samlIdpSchema({ registry: resolved.registry !== undefined, sessionTracking: resolved.sessionTracking, auditLog: resolved.auditLog !== undefined }), resolved.schema),
+    schema: mergeSchema(
+      samlIdpSchema({ registry: resolved.registry !== undefined, sessionTracking: resolved.sessionTracking, auditLog: resolved.auditLog !== undefined, tenants: resolved.tenants !== undefined }),
+      resolved.schema,
+    ),
     $ERROR_CODES: SAML_IDP_ERROR_CODES,
     // No `options` (API decision 3): by convention it holds a plugin's configuration, and ours
     // includes the signing key; the internal SP directory isn't public either.
