@@ -22,8 +22,11 @@ The database-dependent behaviours run against a real server in CI (`test/adapter
 | PostgreSQL 17 | Kysely (a `pg` pool) | `npx auth migrate` | ✅ CI |
 | MySQL 8.4 | Kysely (a `mysql2` pool) | `npx auth migrate` | ✅ CI |
 | MongoDB 8.2 (replica set) | `mongodbAdapter` | created by the adapter | ✅ CI |
-| PostgreSQL / MySQL | Drizzle | `npx auth generate` | expected to work; not yet in CI |
-| Any | Prisma | `npx auth generate` | expected to work; not yet in CI |
+| PostgreSQL 17 | Drizzle (`drizzle-orm/node-postgres`) | `npx auth generate`, then your migration | ✅ CI |
+| MySQL 8.4 | Drizzle (`drizzle-orm/mysql2`) | `npx auth generate`, then your migration | ✅ CI |
+| PostgreSQL 17 | Prisma 6 | `npx auth generate`, then `prisma migrate` | ✅ CI |
+
+In CI, the Drizzle and Prisma schemas are built from Better Auth's own table definitions (`getAuthTables`, in `test/adapters/orm-schemas.ts`), the way `npx auth generate` does, so they include every plugin table and column. The tables are created by Better Auth's migrator; Prisma's client is generated from the schema on each run.
 | Any | Better Auth's memory adapter | | ❌ doesn't enforce uniqueness: development only |
 
 ## Creating the tables

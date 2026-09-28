@@ -59,7 +59,7 @@ ROADMAP = [
    ("Observability hooks (done)", "onAssertionIssued, onDenied, onLogout and onSessionEnded callbacks, run in the background (waitUntil on Workers) and isolated from the flow, plus an optional audit-log table with retention that doesn't store anonymous noise (D-038)."),
    ("better-auth-cloudflare 0.4", "1.0.0 goes to npm latest once 0.4 is released; release candidates are on the next tag meanwhile. The example then swaps its vendored build for ^0.4.0. The plugin doesn't depend on it: 0.3.1 works with verification and rate limits in the database."),
    ("Key rotation guide (done)", "docs/key-rotation.md: add next certificate, switch, retire. Rehearsed live with Cloudflare Access with zero downtime."),
-   ("Database adapter test matrix", "Postgres, MySQL and MongoDB proven in CI next to SQLite and D1 (MongoDB found a real gap, fixed: D-033), with a Databases page in the guide. Still to add: Drizzle on Postgres/MySQL, and Prisma."),
+   ("Database adapter test matrix (done)", "Postgres, MySQL and MongoDB, and Drizzle on Postgres and MySQL and Prisma on Postgres, proven in CI next to SQLite and D1 (MongoDB found a real gap, fixed: D-033), with a Databases page in the guide."),
    ("Second adversarial review (done)", "Fresh-eyes review plus an independent review by a different model (D-029, D-030); every finding fixed with a regression test. Everything since the first round: POST re-entry, error Responses, account policy, NameID, encryption, IdP-initiated SSO, POST signatures, metadata refresh, the registry and the CLI."),
  ]),
  ("v1.1", "Close the expected-feature gaps", "What admins and SPs assume every IdP has.", [
@@ -77,7 +77,7 @@ ROADMAP = [
  ]),
  ("Next", "Reach, trust and B2B", "Adoption by Better Auth's mainstream users, trust signals, and what B2B apps ask for next.", [
    ("Next.js example", "A Next.js App Router example (Node runtime) next to the Workers one: most Better Auth apps are Next.js or Node servers."),
-   ("Prisma and Drizzle on Postgres/MySQL", "The most common Better Auth adapters, proven in the CI adapter matrix alongside Kysely, MongoDB, SQLite and D1."),
+   ("Prisma and Drizzle on Postgres/MySQL (done)", "The most common Better Auth adapters, proven in the CI adapter matrix alongside Kysely, MongoDB, SQLite and D1 (D-051)."),
    ("Bun and Deno", "Smoke tests on both runtimes in CI, as Better Auth advertises them."),
    ("OpenSSF Best Practices badge", "The passing-level self-assessment at bestpractices.dev, with the evidence for each criterion."),
    ("Raise the OpenSSF Scorecard score", "Work through the checks the published Scorecard marks down, and record what is out of reach for a single-maintainer project."),

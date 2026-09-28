@@ -26,6 +26,8 @@ interface Db {
   database: unknown;
   migrate: boolean;
   close(): Promise<void>;
+  /** The fresh database's URL (Postgres), for clients that connect on their own (Prisma). */
+  url?: string;
 }
 
 /** One small function per database: a fresh, empty database and Better Auth's `database` option. */
@@ -44,6 +46,7 @@ const databases: Record<string, () => Promise<Db>> = {
     return {
       database: pool,
       migrate: true,
+      url: url.toString(),
       async close() {
         await pool.end();
         await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
@@ -71,6 +74,11 @@ const databases: Record<string, () => Promise<Db>> = {
     };
   },
 
+  // The same servers, through Drizzle (the most common Better Auth adapter after Kysely).
+  "drizzle-postgres": async () => withDrizzle(await databases.postgres!(), "pg"),
+  "drizzle-mysql": async () => withDrizzle(await databases.mysql!(), "mysql"),
+  "prisma-postgres": async () => withPrisma(await databases.postgres!()),
+
   async mongodb() {
     const { MongoClient } = await import("mongodb");
     const { mongodbAdapter } = await import("better-auth/adapters/mongodb");
@@ -92,12 +100,12 @@ const databases: Record<string, () => Promise<Db>> = {
 let db: Db;
 let auth: Awaited<ReturnType<typeof build>>;
 
-async function build() {
-  const a = betterAuth({
+/** The options every entry runs with; `database` is the entry's. */
+const optionsFor = (database: unknown) => ({
     baseURL: BASE_URL,
     secret: "test-secret-that-is-at-least-32-characters-long",
     telemetry: { enabled: false },
-    database: db.database as any,
+    database: database as any,
     emailAndPassword: { enabled: true },
     rateLimit: { enabled: false },
     plugins: [
@@ -113,6 +121,59 @@ async function build() {
       ),
     ],
   });
+
+/**
+ * A Drizzle entry: the tables are created by Better Auth's own migrator on a raw connection (as a
+ * host running `npx auth migrate` would), then the plugin runs through drizzleAdapter with a
+ * schema built from the same table definitions (orm-schemas.ts).
+ */
+async function withDrizzle(raw: Db, provider: "pg" | "mysql"): Promise<Db> {
+  const { getMigrations } = await import("better-auth/db/migration");
+  await (await getMigrations(optionsFor(raw.database) as any)).runMigrations();
+  const { drizzleAdapter } = await import("better-auth/adapters/drizzle");
+  const schemas = await import("./orm-schemas");
+  const drizzleDb =
+    provider === "pg"
+      ? (await import("drizzle-orm/node-postgres")).drizzle(raw.database as any)
+      : (await import("drizzle-orm/mysql2")).drizzle(raw.database as any);
+  const schema = provider === "pg" ? await schemas.drizzlePgSchema(optionsFor(null) as any) : await schemas.drizzleMysqlSchema(optionsFor(null) as any);
+  return { database: drizzleAdapter(drizzleDb as any, { provider, schema: schema as any }), migrate: false, close: raw.close };
+}
+
+/**
+ * A Prisma entry: tables from Better Auth's migrator, then a Prisma client generated from a schema
+ * built from the same table definitions (`prisma generate` into a temporary directory).
+ */
+async function withPrisma(raw: Db): Promise<Db> {
+  const { getMigrations } = await import("better-auth/db/migration");
+  await (await getMigrations(optionsFor(raw.database) as any)).runMigrations();
+  const { mkdirSync, mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { execFileSync } = await import("node:child_process");
+  const { pathToFileURL } = await import("node:url");
+  // Inside the project, so the generated client resolves the installed @prisma/client.
+  const cache = join(process.cwd(), "node_modules/.cache");
+  mkdirSync(cache, { recursive: true });
+  const dir = mkdtempSync(join(cache, "saml-prisma-"));
+  const { prismaSchema } = await import("./orm-schemas");
+  writeFileSync(join(dir, "schema.prisma"), prismaSchema(optionsFor(null) as any, join(dir, "client")));
+  execFileSync(join(process.cwd(), "node_modules/.bin/prisma"), ["generate", "--schema", join(dir, "schema.prisma")], { stdio: "pipe" });
+  const { PrismaClient } = (await import(pathToFileURL(join(dir, "client/index.js")).href)) as any;
+  const prisma = new PrismaClient({ datasources: { db: { url: raw.url } } });
+  const { prismaAdapter } = await import("better-auth/adapters/prisma");
+  return {
+    database: prismaAdapter(prisma, { provider: "postgresql" }),
+    migrate: false,
+    async close() {
+      await prisma.$disconnect();
+      await raw.close();
+      rmSync(dir, { recursive: true, force: true });
+    },
+  };
+}
+
+async function build() {
+  const a = betterAuth(optionsFor(db.database));
   if (db.migrate) {
     const { getMigrations } = await import("better-auth/db/migration");
     await (await getMigrations((await a.$context).options)).runMigrations();

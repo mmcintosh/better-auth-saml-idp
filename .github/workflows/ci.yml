@@ -44,6 +44,14 @@ jobs:
             url: postgres://postgres:test@localhost:5432/postgres
           - db: mysql
             url: mysql://root:test@127.0.0.1:3306/mysql
+          # The same servers through Drizzle and Prisma, with schemas built from Better Auth's
+          # table definitions (test/adapters/orm-schemas.ts).
+          - db: drizzle-postgres
+            url: postgres://postgres:test@localhost:5432/postgres
+          - db: drizzle-mysql
+            url: mysql://root:test@127.0.0.1:3306/mysql
+          - db: prisma-postgres
+            url: postgres://postgres:test@localhost:5432/postgres
           # A single-node replica set, as production MongoDB is: Better Auth's adapter uses
           # transactions, which standalone servers don't support.
           - db: mongodb

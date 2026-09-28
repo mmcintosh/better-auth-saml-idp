@@ -30,7 +30,7 @@ Turn your [Better Auth](https://www.better-auth.com) server into a **SAML 2.0 Id
 - 🛡️ **Hardened input**: every message is checked against the OASIS XSDs by a libxml2 WebAssembly build that also runs on Workers. DOCTYPEs are refused, DEFLATE output is capped, and duplicate or encoded parameters are rejected.
 - ✅ **Signed AuthnRequests** over Redirect *and* POST, with defences against XML signature wrapping. Each defence was mutation-checked when written, and is fuzzed on every CI run.
 - 🔁 **Replay protection** you can check: a database unique key, tested under concurrency across separate instances.
-- 🗄️ **Your database**: proven in CI on PostgreSQL, MySQL, MongoDB, SQLite and Cloudflare D1, with Better Auth's own migrations ([Databases](docs/guide/databases.md)).
+- 🗄️ **Your database**: proven in CI on PostgreSQL, MySQL, MongoDB, SQLite and Cloudflare D1, through Kysely, Drizzle and Prisma ([Databases](docs/guide/databases.md)).
 - 🎲 **Fuzz-tested**: property-based tests throw hostile input at every inbound parser (AuthnRequest, LogoutRequest, LogoutResponse, SP metadata, raw XML) and the signature verifier, and hostile user data at issuance ([D-036](DECISIONS.md)).
 - 📦 **Supply chain**: SHA-pinned actions, CodeQL, dependency audits, OpenSSF Scorecard, and a release workflow that publishes with npm provenance and an SBOM ([SECURITY.md](SECURITY.md)).
 - 👤 **Strict identity**: only verified emails get assertions; impersonated and anonymous sessions are refused; the user and session are re-read right before signing. The NameID can come from a user field (an employee number), but only from fields users can't change themselves.
@@ -59,7 +59,7 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 - [x] **Observability hooks**: onAssertionIssued, onDenied, onLogout and onSessionEnded callbacks, run in the background (waitUntil on Workers) and isolated from the flow, plus an optional audit-log table with retention that doesn't store anonymous noise (D-038).
 - [ ] **better-auth-cloudflare 0.4**: 1.0.0 goes to npm latest once 0.4 is released; release candidates are on the next tag meanwhile. The example then swaps its vendored build for ^0.4.0. The plugin doesn't depend on it: 0.3.1 works with verification and rate limits in the database.
 - [x] **Key rotation guide**: docs/key-rotation.md: add next certificate, switch, retire. Rehearsed live with Cloudflare Access with zero downtime.
-- [ ] **Database adapter test matrix**: Postgres, MySQL and MongoDB proven in CI next to SQLite and D1 (MongoDB found a real gap, fixed: D-033), with a Databases page in the guide. Still to add: Drizzle on Postgres/MySQL, and Prisma.
+- [x] **Database adapter test matrix**: Postgres, MySQL and MongoDB, and Drizzle on Postgres and MySQL and Prisma on Postgres, proven in CI next to SQLite and D1 (MongoDB found a real gap, fixed: D-033), with a Databases page in the guide.
 - [x] **Second adversarial review**: Fresh-eyes review plus an independent review by a different model (D-029, D-030); every finding fixed with a regression test. Everything since the first round: POST re-entry, error Responses, account policy, NameID, encryption, IdP-initiated SSO, POST signatures, metadata refresh, the registry and the CLI.
 
 **v1.1: Close the expected-feature gaps**
@@ -80,7 +80,7 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 **Next: Reach, trust and B2B**
 
 - [ ] **Next.js example**: A Next.js App Router example (Node runtime) next to the Workers one: most Better Auth apps are Next.js or Node servers.
-- [ ] **Prisma and Drizzle on Postgres/MySQL**: The most common Better Auth adapters, proven in the CI adapter matrix alongside Kysely, MongoDB, SQLite and D1.
+- [x] **Prisma and Drizzle on Postgres/MySQL**: The most common Better Auth adapters, proven in the CI adapter matrix alongside Kysely, MongoDB, SQLite and D1 (D-051).
 - [ ] **Bun and Deno**: Smoke tests on both runtimes in CI, as Better Auth advertises them.
 - [ ] **OpenSSF Best Practices badge**: The passing-level self-assessment at bestpractices.dev, with the evidence for each criterion.
 - [ ] **Raise the OpenSSF Scorecard score**: Work through the checks the published Scorecard marks down, and record what is out of reach for a single-maintainer project.
@@ -135,7 +135,7 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 
 - [x] PostgreSQL 17, MySQL 8.4 and MongoDB 8.2 (replica set): the database-dependent behaviours (replay protection under concurrency, single use, registry, logout participants, memberships, the sweep, the audit log)
 - [x] SQLite (Node) and Cloudflare D1 via Drizzle (workerd): the whole suite
-- [ ] Drizzle on PostgreSQL/MySQL, and Prisma
+- [x] Drizzle on PostgreSQL and MySQL, and Prisma on PostgreSQL: the adapter matrix, in CI
 - [ ] HubSpot and AWS IAM Identity Center: guides written ([HubSpot](docs/hubspot.md), [AWS](docs/sp-aws-iam-identity-center.md)), not yet run live
 
 ## 📚 Table of Contents
