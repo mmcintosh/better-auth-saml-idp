@@ -3,7 +3,7 @@
 CHECKED = "2026-09-25"
 PRODUCTS = [
   # key, name, group, version/tier note, sources
-  ("us", "better-auth-saml-idp", "This plugin", "pre-release", [("Repository", "https://github.com/mmcintosh/better-auth-saml-idp"), ("Decision log", "https://github.com/mmcintosh/better-auth-saml-idp/blob/main/DECISIONS.md")]),
+  ("us", "better-auth-saml-idp", "This plugin", "1.0", [("Repository", "https://github.com/mmcintosh/better-auth-saml-idp"), ("Decision log", "https://github.com/mmcintosh/better-auth-saml-idp/blob/main/DECISIONS.md")]),
   ("shib", "Shibboleth IdP", "Reference", "5.2.3", [("Relying party config", "https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199508680"), ("Metadata config", "https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199508402"), ("Replay cache", "https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199509576")]),
   ("ssp", "SimpleSAMLphp", "Reference", "2.5.3", [("IdP setup", "https://simplesamlphp.org/docs/stable/simplesamlphp-idp.html"), ("SP remote reference", "https://simplesamlphp.org/docs/stable/simplesamlphp-reference-sp-remote.html"), ("Key rollover", "https://simplesamlphp.org/docs/stable/saml/keyrollover.html")]),
   ("kc", "Keycloak", "Reference", "26.7.4", [("SAML client config", "https://www.keycloak.org/docs/latest/server_admin/index.html#_client-saml-configuration"), ("SAML step-up", "https://www.keycloak.org/docs/latest/server_admin/index.html#_step-up-authentication-saml")]),

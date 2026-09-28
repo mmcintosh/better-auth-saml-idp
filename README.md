@@ -17,7 +17,7 @@ Turn your [Better Auth](https://www.better-auth.com) server into a **SAML 2.0 Id
 - **Example IdP (Workers + Hono + D1)**: [better-auth-saml-idp-example.mmcintosh-f61.workers.dev](https://better-auth-saml-idp-example.mmcintosh-f61.workers.dev/), which signs users in to Cloudflare Access, Okta, Auth0 and Salesforce, verified live
 - **Feature comparison with eleven SAML IdPs**: [mmcintosh.github.io/better-auth-saml-idp/comparison](https://mmcintosh.github.io/better-auth-saml-idp/comparison/)
 
-> **Unofficial community plugin.** This project isn't affiliated with or endorsed by Better Auth. Status: **release candidate** on npm under the `next` tag (`npm install better-auth-saml-idp@next`); 1.0.0 follows ([CHANGELOG](CHANGELOG.md)). Every design decision and its evidence is in [DECISIONS.md](DECISIONS.md).
+> **Unofficial community plugin.** This project isn't affiliated with or endorsed by Better Auth. Status: **1.0** on npm (`npm install better-auth-saml-idp`); see the [CHANGELOG](CHANGELOG.md). Every design decision and its evidence is in [DECISIONS.md](DECISIONS.md).
 
 > [!WARNING]
 > **Cloudflare Workers: put `samlIdp()` inside `withCloudflare`'s second argument.** A `plugins: [...]` next to `...withCloudflare(...)` **replaces** the Cloudflare plugin, which silently disables its storage validation, IP detection and geolocation.
@@ -169,9 +169,6 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 
 ## ⚡ Quick Start
 
-> [!IMPORTANT]
-> **Release candidate.** Until 1.0.0, install the `next` tag: `npm install better-auth-saml-idp@next`. `npx better-auth-saml-idp` then runs the installed CLI. Without it installed, use `npx better-auth-saml-idp@next <command>`: the untagged name still resolves to a placeholder.
-
 ```bash
 # 1. A signing key and certificate. The key goes straight into your Worker's secrets.
 npx better-auth-saml-idp keygen --cert-out idp.crt | npx wrangler secret put SAML_IDP_PRIVATE_KEY
@@ -192,9 +189,9 @@ The [Workers + Hono example](examples/workers-hono/README.md) is a complete, dep
 ## 📦 Installation
 
 ```bash
-npm install better-auth-saml-idp@next   # the release candidate, until 1.0.0
+npm install better-auth-saml-idp
 # or
-pnpm add better-auth-saml-idp@next
+pnpm add better-auth-saml-idp
 ```
 
 ### Requirements

@@ -4,7 +4,7 @@
 
 What a version number promises, which Better Auth versions each release works with, and how long each release gets fixes.
 
-The project is **pre-release**. This policy takes effect at 1.0.0, the first npm release.
+This policy applies from 1.0.0.
 
 ## Semantic Versioning
 

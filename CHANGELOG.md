@@ -4,6 +4,14 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-28
+
+The first stable release, on npm's `latest` tag. It's 1.0.0-rc.2 with the changes below; the full feature list is under 1.0.0-rc.1 and 1.0.0-rc.2 in the [CHANGELOG](https://github.com/mmcintosh/better-auth-saml-idp/blob/main/CHANGELOG.md). From here on, [Versioning and support](https://github.com/mmcintosh/better-auth-saml-idp/blob/main/docs/guide/versioning.md) applies. better-auth-cloudflare 0.4 isn't needed: with 0.3.1, keep verification and rate limits in the database, as the Workers guide says. Support for 0.4 comes in a 1.x minor release.
+
+### Changed
+
+- Dependencies: the xml-crypto range now starts at 6.3.2.
+
 ### Documentation
 
 - **AWS IAM Identity Center verified live** (D-054): a multi-Region instance accepted our assertion, with the access portal and the AWS console in an assigned permission set. The [guide](docs/sp-aws-iam-identity-center.md) now covers the several ACS URLs AWS publishes (one per Region, on `signin.aws` and `sso.signin.aws`), registering AWS from its metadata on the admin page, and what AWS doesn't do (signed requests, Single Logout).

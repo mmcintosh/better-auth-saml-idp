@@ -17,7 +17,7 @@ Our own column links to the tests that prove each entry. The roadmap derived fro
 
 ## Feature matrix
 
-Products: **better-auth-saml-idp** (This plugin, pre-release); **Shibboleth IdP** (Reference, 5.2.3); **SimpleSAMLphp** (Reference, 2.5.3); **Keycloak** (Reference, 26.7.4); **Zitadel** (Open source, main, Sep 2026); **authentik** (Open source, main, Sep 2026); **Logto** (Open source, SAML apps); **Ory Polis** (Open source, SAML Federation (enterprise)); **Microsoft Entra ID** (Commercial, non-gallery apps); **Okta** (Commercial, custom SAML apps); **Google Workspace** (Commercial, custom SAML apps); **Auth0** (Commercial, SAML2 Web App addon).
+Products: **better-auth-saml-idp** (This plugin, 1.0); **Shibboleth IdP** (Reference, 5.2.3); **SimpleSAMLphp** (Reference, 2.5.3); **Keycloak** (Reference, 26.7.4); **Zitadel** (Open source, main, Sep 2026); **authentik** (Open source, main, Sep 2026); **Logto** (Open source, SAML apps); **Ory Polis** (Open source, SAML Federation (enterprise)); **Microsoft Entra ID** (Commercial, non-gallery apps); **Okta** (Commercial, custom SAML apps); **Google Workspace** (Commercial, custom SAML apps); **Auth0** (Commercial, SAML2 Web App addon).
 
 ### Flows
 
@@ -107,7 +107,7 @@ From [HubSpot's SSO setup guide](https://knowledge.hubspot.com/account-security/
 
 ## Sources
 
-- **better-auth-saml-idp** (pre-release): [Repository](https://github.com/mmcintosh/better-auth-saml-idp), [Decision log](https://github.com/mmcintosh/better-auth-saml-idp/blob/main/DECISIONS.md)
+- **better-auth-saml-idp** (1.0): [Repository](https://github.com/mmcintosh/better-auth-saml-idp), [Decision log](https://github.com/mmcintosh/better-auth-saml-idp/blob/main/DECISIONS.md)
 - **Shibboleth IdP** (5.2.3): [Relying party config](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199508680), [Metadata config](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199508402), [Replay cache](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199509576)
 - **SimpleSAMLphp** (2.5.3): [IdP setup](https://simplesamlphp.org/docs/stable/simplesamlphp-idp.html), [SP remote reference](https://simplesamlphp.org/docs/stable/simplesamlphp-reference-sp-remote.html), [Key rollover](https://simplesamlphp.org/docs/stable/saml/keyrollover.html)
 - **Keycloak** (26.7.4): [SAML client config](https://www.keycloak.org/docs/latest/server_admin/index.html#_client-saml-configuration), [SAML step-up](https://www.keycloak.org/docs/latest/server_admin/index.html#_step-up-authentication-saml)

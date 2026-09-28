@@ -7,7 +7,7 @@ This page takes you from nothing to a working sign-in at a SAML service provider
 ## 1. Install
 
 ```bash
-npm install better-auth-saml-idp@next   # the release candidate, until 1.0.0
+npm install better-auth-saml-idp
 # or: pnpm add / yarn add / bun add
 ```
 

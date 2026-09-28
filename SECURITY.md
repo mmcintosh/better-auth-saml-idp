@@ -23,7 +23,7 @@ What happens next:
 
 ## Supported versions
 
-The project is in **release candidates**: they're on npm under the `next` tag, and until 1.0.0 only `main` (and the next release candidate) gets fixes. After 1.0, see [Versioning and support](docs/guide/versioning.md) for which versions get security fixes and for how long.
+See [Versioning and support](docs/guide/versioning.md) for which versions get security fixes and for how long.
 
 ## Scope
 
