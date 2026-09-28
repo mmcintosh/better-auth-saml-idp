@@ -11,7 +11,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { auditRow } from "../../src/events";
 import { AUTH_BASE } from "../support/host";
-import { authn, code, ok, urls, world } from "./world";
+import { authn, code, ok, urls, world } from "./tenant-world";
 
 // Unique per test: on workerd the tests of a file share one D1 database.
 const sp = (t: string) => ({ id: `sp-${t}`, entityId: `https://sp-a.test/${t}`, acs: "https://sp-a.test/acs" });

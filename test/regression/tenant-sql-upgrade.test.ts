@@ -4,8 +4,8 @@
 // Review 6 (D-052): the multi-tenant guide's upgrade of a populated registry, step by step, on
 // Postgres and MySQL, followed by its "drop the old UNIQUE(entityId)" SQL. Kept as a check of the
 // documented steps (it passes: see the report's "tried and rejected").
-//   ADAPTER_DB=postgres ADAPTER_URL=postgres://postgres:test@localhost:55432/postgres npx vitest run --project node test/review6/r6-sql-upgrade.test.ts
-//   ADAPTER_DB=mysql ADAPTER_URL=mysql://root:test@127.0.0.1:53306/mysql npx vitest run --project node test/review6/r6-sql-upgrade.test.ts
+//   ADAPTER_DB=postgres ADAPTER_URL=postgres://postgres:test@localhost:55432/postgres npx vitest run --project node test/regression/tenant-sql-upgrade.test.ts
+//   ADAPTER_DB=mysql ADAPTER_URL=mysql://root:test@127.0.0.1:53306/mysql npx vitest run --project node test/regression/tenant-sql-upgrade.test.ts
 import { betterAuth } from "better-auth";
 import { admin, organization } from "better-auth/plugins";
 import { afterAll, describe, expect, it } from "vitest";
@@ -13,7 +13,7 @@ import { samlIdp } from "../../src";
 import { baseOptions, SP_ACS } from "../support/config";
 import { AUTH_BASE, BASE_URL } from "../support/host";
 import { Browser, readAutoPost } from "../support/sp";
-import { authn } from "./world";
+import { authn } from "./tenant-world";
 
 const KIND = process.env.ADAPTER_DB;
 const URL_ = process.env.ADAPTER_URL ?? "";
@@ -25,7 +25,7 @@ describe.skipIf(KIND !== "postgres" && KIND !== "mysql")("the guide's SQL upgrad
   });
 
   async function database() {
-    const name = `saml_review6_${Date.now().toString(36)}`;
+    const name = `saml_upgrade_${Date.now().toString(36)}`;
     if (KIND === "postgres") {
       const { Pool } = await import("pg");
       const root = new Pool({ connectionString: URL_ });

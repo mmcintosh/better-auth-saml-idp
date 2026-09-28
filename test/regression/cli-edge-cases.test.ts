@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { run } from "../../src/cli/main";
 import { isWorkerd } from "../support/host";
 
-describe("review2 cli", () => {
+describe("CLI edge cases", () => {
   it.skipIf(isWorkerd)("R2-CLI-1: keygen --force writes the private key with mode 0600 even over an existing world-readable file", async () => {
     const dir = mkdtempSync(join(tmpdir(), "saml-r2-"));
     const key = join(dir, "idp.key");

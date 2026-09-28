@@ -7,7 +7,7 @@
 // signing key in phase 1), exactly what the design refuses for slugs (§1).
 // The same holds for a tenant still cached in another isolate for `tenants.cacheSeconds`.
 import { describe, expect, it } from "vitest";
-import { ok, world } from "./world";
+import { ok, world } from "./tenant-world";
 
 describe("R6-2: a deleted tenant's key can be given to another organization", () => {
   it("tenant A (key acme) deleted; a tenant for organization B with key acme should be refused; today it gets A's entity ID", async () => {

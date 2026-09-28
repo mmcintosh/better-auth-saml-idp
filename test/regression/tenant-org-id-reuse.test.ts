@@ -10,7 +10,7 @@
 import { describe, expect, it } from "vitest";
 import { AUTH_BASE, isWorkerd } from "../support/host";
 import { Browser } from "../support/sp";
-import { authn, code, ok, urls, world } from "./world";
+import { authn, code, ok, urls, world } from "./tenant-world";
 
 const SP = { entityId: "https://sp-b.test/sp", acs: "https://sp-b.test/acs" };
 const post = (b: Browser, path: string, body: unknown) =>

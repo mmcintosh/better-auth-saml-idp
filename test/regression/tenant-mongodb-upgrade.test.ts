@@ -12,7 +12,7 @@
 //
 // Runs only against a MongoDB replica set, like the adapter matrix:
 //   ADAPTER_DB=mongodb ADAPTER_URL='mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true' \
-//     npx vitest run --project node test/review6/r6-mongodb-upgrade.test.ts
+//     npx vitest run --project node test/regression/tenant-mongodb-upgrade.test.ts
 import { betterAuth } from "better-auth";
 import { admin, organization } from "better-auth/plugins";
 import { afterAll, describe, expect, it } from "vitest";
@@ -104,7 +104,7 @@ describe.skipIf(KIND !== "mongodb")("R6-4: the upgrade of a populated registry o
   }
 
   it("the guide's order: backfillMongoServiceProviderKeys before tenants are turned on; then everything works", async () => {
-    const dbName = `saml_review6_${Date.now().toString(36)}a`;
+    const dbName = `saml_upgrade_${Date.now().toString(36)}a`;
     const before = await populated(dbName);
     expect(await backfillMongoServiceProviderKeys(before.database)).toEqual({ updated: 2, skipped: [], failed: [] });
     expect(await backfillMongoServiceProviderKeys(before.database)).toEqual({ updated: 0, skipped: [], failed: [] }); // idempotent
@@ -114,7 +114,7 @@ describe.skipIf(KIND !== "mongodb")("R6-4: the upgrade of a populated registry o
   });
 
   it("tenants turned on first (the old order): the endpoint reports the rows it can't write instead of throwing; the MongoDB backfill then recovers", async () => {
-    const dbName = `saml_review6_${Date.now().toString(36)}b`;
+    const dbName = `saml_upgrade_${Date.now().toString(36)}b`;
     await populated(dbName);
     const after = await host(true, dbName);
     // Today (dac64f3) this threw E11000 at the first row. It now names every row it couldn't key.

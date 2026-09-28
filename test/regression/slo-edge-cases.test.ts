@@ -43,7 +43,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("review2 SLO", () => {
+describe("Single Logout edge cases", () => {
   it("R2-SLO-1: logout reaches every SP that got an assertion, even after the IdP session was refreshed", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     const t0 = Date.now();

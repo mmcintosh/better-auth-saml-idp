@@ -34,7 +34,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 const log = { info: () => {}, warn: () => {} };
 
-describe("review2 metadata", () => {
+describe("metadata edge cases", () => {
   it("R2-MD-1: changing an SP's metadata signing pin drops certificates learned under the old pin", async () => {
     const options = resolveOptions(baseOptions({ registry: { enabled: true } } as any));
     const stored = (pin: string) => {
