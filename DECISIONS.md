@@ -2,6 +2,65 @@
 
 A running log of the non-obvious choices, with the options considered and the evidence behind each one (SPEC §11).
 
+## Index
+
+- [D-001](#d-001-test-toolchain-versions-phase-0): Test toolchain versions (Phase 0)
+- [D-002](#d-002-test-keys): Test keys
+- [D-003](#d-003-schema-validator-under-workers-spec-8-open-question-3): Schema validator under Workers (SPEC §8, open question 3)
+- [D-004](#d-004-runtime-compatibility-of-samlifys-dependencies-spec-8): Runtime compatibility of samlify's dependencies (SPEC §8)
+- [D-005](#d-005-bundle-size-spec-8): Bundle size (SPEC §8)
+  - [addendum](#d-005-addendum-real-plugin-size-phase-1): real plugin size (Phase 1)
+- [D-006](#d-006-how-the-plugin-uses-the-schema-validator-phase-1): How the plugin uses the schema validator (Phase 1)
+- [D-007](#d-007-vendored-xsds-phase-1): Vendored XSDs (Phase 1)
+- [D-008](#d-008-node-xmllint-runs-in-emscripten-shell-mode-through-a-generated-wrapper-phase-1): node-xmllint runs in emscripten "shell" mode through a generated wrapper (Phase 1)
+- [D-009](#d-009-default-validator-is-the-custom-libxml2-wasm-build-node-xmllint-is-removed-phase-1-2026-09-24): Default validator is the custom libxml2 WASM build; node-xmllint is removed (Phase 1, 2026-09-24)
+- [D-010](#d-010-addendum-01-host-stack-and-amended-phase-0-gate-2026-09-24): ADDENDUM-01 host stack and amended Phase 0 gate (2026-09-24)
+- [D-011](#d-011-pending-requests-and-replay-storage-addendum-01-r1-r2-resolves-spec-12-q2): Pending requests and replay storage (ADDENDUM-01 R1, R2; resolves SPEC §12 Q2)
+- [D-012](#d-012-sp-initiated-sso-design-phase-2): SP-initiated SSO design (Phase 2)
+- [D-013](#d-013-phase-3-gate-amended-independent-sps-in-place-of-a-live-hubspot-login-2026-09-25): Phase 3 gate amended: independent SPs in place of a live HubSpot login (2026-09-25)
+- [D-014](#d-014-example-app-and-repo-plumbing-phase-3): Example app and repo plumbing (Phase 3)
+- [D-015](#d-015-adversarial-review-15-findings-fixed-plus-real-browser-e2e-2026-09-25): Adversarial review: 15 findings fixed, plus real-browser e2e (2026-09-25)
+- [D-016](#d-016-tier-3-evidence-a-real-cloudflare-access-login-2026-09-25): Tier-3 evidence: a real Cloudflare Access login (2026-09-25)
+- [D-017](#d-017-measured-on-the-live-deployment-2026-09-25): Measured on the live deployment (2026-09-25)
+- [D-018](#d-018-signed-authnrequests-and-forceauthn-verified-live-with-cloudflare-access-2026-09-25): Signed AuthnRequests and ForceAuthn, verified live with Cloudflare Access (2026-09-25)
+- [D-019](#d-019-key-rotation-rehearsed-live-example-builds-better-auth-once-per-isolate-2026-09-25): Key rotation rehearsed live; example builds Better Auth once per isolate (2026-09-25)
+- [D-020](#d-020-encrypted-assertions-2026-09-25): Encrypted assertions (2026-09-25)
+- [D-021](#d-021-idp-initiated-sso-spec-5-stretch-roadmap-v11): IdP-initiated SSO (SPEC §5 stretch, roadmap v1.1)
+- [D-022](#d-022-per-sp-signing-signed-metadata-sp-registration-from-metadata-2026-09-25): Per-SP signing, signed metadata, SP registration from metadata (2026-09-25)
+- [D-023](#d-023-a-command-line-tool-not-a-debug-endpoint-2026-09-25): A command-line tool, not a debug endpoint (2026-09-25)
+- [D-024](#d-024-declarative-attribute-mapping-2026-09-25): Declarative attribute mapping (2026-09-25)
+- [D-025](#d-025-signed-authnrequests-over-http-post-2026-09-25): Signed AuthnRequests over HTTP-POST (2026-09-25)
+- [D-026](#d-026-sp-metadata-url-with-refresh-2026-09-25): SP metadata URL with refresh (2026-09-25)
+- [D-027](#d-027-database-backed-sp-registry-and-management-api-2026-09-25): Database-backed SP registry and management API (2026-09-25)
+- [D-028](#d-028-saml-single-logout-2026-09-25): SAML Single Logout (2026-09-25)
+- [D-029](#d-029-second-adversarial-review-part-1-fresh-eyes-2026-09-25): Second adversarial review, part 1 (fresh eyes, 2026-09-25)
+- [D-030](#d-030-second-adversarial-review-part-2-external-different-model-2026-09-25): Second adversarial review, part 2 (external, different model, 2026-09-25)
+- [D-031](#d-031-deeper-better-auth-integration-2026-09-25): Deeper Better Auth integration (2026-09-25)
+- [D-032](#d-032-the-guide-and-background-work-on-workers-2026-09-26): The guide, and background work on Workers (2026-09-26)
+- [D-033](#d-033-database-adapter-matrix-and-replay-protection-on-mongodb-2026-09-26): Database adapter matrix, and replay protection on MongoDB (2026-09-26)
+- [D-034](#d-034-okta-as-a-live-sp-2026-09-26): Okta as a live SP (2026-09-26)
+- [D-035](#d-035-auth0-as-a-live-sp-tolerate-protocolbindinghttp-redirect-2026-09-26): Auth0 as a live SP; tolerate ProtocolBinding=HTTP-Redirect (2026-09-26)
+- [D-036](#d-036-fuzzing-characters-xml-cant-carry-in-issued-assertions-2026-09-26): Fuzzing; characters XML can't carry in issued assertions (2026-09-26)
+- [D-037](#d-037-codeql-findings-a-quadratic-xml-pre-scan-and-xmldoms-nesting-cost-2026-09-26): CodeQL findings: a quadratic XML pre-scan, and xmldom's nesting cost (2026-09-26)
+- [D-038](#d-038-observability-event-callbacks-and-an-audit-log-table-2026-09-26): Observability: event callbacks and an audit-log table (2026-09-26)
+- [D-039](#d-039-third-review-review-4-two-independent-reports-2026-09-26): Third review ("review 4"), two independent reports (2026-09-26)
+- [D-040](#d-040-api-decisions-before-10-2026-09-26): API decisions before 1.0 (2026-09-26)
+- [D-041](#d-041-nameid-from-a-user-field-2026-09-27): NameID from a user field (2026-09-27)
+- [D-042](#d-042-salesforce-verified-live-2026-09-27): Salesforce verified live (2026-09-27)
+- [D-043](#d-043-sessions-that-end-without-single-logout-2026-09-27): Sessions that end without Single Logout (2026-09-27)
+- [D-044](#d-044-authorize-can-give-a-reason-and-ask-for-re-authentication-2026-09-27): `authorize` can give a reason and ask for re-authentication (2026-09-27)
+- [D-045](#d-045-identity-broker-verified-better-authsso-upstream-this-plugin-downstream-2026-09-27): Identity broker verified: `@better-auth/sso` upstream, this plugin downstream (2026-09-27)
+- [D-046](#d-046-pre-release-review-2026-09-27): Pre-release review (2026-09-27)
+- [D-047](#d-047-step-up-authentication-2026-09-27): Step-up authentication (2026-09-27)
+- [D-048](#d-048-review-5-fixes-2026-09-28): Review 5 fixes (2026-09-28)
+- [D-049](#d-049-ci-runners-pinned-to-ubuntu-2404-2026-09-28): CI runners pinned to ubuntu-24.04 (2026-09-28)
+- [D-050](#d-050-openssf-scorecard-2026-09-28): OpenSSF Scorecard (2026-09-28)
+- [D-051](#d-051-adapter-matrix-with-drizzle-and-prisma-bun-and-deno-2026-09-28): Adapter matrix with Drizzle and Prisma; Bun and Deno (2026-09-28)
+- [D-052](#d-052-multi-tenant-idp-phase-1-an-idp-identity-per-organization-under-the-shared-key-2026-09-28): Multi-tenant IdP, phase 1: an IdP identity per organization under the shared key (2026-09-28)
+- [D-053](#d-053-review-6-fixes-2026-09-28): Review 6 fixes (2026-09-28)
+- [D-054](#d-054-aws-iam-identity-center-verified-live-2026-09-28): AWS IAM Identity Center verified live (2026-09-28)
+- [D-055](#d-055-repository-clean-up-before-100-2026-09-28): Repository clean-up before 1.0.0 (2026-09-28)
+
 ---
 
 ## D-001: Test toolchain versions (Phase 0)
@@ -1653,3 +1712,11 @@ A new AWS organization as the SP, and the deployed Workers example as the IdP, u
   - opening the account's permission set reached the AWS console as `SamlIdpReadOnly/<email>`, without another IdP sign-in;
   - signing out of the portal sent nothing to the IdP: Identity Center doesn't do SAML Single Logout with an external IdP.
 - **No bugs found.** Traps hit on the way, now in the guide: opening the portal before changing the identity source shows AWS's own sign-in page, and right after the change the settings page shows "External identity provider configuration not available" in the panel for AWS's own details; sign-in worked regardless.
+
+## D-055: Repository clean-up before 1.0.0 (2026-09-28)
+
+The repository kept working material that no longer reflects the project. Everything removed is in git history (tag `v1.0.0-rc.2` has it all).
+- **`docs/review/`:** the review reports (reviews 5 and 6), the review brief, the pre-release reviews and the OpenSSF badge notes are removed. Their findings and fixes are recorded here (D-039, D-046, D-048, D-053). The multi-tenant design moves to `docs/design/multi-tenant.md`, with a status note: phase 1 built, phases 2 and 3 not.
+- **`test/review2` … `test/review6`:** the proof tests stay as regression tests, in `test/regression/`, named for what they guard (such as `slo-relaystate-limit`, `tenant-key-reuse`). Their test titles keep the finding IDs (R4-1, R6-2 …) that this log refers to.
+- **`spike/` and `test/spike/`:** the Phase 0 spike is removed: the patched libxml2-wasm copy that reproduced the workerd blocker (D-003), the bundle-size and coexistence workers, and the samlify round-trip test that the interop tests have long covered. The workerd test host moves to `test/support/worker.ts`. The spike's two dev dependencies stay, because the wasm-validator benchmarks use them.
+- **This file:** an index of entries at the top. Entries are unchanged, so references to them (D-0xx) in code and docs still work.
