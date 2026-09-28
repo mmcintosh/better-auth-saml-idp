@@ -1582,7 +1582,7 @@ The roadmap item "One IdP identity per organization", built as phase 1 of `docs/
 20. no overlap warning; 21. the directory's tenant-column check; 22. the tenant lookup's exact-match check;
 23. a hard-wired `state.options.entityId` in SLO (the identity lint test); 24. a slug rule on a tenant SP accepted;
 25. the audit `tenantId` column dropped; 26. tenant routes checked against `samlServiceProvider`; 27. no manager check on tenant create;
-28. SLO lookup crossing tenants; 29. `Destination` compared with the root SSO URL; 30. the `lookupKey` index entry removed (MongoDB matrix).
+28. SLO lookup crossing tenants; 29. `Destination` compared with the root SSO URL; 30. the `lookupKey` index entry removed (MongoDB matrix); 31. the SLO continuation's route check (a POST LogoutRequest re-entered at another tenant's SLO URL).
 
-**Not verified:** a live interop run with real SPs in two tenants (design §8, "Interop, live"); the upgrade steps on a populated MongoDB collection; the tenant SLO continuation's route check (`/slo/<key>?cid=`), which has no test of its own.
+**Not verified:** a live interop run with real SPs in two tenants (design §8, "Interop, live"); the upgrade steps on a populated MongoDB collection.
 

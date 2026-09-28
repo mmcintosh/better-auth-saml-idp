@@ -505,6 +505,22 @@ describe("tenants: Single Logout across tenants (D-052)", () => {
     expect(toA.xml).toContain("status:PartialLogout");
   });
 
+  it("a POST LogoutRequest's continuation re-entered at another tenant's SLO URL is refused, and ends nothing", async () => {
+    const w = await signedInEverywhere();
+    const { signedPostMessage } = await import("../../src/saml/logout");
+    const post = await w.browser.fetch(w.A.slo, {
+      method: "POST",
+      crossSite: true,
+      headers: { "content-type": "application/x-www-form-urlencoded", origin: "https://only-a.test" },
+      body: new URLSearchParams({ SAMLRequest: signedPostMessage(w.lr(w.A.slo).xml, "LogoutRequest", spSigning(keys.sp.privateKey)) }).toString(),
+    });
+    expect(post.status).toBe(303);
+    const cid = new URL(post.headers.get("location")!).searchParams.get("cid");
+    expect(new URL(post.headers.get("location")!).pathname).toBe(new URL(w.A.slo).pathname);
+    expect(await code(await w.browser.fetch(`${w.B.slo}?cid=${cid}`))).toBe("UNKNOWN_SERVICE_PROVIDER");
+    expect(await (await w.browser.fetch(`${AUTH_BASE}/get-session`)).json()).not.toBeNull();
+  });
+
   it("an SP's LogoutRequest at another tenant's SLO URL finds nothing, and ends nothing", async () => {
     const w = await signedInEverywhere();
     const res = await w.browser.fetch(redirectBindingUrl(w.B.slo, "SAMLRequest", w.lr(w.B.slo).xml, undefined, spSigning(keys.sp.privateKey)));
