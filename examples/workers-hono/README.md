@@ -83,7 +83,6 @@ Two things to know:
 
 ## Guides for real service providers
 
-- [Cloudflare Access](../../docs/sp-cloudflare-access.md), [Okta](../../docs/sp-okta.md), [Auth0](../../docs/sp-auth0.md) and [Salesforce](../../docs/sp-salesforce.md), verified live
-- [AWS IAM Identity Center](../../docs/sp-aws-iam-identity-center.md), not yet verified live
+- [Cloudflare Access](../../docs/sp-cloudflare-access.md), [Okta](../../docs/sp-okta.md), [Auth0](../../docs/sp-auth0.md), [Salesforce](../../docs/sp-salesforce.md) and [AWS IAM Identity Center](../../docs/sp-aws-iam-identity-center.md), verified live
 - [HubSpot](../../docs/hubspot.md), not yet verified live
 - [Testing with other SPs and validators](../../docs/testing-with-sps.md)

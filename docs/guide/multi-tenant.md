@@ -112,7 +112,7 @@ await authClient.samlIdp.serviceProviders.create({
 ```
 
 - The SP is found **only through its tenant's URLs**, and gets the tenant's identity in everything it's sent: the `Issuer`, the `Destination` it must use, the metadata.
-- `spId` stays unique across all tenants; an **entity ID is unique per tenant**, so the same SP can be registered in several (AWS uses `urn:amazon:webservices` for every customer; [see below](#the-same-sp-in-several-tenants)).
+- `spId` stays unique across all tenants; an **entity ID is unique per tenant**, so the same SP can be registered in several (AWS IAM's SAML federation uses `urn:amazon:webservices` for every customer; [see below](#the-same-sp-in-several-tenants)).
 - A stored SP's `tenant` **can't change** (as its `id` can't): delete and re-create it. Creating one in an organization that isn't a tenant is refused.
 - `GET /saml-idp/service-providers?tenantId=<organization id>` lists one tenant's SPs (`?tenantId=` alone: the root's). With tenants on, every record has `tenantId` (`null` for the root IdP).
 - SPs without `tenant` belong to the root IdP, as before, and are found only through the root URLs.

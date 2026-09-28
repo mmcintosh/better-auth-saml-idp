@@ -261,7 +261,7 @@ The cross-instance R1 test matters. `consumeVerificationValue`'s in-process lock
 | 2 (CI job + local) | Keycloak 26.4, SAML identity broker with `validateSignature` and `wantAssertionsSigned` | `pnpm e2e`: PASS. A new user was created in Keycloak and linked to `our-idp`; first/last name mapped from our attributes |
 | 2 | SimpleSAMLphp 2.5.0 SP | `pnpm e2e`: PASS (new user: NameID + `email, name, firstName, lastName`), PASS (existing IdP session → no login page) |
 | 3 | **Cloudflare Access** (Zero Trust Free, team `aged-bird-8df2`) | **PASS 2026-09-25** (see D-016). |
-| 3 | AWS IAM Identity Center | Pending; needs a sandbox AWS account. Guide: `docs/sp-aws-iam-identity-center.md` |
+| 3 | AWS IAM Identity Center | **PASS 2026-09-28** (see D-054). Guide: `docs/sp-aws-iam-identity-center.md` |
 | 4 | SAMLtool (samltool.com/validate_response.php) | A throwaway local user and dev key, with the Response from `examples/workers-hono` on workerd → **"The SAML Response is valid."** The same Response with a wrong certificate → **"invalid. Response signature validation failed. Assertion signature validation failed."**, so the check is real |
 
 The tier-2 e2e drives the **example app on workerd** (`wrangler dev`, local D1), with a scripted browser that follows redirects and auto-submits SAML forms. Everything else about it is in `e2e/run.mjs`. Problems found and fixed while building it:
@@ -1637,3 +1637,19 @@ An external review of multi-tenant phase 1 (D-052) and everything since 1.0.0-rc
 10. the participant answer requiring an enabled route (I-4 test);
 11. the audit script auditing the whole lockfile (285 dependencies instead of 17);
 12. the old Next.js page restored (R6-7 check).
+
+## D-054: AWS IAM Identity Center verified live (2026-09-28)
+
+A new AWS organization as the SP, and the deployed Workers example as the IdP, updated to rc.2 first (migration 0008 applied).
+- **Setup:** IAM Identity Center enabled as a multi-Region organization instance, primary Region Ohio (the console wouldn't offer N. Virginia as primary), N. Virginia added. Identity source changed to an external IdP with the live metadata (certificate CN "better-auth-saml-idp-example (rotation 3)").
+- **Registry:** AWS was registered in the D1 registry from its downloaded dual-stack metadata on the admin page (`sp-from-metadata`):
+  - entity ID `https://us-east-2.signin.aws.amazon.com/platform/saml/<directory id>`, one per directory (not `urn:amazon:webservices`, which is AWS IAM's SAML federation);
+  - four ACS URLs: `us-east-2` and `us-east-1`, each on `signin.aws` and `sso.signin.aws`. The IPv4-only tab's ACS URL is one of them;
+  - `AuthnRequestsSigned="false"`, so there was no request signature to verify; `WantAssertionsSigned="true"`; NameID format `emailAddress`.
+- **User:** made with the AWS CLI: an Identity Center user whose username is the demo account's email, a `SamlIdpReadOnly` permission set (`ReadOnlyAccess`, 1-hour sessions) assigned on the account.
+- **Checks:**
+  - the access portal URL sent the browser to the IdP, and the maintainer landed in the portal with the account listed;
+  - the audit log recorded `assertion.issued` for `aws-identity-center`, SP-initiated (`inResponseTo` AWS's request ID), posted to the Ohio `sso.signin.aws` ACS URL, NameID the email, not encrypted;
+  - opening the account's permission set reached the AWS console as `SamlIdpReadOnly/<email>`, without another IdP sign-in;
+  - signing out of the portal sent nothing to the IdP: Identity Center doesn't do SAML Single Logout with an external IdP.
+- **No bugs found.** Traps hit on the way, now in the guide: opening the portal before changing the identity source shows AWS's own sign-in page, and right after the change the settings page shows "External identity provider configuration not available" in the panel for AWS's own details; sign-in worked regardless.

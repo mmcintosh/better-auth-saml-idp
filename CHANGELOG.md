@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Documentation
+
+- **AWS IAM Identity Center verified live** (D-054): a multi-Region instance accepted our assertion, with the access portal and the AWS console in an assigned permission set. The [guide](docs/sp-aws-iam-identity-center.md) now covers the several ACS URLs AWS publishes (one per Region, on `signin.aws` and `sso.signin.aws`), registering AWS from its metadata on the admin page, and what AWS doesn't do (signed requests, Single Logout).
+
 ## [1.0.0-rc.2] - 2026-09-28
 
 ### Added

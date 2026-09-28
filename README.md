@@ -55,7 +55,7 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 - [x] **Release engineering**: dist build with type declarations, Biome lint, gitleaks, publint and Are the Types Wrong, changelog; a CI-only release workflow publishing with npm provenance and a CycloneDX SBOM.
 - [x] **Supply chain and project files**: Every GitHub Action pinned by SHA with least-privilege tokens; CodeQL, a blocking runtime dependency audit, dependency review, OSV-Scanner, OpenSSF Scorecard and Dependabot. SECURITY.md, CONTRIBUTING.md, issue forms, and a versioning and support policy.
 - [x] **Fuzzing**: Property-based tests (fast-check) of the signature verifier, every inbound parser and issuance. The verifier held; issuance had five kinds of characters that produced invalid or unverifiable assertions, all fixed (D-036).
-- [ ] **Live SP verification**: Done: Cloudflare Access, Okta, Auth0 and Salesforce, live, with signed requests (Redirect and POST), encrypted assertions and Single Logout (D-034, D-035, D-042). Next: AWS IAM Identity Center.
+- [x] **Live SP verification**: Cloudflare Access, Okta, Auth0, Salesforce and AWS IAM Identity Center, live, with signed requests (Redirect and POST), encrypted assertions and Single Logout (D-034, D-035, D-042, D-054).
 - [x] **Observability hooks**: onAssertionIssued, onDenied, onLogout and onSessionEnded callbacks, run in the background (waitUntil on Workers) and isolated from the flow, plus an optional audit-log table with retention that doesn't store anonymous noise (D-038).
 - [ ] **better-auth-cloudflare 0.4**: 1.0.0 goes to npm latest once 0.4 is released; release candidates are on the next tag meanwhile. The example then swaps its vendored build for ^0.4.0. The plugin doesn't depend on it: 0.3.1 works with verification and rate limits in the database.
 - [x] **Key rotation guide**: docs/key-rotation.md: add next certificate, switch, retire. Rehearsed live with Cloudflare Access with zero downtime.
@@ -125,14 +125,14 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 - [x] Keycloak 26.7 and SimpleSAMLphp 2.5: real Chromium over HTTPS, in CI
 - [x] node-saml, samlify and `@better-auth/sso`: in CI, on Node and workerd, including an **identity broker** (`@better-auth/sso` upstream and this plugin downstream in one Better Auth, [guide](docs/guide/better-auth-sso.md#one-app-both-roles-an-identity-broker))
 - [x] SAMLtool: Response validation
-- [ ] AWS IAM Identity Center: next, live
+- [x] AWS IAM Identity Center: live (multi-Region instance), the access portal and the AWS console in an assigned permission set, SP stored in the D1 registry ([guide](docs/sp-aws-iam-identity-center.md))
 
 **Databases, in CI:**
 
 - [x] PostgreSQL 17, MySQL 8.4 and MongoDB 8.2 (replica set): the database-dependent behaviours (replay protection under concurrency, single use, registry, logout participants, memberships, the sweep, the audit log)
 - [x] SQLite (Node) and Cloudflare D1 via Drizzle (workerd): the whole suite
 - [x] Drizzle on PostgreSQL and MySQL, and Prisma on PostgreSQL: the adapter matrix, in CI
-- [ ] HubSpot and AWS IAM Identity Center: guides written ([HubSpot](docs/hubspot.md), [AWS](docs/sp-aws-iam-identity-center.md)), not yet run live
+- [ ] HubSpot: guide written ([HubSpot](docs/hubspot.md)), not yet run live
 
 ## 📚 Table of Contents
 
