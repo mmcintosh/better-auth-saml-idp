@@ -87,7 +87,6 @@ ROADMAP = [
  ("Later", "Considered", "Valuable, but needs design first or depends on the host.", [
    ("Step-up authentication (done)", "authnContext levels: RequestedAuthnContext judged against the session's achieved class; the user is sent to sign in again (prompt=login, acr_values) when more is needed, as Keycloak does with levels of authentication (D-047)."),
    ("Declarative attribute mapping (done)", "Per-SP map from attribute name to user field, constant, split list or first/last name; usable from JSON configuration."),
-   ("Upstreaming", "Propose integration with @better-auth/sso on better-auth #6254 once v1 is stable."),
  ]),
  ("Proposed", "Under review", "Ideas raised while waiting for 0.4. Each one either moves into a release or goes.", [
    ("Salesforce as a live SP (done)", "Verified 2026-09-27 with a Developer Edition org: signed requests required and verified, NameID to Federation ID (D-042, docs/sp-salesforce.md)."),
@@ -95,9 +94,6 @@ ROADMAP = [
    ("Release automation", "Changesets: changelog entries written with each PR, version bumps and the release PR generated, so a release is one merge."),
    ("Admin page in the example (done)", "/admin in the Workers example: IdP details, SPs (add from metadata, edit, enable, delete, test sign-in) and recent audit events, on the registry API. The plugin itself ships no UI."),
    ("NameID from a user field (done)", "nameId: { field } for code and stored SPs (for example an employee ID); only fields users can't set themselves (D-041)."),
-   ("MongoDB uniqueness report to Better Auth", "Better Auth's own tables (user.email, session.token) declare uniqueness the way that MongoDB's adapter ignores (D-033). A careful upstream report."),
-   ("Offer the verifier to @better-auth/sso", "Our hardened XML-signature verifier (XSW defences, mutation-tested, fuzzed) could harden the SP side too."),
-   ("Community Plugins listing", "An entry in Better Auth's Community Plugins at v1.0."),
  ]),
  ("Not planned", "Out of scope", "Deliberately left out.", [
    ("Artifact binding", "Of the products compared, only Keycloak supports it fully (Shibboleth and SimpleSAMLphp for responses); no target SP needs it."),
