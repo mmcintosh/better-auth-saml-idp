@@ -53,13 +53,10 @@ describe("one entity ID in two tenants, stored (D-052)", () => {
   it("a database that kept UNIQUE(entityId) from before tenants refuses the second one: 409, not a silent overwrite", async () => {
     const database = await createHostDatabase();
     if (!isWorkerd) {
-      // Upgrade path on SQLite: the table made with tenants off, then the guide's added columns.
+      // Upgrade path on SQLite: the table made with tenants off, then the guide's steps (lookupKey
+      // by hand, the rest by Better Auth's migrator, which leaves UNIQUE(entityId) in place).
       await createHost({ database, plugins: [organization()], saml: { registry: { enabled: true, canManage }, serviceProviders: [] } });
-      (database.db as { exec(sql: string): void }).exec(
-        `ALTER TABLE samlIdpServiceProvider ADD COLUMN tenantId TEXT NOT NULL DEFAULT '';
-         ALTER TABLE samlIdpServiceProvider ADD COLUMN lookupKey TEXT;
-         CREATE UNIQUE INDEX samlIdpServiceProvider_lookupKey_uidx ON samlIdpServiceProvider (lookupKey);`,
-      );
+      (database.db as { exec(sql: string): void }).exec("ALTER TABLE samlIdpServiceProvider ADD COLUMN lookupKey TEXT");
       const { getMigrations } = await import("better-auth/db/migration");
       const { hostOptions } = await import("../support/host");
       const opts = hostOptions(database, { plugins: [organization()], saml: { registry: { enabled: true, canManage }, tenants: { enabled: true }, serviceProviders: [] } });

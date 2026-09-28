@@ -686,14 +686,11 @@ describe("tenants: stored SPs through the registry API (D-052)", () => {
       model: "samlIdpServiceProvider",
       data: { spId: config.id, entityId, config: JSON.stringify(config), enabled: true, createdAt: now, updatedAt: now },
     });
-    // The guide's steps for a populated table: add the columns by hand (lookupKey nullable for now),
-    // then let Better Auth's migrator add the rest. On D1, migration 0007 is those steps.
+    // The guide's steps for a populated table: add lookupKey by hand, nullable for now (Better Auth's
+    // migrator won't add a required column to a table with rows), then let the migrator add the
+    // rest (tenantId, the UNIQUE index, the tenant table). On D1, migration 0007 is those steps.
     if (!isWorkerd) {
-      (database.db as { exec(sql: string): void }).exec(
-        `ALTER TABLE samlIdpServiceProvider ADD COLUMN tenantId TEXT NOT NULL DEFAULT '';
-         ALTER TABLE samlIdpServiceProvider ADD COLUMN lookupKey TEXT;
-         CREATE UNIQUE INDEX samlIdpServiceProvider_lookupKey_uidx ON samlIdpServiceProvider (lookupKey);`,
-      );
+      (database.db as { exec(sql: string): void }).exec("ALTER TABLE samlIdpServiceProvider ADD COLUMN lookupKey TEXT");
       const { getMigrations } = await import("better-auth/db/migration");
       const { hostOptions } = await import("../support/host");
       const opts = hostOptions(database, { plugins: [organization()], saml: { registry: { enabled: true, canManage }, tenants: { enabled: true }, serviceProviders: [] } });
