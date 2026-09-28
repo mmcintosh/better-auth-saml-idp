@@ -1,6 +1,6 @@
-// Review 6 helpers: a host with tenants on (organization plugin, registry, SLO), organizations
-// made through the adapter, tenants made through the tenant API by an admin. Both runtimes
-// (on workerd the organization and tenant tables come from D1 migration 0007).
+// Review 6 helpers: a host with tenants on (organization plugin, registry, SLO), organizations made
+// through the adapter, tenants made through the tenant API by an admin. Both runtimes (on workerd
+// the organization and tenant tables come from D1 migration 0007). The findings are fixed in D-053.
 import { organization } from "better-auth/plugins";
 import { expect } from "vitest";
 import type { SamlIdpOptions, ServiceProviderConfig } from "../../src/types";

@@ -1,3 +1,6 @@
+// Passed at review time (not a finding); kept as a check of the guide's SQL upgrade steps, and
+// still passing after D-053 (whose tenant table changes are part of what step 2 creates; the
+// backfill result gained `failed`, review 6 I-1).
 // Review 6 (D-052): the multi-tenant guide's upgrade of a populated registry, step by step, on
 // Postgres and MySQL, followed by its "drop the old UNIQUE(entityId)" SQL. Kept as a check of the
 // documented steps (it passes: see the report's "tried and rejected").
@@ -94,7 +97,7 @@ describe.skipIf(KIND !== "postgres" && KIND !== "mysql")("the guide's SQL upgrad
     await migrate(options(db, true));
     const after = betterAuth(options(db, true));
     // Step 3: the backfill.
-    expect(await (after.api as any).samlIdpBackfillServiceProviderKeys()).toEqual({ updated: 2, skipped: [] });
+    expect(await (after.api as any).samlIdpBackfillServiceProviderKeys()).toEqual({ updated: 2, skipped: [], failed: [] });
     // Step 4: NOT NULL.
     await sql(KIND === "postgres" ? `ALTER TABLE "samlIdpServiceProvider" ALTER COLUMN "lookupKey" SET NOT NULL` : "ALTER TABLE samlIdpServiceProvider MODIFY lookupKey varchar(255) NOT NULL");
 

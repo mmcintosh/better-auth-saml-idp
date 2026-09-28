@@ -1,3 +1,5 @@
+// Fixed in D-053 (a deleted tenant's key is retired, TENANT_KEY_RETIRED); kept as a regression
+// test, and tenants.test.ts has the main suite's. Comments saying "today" describe dac64f3.
 // Review 6 (D-052): a tenant's key is its entity ID and URLs, which the customer's SPs pin, and
 // "never changes". But deleting a tenant frees the key, and the next tenant created with it, for
 // another organization, gets the same entity ID, metadata URL and SSO/SLO URLs. SPs still
