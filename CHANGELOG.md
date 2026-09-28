@@ -4,6 +4,8 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.0.0-rc.2] - 2026-09-28
+
 ### Added
 
 - **Multi-tenant IdP, phase 1** (`tenants: { enabled: true }`, off by default; [guide](docs/guide/multi-tenant.md), D-052): an IdP identity per Better Auth organization, next to the root IdP.
