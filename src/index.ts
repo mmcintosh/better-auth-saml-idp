@@ -17,7 +17,7 @@ import { SpDirectory } from "./saml/sp-directory";
 import { registryEndpoints } from "./endpoints/registry";
 import { logoutEndpoint, sloEndpoint } from "./endpoints/slo";
 import { SLO_PATH } from "./saml/logout";
-import { consumeEndingBySlo, endParticipants, extendParticipants } from "./storage/participants";
+import { consumeEndingBySlo, endParticipants, extendParticipants, forgetUserParticipants } from "./storage/participants";
 import { emitWithoutRequest } from "./events";
 import { listSessionParticipantsEndpoint } from "./endpoints/participants";
 import type { SamlIdpOptions } from "./types";
@@ -104,6 +104,18 @@ export const samlIdp = (options: SamlIdpOptions) => {
       const options = resolved.sessionTracking
         ? {
             databaseHooks: {
+              // A deleted user's participant rows (NameID included) are removed with the user, after
+              // the session hook below has reported them (review 5 R5-3). Never blocks the delete.
+              user: {
+                delete: {
+                  after: async (user: { id?: string }) => {
+                    if (!user?.id) return;
+                    await forgetUserParticipants(ctx.adapter as any, user.id).catch((e) =>
+                      ctx.logger.error("[saml-idp] could not remove a deleted user's SAML participant rows", e),
+                    );
+                  },
+                },
+              },
               session: {
                 // Participants live as long as the session: when Better Auth extends a session,
                 // extend its participant rows, so the expiry sweep can't drop SPs a later logout

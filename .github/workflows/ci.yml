@@ -81,8 +81,8 @@ jobs:
         with: { fetch-depth: 0 }
       - run: docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.28.0@sha256:cdbb7c955abce02001a9f6c9f602fb195b7fadc1e812065883f695d1eeaba854 git /repo --no-banner --redact -c /repo/.gitleaks.toml
 
-  # Real Chromium over HTTPS (Playwright): Keycloak 26.4, SimpleSAMLphp 2.5 and a node-saml POST-binding
-  # SP with a cross-site post-ACS redirect, against the example IdP on workerd.
+  # Real Chromium over HTTPS (Playwright): Keycloak 26.7, SimpleSAMLphp 2.5, a node-saml POST-binding
+  # SP with a cross-site post-ACS redirect, and the example's /admin page, against the example IdP on workerd.
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 20

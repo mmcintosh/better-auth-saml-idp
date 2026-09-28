@@ -130,6 +130,11 @@ export function consumeEndingBySlo(sessionId: string): boolean {
   return at !== undefined && Date.now() - at <= ENDING_TTL_MS;
 }
 
+/** A deleted user's rows, NameIDs included, go with the user (review 5 R5-3). */
+export async function forgetUserParticipants(adapter: Adapter, userId: string): Promise<void> {
+  await adapter.deleteMany({ model: PARTICIPANT_MODEL, where: [{ field: "userId", value: userId }] });
+}
+
 export async function forgetParticipants(adapter: Adapter, sessionId: string): Promise<void> {
   await adapter.deleteMany({ model: PARTICIPANT_MODEL, where: [{ field: "sessionKey", value: await sessionKeyOf(sessionId) }] });
 }

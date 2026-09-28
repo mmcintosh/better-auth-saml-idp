@@ -2,7 +2,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { TLS } from "./tls.mjs";
-import { E2E_DIR, EXAMPLE_DIR, GENERATED, IDP, IDP_ENTITY, IDP_SSO, PORTS, SERVICE_PROVIDERS, SSP } from "./config.mjs";
+import { ADMIN_EMAIL, E2E_DIR, EXAMPLE_DIR, GENERATED, IDP, IDP_ENTITY, IDP_SSO, PORTS, SERVICE_PROVIDERS, SSP } from "./config.mjs";
 
 const STATE_DIR = join(GENERATED, "wrangler-state");
 
@@ -66,6 +66,7 @@ export async function startIdp() {
       "--local-protocol", "https", "--https-key-path", TLS.key, "--https-cert-path", TLS.cert,
       "--var", `SAML_SERVICE_PROVIDERS:${JSON.stringify(SERVICE_PROVIDERS)}`,
       "--var", "DEV_MAILBOX:true",
+      "--var", `SAML_REGISTRY_ADMINS:${ADMIN_EMAIL}`,
       "--persist-to", STATE_DIR,
     ],
     { cwd: EXAMPLE_DIR, stdio: ["ignore", "ignore", "inherit"], detached: true, env: { ...process.env, WRANGLER_SEND_METRICS: "false" } },

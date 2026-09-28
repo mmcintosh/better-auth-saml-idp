@@ -184,11 +184,21 @@ export function registryEndpoints(state: PluginState) {
 
     samlIdpUpdateServiceProvider: createAuthEndpoint(
       "/saml-idp/service-providers/update",
-      { method: "POST", use: [sensitiveSessionMiddleware], body: z.object({ id: idSchema, serviceProvider: spBody, enabled: z.boolean().optional() }) },
+      { method: "POST", use: [sensitiveSessionMiddleware], body: z.object({ id: idSchema, serviceProvider: spBody.optional(), enabled: z.boolean().optional() }) },
       async (ctx) => {
         const user = await manager(ctx, state, "update");
         const row = await findRow(ctx, ctx.body.id);
         if (!row) throw fail("NOT_FOUND", "SERVICE_PROVIDER_NOT_FOUND");
+        // Only switching it on or off: no re-validation, so an invalid row can still be disabled
+        // (review 5 R5-8). Its config is untouched.
+        if (ctx.body.serviceProvider === undefined) {
+          if (ctx.body.enabled === undefined) throw fail("BAD_REQUEST", "INVALID_SERVICE_PROVIDER", { issues: ["send serviceProvider, enabled, or both"] });
+          const toggle = { enabled: ctx.body.enabled, updatedAt: new Date(), updatedBy: user.id };
+          await adapterOf(ctx).update({ model: SP_MODEL, where: [{ field: "id", value: row.id }], update: toggle });
+          state.directory.invalidate();
+          audit(ctx, `user ${user.id} ${toggle.enabled ? "enabled" : "disabled"} SP ${row.spId}`);
+          return ctx.json({ serviceProvider: view({ ...row, ...toggle }, state, ctx.context.options) });
+        }
         if (ctx.body.serviceProvider.id !== ctx.body.id)
           throw fail("BAD_REQUEST", "INVALID_SERVICE_PROVIDER", { issues: ["serviceProvider.id: can't be changed (delete and re-create instead)"] });
         const config = validate(ctx, state, ctx.body.serviceProvider);

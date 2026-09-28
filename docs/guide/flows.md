@@ -98,8 +98,9 @@ samlIdp({
 
 For each SP request:
 - **Already met:** the assertion states the class the session achieved. Comparisons follow SAML Core §3.3.2.2.1 on your level order: `exact` (listed), `minimum` (at least as strong), `better` (stronger), `maximum` (no stronger). Classes outside `levels` only match exactly.
+- **The login page always hears it:** whenever a request that asked for a context is sent to your `loginPage` (the user isn't signed in, the SP sent ForceAuthn, `authorize` asked to re-authenticate, or step-up itself), the URL carries `acr_values=<the weakest class that would do>`. One round is then always enough for a page that honours it.
 - **Reachable but not met:** the user goes back to your `loginPage` with `prompt=login` and `acr_values=<the weakest class that would do>`. Your page must then require what that class means (for example the second factor, or enrolling one), and a fresh session is required. On the new session the request is judged again.
-- **Not met after that,** or not reachable by any level: the SP gets `NoAuthnContext`, with no loops. An IsPassive request that would need a step-up gets `NoPassive`.
+- **Not met after that,** or not reachable by any level: the SP gets `NoAuthnContext`, with no loops. An IsPassive request that would need a step-up gets `NoPassive`. `Comparison="maximum"` below the session's level is answered `NoAuthnContext` at once: signing in again can't lower it.
 - `current` runs on the user and session as re-read just before signing. It must return one of `levels`; anything else, or a throw, issues nothing (`INTERNAL_ERROR`).
 - **Be precise about what a session proves.** With Better Auth's two-factor "trust this device" option, a user with 2FA on may sign in without the second factor. If your app has that, or any way to create sessions without credentials, record when the second factor was actually completed (a session field) and have `current` read it.
 - `authnContext` and `authnContextClassRef` are exclusive.

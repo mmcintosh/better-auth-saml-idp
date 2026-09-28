@@ -329,9 +329,12 @@ export async function parseAuthnRequest(
   const rac = child(root, NS_PROTOCOL, "RequestedAuthnContext")[0];
   if (rac) {
     const comparison = ((rac.getAttribute("Comparison") ?? "exact").trim() || "exact") as RequestedAuthnContext["comparison"];
+    const classRefs = child(rac, NS_ASSERTION, "AuthnContextClassRef").map((e) => (e.textContent ?? "").trim());
+    // Bounded before it's stored with the pending request, as the Subject is (R4-L2; review 5 R5-5).
+    if (classRefs.length > 16 || classRefs.some((c) => c.length > 1024)) throw invalid("RequestedAuthnContext too large");
     requestedAuthnContext = {
       comparison,
-      classRefs: child(rac, NS_ASSERTION, "AuthnContextClassRef").map((e) => (e.textContent ?? "").trim()),
+      classRefs,
       hasDeclRefs: child(rac, NS_ASSERTION, "AuthnContextDeclRef").length > 0,
     };
   }

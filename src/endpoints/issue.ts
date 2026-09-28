@@ -259,7 +259,9 @@ export async function issueResponse(
     if (requested && !satisfiesAuthnContext(requested, achievedClass, levels.levels)) {
       const target = stepUpTarget(requested, levels.levels);
       const noContext = { code: "Responder" as const, subCode: "NoAuthnContext" as const, message: "The requested authentication context is not available" };
-      if (!target) return samlError(ctx, state, request, noContext, user.id);
+      // "maximum": the session is already stronger than asked, and signing in again can't lower
+      // what current() reports, so a round would be a dead end (review 5 R5-4).
+      if (!target || requested.comparison === "maximum") return samlError(ctx, state, request, noContext, user.id);
       if (request.isPassive)
         return samlError(ctx, state, request, { code: "Responder", subCode: "NoPassive", message: "Stepping up authentication needs the user" }, user.id);
       // Loop guard: this request already made the user sign in again, and it still isn't enough.

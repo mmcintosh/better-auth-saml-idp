@@ -1455,3 +1455,26 @@ Roadmap D3 ("map RequestedAuthnContext to the host's 2FA state, as Keycloak does
   10. no levels check;
   11. no exclusivity check.
 
+## D-048: Review 5 fixes (2026-09-28)
+
+An external review of everything since 4a44664 (`docs/review/review-5-findings.md`, proof tests in `test/review5/`, kept as regression tests). It found no Critical or High issues, and confirmed the D-046 fixes. Two Medium step-up gaps: D-047 was new, and its own tests hadn't exercised a park before issuance.
+- **R5-1 and R5-2 (Medium):** `acr_values` was only sent when step-up itself re-parked. The first park (no session), a ForceAuthn park and `authorize()`'s reauthenticate park didn't carry it. So a ForceAuthn + RequestedAuthnContext SP ended in `NoAuthnContext` after one uninformed password round, and after a reauthenticate round step-up was refused without its own round.
+  - **Fix** (the reviewer's second option): `parkForLogin` computes the step-up target from the stored RequestedAuthnContext on every park, so the login page always hears the level. One round is enough for a page that honours `acr_values`, and the loop guard, which keys on "already sent to sign in for this request", stays fair.
+  - The R5-2 proof test encoded the other option (step-up gets its own round even after an uninformed round). It was adapted to this fix: the reauthenticate redirect carries `acr_values`; a page that honours it gets the assertion in one round; a page that ignores it gets `NoAuthnContext`.
+- **R5-3 (Low, privacy):** participant rows, with their NameID, outlived a deleted user until the old session's expiry. A `user.delete.after` hook now deletes them by `userId`, after the session hook has reported them; it's an observer. The personal-data note in `observability.md` names the table.
+- **R5-4 (Low):** `Comparison="maximum"` below the achieved level sent the user to a sign-in round that can't lower what `current()` reports. It's now answered `NoAuthnContext` at once (the conservative reading).
+- **R5-5 (Info):** RequestedAuthnContext is bounded before it's stored with the pending request: at most 16 class refs of at most 1024 characters (`INVALID_SAML_REQUEST`), as the Subject was bounded (R4-L2).
+- **R5-6 (docs):**
+  - `SECURITY.md` supported versions (release candidates on `next`);
+  - the ci.yml Keycloak version;
+  - `flows.md` on `acr_values` for every park, and on `maximum`;
+  - `observability.md` personal data.
+- **R5-7 (tests):** a Playwright spec, `e2e/browser/admin.spec.mjs`, opens the example's `/admin` in Chromium on workerd. It covers the non-admin refusal; IdP details; add from metadata, save, disable, delete; and no CSP violations. The e2e IdP gets `SAML_REGISTRY_ADMINS`.
+- **R5-8 (admin page):** the registry update now also takes `{ id, enabled }` alone. It only flips the switch, with no re-validation, so an invalid row can be disabled, and its config is untouched. `serviceProvider` became optional on update, which is additive. The admin page's Enable/Disable uses it.
+- **Mutation proof:** five mutations, each caught:
+  1. `acr_values` only on the step-up park;
+  2. parking for `maximum`;
+  3. no user-delete cleanup;
+  4. no class-ref cap;
+  5. switch-only updates re-validating.
+

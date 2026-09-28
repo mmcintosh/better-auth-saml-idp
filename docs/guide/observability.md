@@ -88,7 +88,7 @@ Create the table with your migrations: `npx auth migrate` or `generate`, or D1 m
 - **Anonymous denials aren't stored.** A refusal that identifies neither an SP nor a user (a malformed request, an unknown issuer) goes to `onDenied` but not the table, so an attacker can't grow it at will. A denial for a known SP or a signed-in user is stored.
 - **Retention:** rows expire after `retentionDays` and are swept automatically, like the plugin's other expiring rows.
 - **Best effort:** rows are written in the background. A failed write is logged; it never fails the sign-in. If you need every event durably, forward from the callbacks to a store that guarantees it.
-- **Personal data:** `details` holds the NameID (often an email) and the IP. Set `retentionDays` to what your privacy policy allows.
+- **Personal data:** `details` holds the NameID (often an email) and the IP. Set `retentionDays` to what your privacy policy allows. The session-participant table (with Single Logout or `onSessionEnded`) also holds each SP's NameID; its rows expire with the session, and are removed at once when the user is deleted.
 
 Example queries (SQL, default table names):
 

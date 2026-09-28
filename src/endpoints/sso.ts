@@ -88,13 +88,19 @@ async function proceed(ctx: GenericEndpointContext, state: PluginState, sp: Reso
  * the login page; `/resume?rid=` picks it up afterwards (R1). Shared with IdP-initiated SSO.
  */
 export async function parkForLogin(ctx: GenericEndpointContext, state: PluginState, req: ValidatedRequest, opts: { acr?: string } = {}): Promise<never> {
+  // Step-up (D-047, review 5 R5-1/R5-2): every park of a request with a RequestedAuthnContext
+  // tells the login page the level to deliver, whatever sent the user there (no session yet,
+  // the SP's ForceAuthn, authorize()'s reauthenticate, or step-up itself). One round is then
+  // always enough for a page that honours acr_values, which keeps the loop guard fair.
+  const levels = state.options.authnContext?.levels;
+  const acr = opts.acr ?? (levels && req.authnContext ? stepUpTarget(req.authnContext, levels) : undefined);
   const binding = await bindingValue(ctx, true);
   const rid = await storePending(
     ctx.context.internalAdapter,
     { ...req, bindingHash: await sha256b64url(binding) },
     state.options.pendingRequestTtlSeconds,
   );
-  throw ctx.redirect(loginRedirectUrl(ctx, state, rid, { reauthenticate: req.forceAuthn, acr: opts.acr }));
+  throw ctx.redirect(loginRedirectUrl(ctx, state, rid, { reauthenticate: req.forceAuthn, acr }));
 }
 
 export const ssoEndpoint = (state: PluginState) =>

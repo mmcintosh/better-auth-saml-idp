@@ -205,7 +205,8 @@ function row(sp) {
   if (launchable && sp.enabled && sp.valid) actions.append(el("a", { className: "btn", href: "/api/auth/saml2/idp/init?sp=" + encodeURIComponent(sp.id), textContent: "Test sign-in", target: "_blank", rel: "noopener" }));
   if (sp.source === "database") {
     actions.append(el("button", { textContent: "Edit", onclick: () => openEditor("update", sp.id, sp.config, sp.enabled) }));
-    actions.append(el("button", { textContent: sp.enabled ? "Disable" : "Enable", onclick: () => save(sp.id, sp.config, !sp.enabled, "update") }));
+    // Only the switch: no config sent, so an invalid row can still be disabled.
+    actions.append(el("button", { textContent: sp.enabled ? "Disable" : "Enable", onclick: () => toggle(sp.id, !sp.enabled) }));
     actions.append(el("button", { className: "danger", textContent: "Delete", onclick: () => remove(sp.id) }));
   } else actions.append(el("span", { className: "muted", textContent: "defined in code" }));
   const meta = sp.updatedAt ? el("div", { className: "muted", textContent: "updated " + new Date(sp.updatedAt).toLocaleString() }) : "";
@@ -229,6 +230,10 @@ async function save(id, config, enabled, mode) {
     $("editor").hidden = true; editing = null;
     await loadSps();
   } catch (e) { say(e.message, "err"); }
+}
+
+async function toggle(id, enabled) {
+  try { await call(API + "/update", { id, enabled }); say((enabled ? "Enabled " : "Disabled ") + id + "."); await loadSps(); } catch (e) { say(e.message, "err"); }
 }
 
 async function remove(id) {

@@ -36,5 +36,8 @@ export const SERVICE_PROVIDERS = [
   },
 ];
 
+// The example's /admin page is open to this address (SAML_REGISTRY_ADMINS), once verified.
+export const ADMIN_EMAIL = "admin-e2e@example.com";
+
 export const PORTS = [8787, 8080, 8081, 9100, 9101];
 export const CHROMIUM_ARGS = ["--host-resolver-rules=MAP *.test 127.0.0.1"];

@@ -326,3 +326,20 @@ describe("SP registry: one record shape on every route (API decision 5)", () => 
     expect(r.issues).toEqual(["an SP in code has the same id or entityId; the code one is used"]);
   });
 });
+
+describe("SP registry: switching an SP on or off without re-validating (review 5 R5-8)", () => {
+  it("an invalid row (edited by hand) can still be disabled; its config is untouched; an empty update is refused", async () => {
+    const { auth } = await host();
+    const { browser } = await admin(auth);
+    await api(browser, "/create", { serviceProvider: stored() });
+    const ctx = await auth.$context;
+    const broken = JSON.stringify({ ...stored(), acsUrls: ["not a url"] });
+    await ctx.adapter.update({ model: "samlIdpServiceProvider", where: [{ field: "spId", value: SP_ID }], update: { config: broken } });
+    const res = await api(browser, "/update", { id: SP_ID, enabled: false });
+    expect(res.status).toBe(200);
+    expect((await json(res)).serviceProvider).toMatchObject({ id: SP_ID, enabled: false, valid: false });
+    const row = (await ctx.adapter.findOne({ model: "samlIdpServiceProvider", where: [{ field: "spId", value: SP_ID }] })) as any;
+    expect(row.config).toBe(broken);
+    expect((await api(browser, "/update", { id: SP_ID })).status).toBe(400);
+  });
+});
