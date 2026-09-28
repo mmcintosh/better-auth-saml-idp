@@ -799,6 +799,25 @@ describe("tenants: stored SPs through the registry API (D-052)", () => {
     expect((await api()).updated).toBe(0); // idempotent
   });
 
+  it.skipIf(isWorkerd)("the backfill reads the table in pages: more rows than one page are all keyed (review 6 I-1)", async () => {
+    const database = await createHostDatabase();
+    const before = await createHost({ database, plugins: [organization()], saml: { registry: { enabled: true, canManage }, serviceProviders: [] } });
+    const bctx = (await before.auth.$context) as any;
+    const now = new Date();
+    const count = 520; // the page is 500
+    for (let i = 0; i < count; i++) {
+      const config = { id: `pg-${i}`, entityId: `https://pg${i}.test/sp`, acsUrls: [`https://pg${i}.test/acs`] };
+      await bctx.adapter.create({ model: "samlIdpServiceProvider", data: { spId: config.id, entityId: config.entityId, config: JSON.stringify(config), enabled: true, createdAt: now, updatedAt: now } });
+    }
+    const saml = { registry: { enabled: true, canManage, cacheSeconds: 0 }, tenants: { enabled: true }, serviceProviders: [] };
+    (database.db as { exec(sql: string): void }).exec("ALTER TABLE samlIdpServiceProvider ADD COLUMN lookupKey TEXT");
+    const { getMigrations } = await import("better-auth/db/migration");
+    const { hostOptions } = await import("../support/host");
+    await (await getMigrations(hostOptions(database, { plugins: [organization()], saml }) as any)).runMigrations();
+    const { auth } = await createHost({ database, plugins: [organization()], saml });
+    expect(await (auth.api as any).samlIdpBackfillServiceProviderKeys()).toEqual({ updated: count, skipped: [], failed: [] });
+  });
+
   it("the backfill reports a row it can't write and carries on with the rest (review 6 I-1)", async () => {
     const t = `${Date.now().toString(36)}${n++}`;
     const database = await createHostDatabase();
