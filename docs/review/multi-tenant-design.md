@@ -494,20 +494,11 @@ The roadmap line says "Designed with a review before it is built" (README.md:87)
 
 ---
 
-## 9. Open questions for the maintainer
+## 9. Maintainer decisions (2026-09-27)
 
-1. Tenant creation: host administrators only (recommended), or automatic for every organization?
-2. Membership mandatory for tenant SPs (recommended), or does a real host need tenant SPs open to non-members?
-3. `tenantKey`: the org id by default (recommended), or a random key by default to defeat enumeration on serial-id hosts?
-4. Is anyone asking for KMS/HSM keys (option C)? If not, leave it deferred.
+1. **Tenant creation:** host administrators only. Nothing is created automatically for organizations.
+2. **Membership:** mandatory for tenant SPs. A user signs in through a tenant's identity only as a member of that organization.
+3. **`tenantKey`:** the organization id by default; the host administrator may set another key at creation (immutable afterwards).
+4. **KMS/HSM keys (option C):** deferred until someone asks. Phase 2 stores per-tenant keys encrypted in the database.
 
-## Sources
-
-- Okta, Beginner's Guide to SAML: https://support.okta.com/help/s/article/okta-saml?language=en_US
-- Okta, Manage signing certificates: https://help.okta.com/en-us/content/topics/apps/manage-signing-certificates.htm
-- Auth0, Configure Auth0 as SAML IdP: https://auth0.com/docs/authenticate/protocols/saml/saml-sso-integrations/configure-auth0-saml-identity-provider
-- WorkOS, SAML integration: https://workos.com/docs/integrations/saml
-- Keycloak Server Administration (realm keys): https://www.keycloak.org/docs/latest/server_admin/index.html
-- Keycloak descriptor URL (third-party guide): https://www.itsfullofstars.de/2020/02/keycloak-download-saml-2-0-idp-metadata/
-- authentik SAML provider: https://docs.goauthentik.io/add-secure-apps/providers/saml/
-- Okta Issuer-mismatch error (SPs checking Issuer): https://support.okta.com/help/s/question/0D51Y00009Y1nyHSAR/
+Phase 1 is built on these decisions; phases 2 and 3 check in with the maintainer before starting.
