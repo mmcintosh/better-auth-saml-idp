@@ -82,8 +82,6 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 - [x] **Next.js example**: examples/nextjs: App Router on the Node runtime with node:sqlite, a sign-in page that honours callbackURL, prompt=login and acr_values; CI builds it, starts it and signs in with node-saml.
 - [x] **Prisma and Drizzle on Postgres/MySQL**: The most common Better Auth adapters, proven in the CI adapter matrix alongside Kysely, MongoDB, SQLite and D1 (D-051).
 - [x] **Bun and Deno**: The built package smoke-tested on both in CI (test/runtimes/smoke.mjs): CLI keygen, metadata and a full sign-in with the signature verified (D-051).
-- [ ] **OpenSSF Best Practices badge**: The passing-level self-assessment at bestpractices.dev, with the evidence for each criterion.
-- [ ] **Raise the OpenSSF Scorecard score**: Work through the checks the published Scorecard marks down, and record what is out of reach for a single-maintainer project.
 - [ ] **Multi-tenant IdP**: One IdP identity per organization: each customer organization gets its own entity ID, metadata and signing key (organization plugin). Designed with a review before it is built.
 - [ ] **SCIM provisioning (companion plugin)**: Create, update and deactivate users in SPs automatically, usually asked for alongside SAML. A separate plugin, since provisioning is a separate concern from sign-in.
 
