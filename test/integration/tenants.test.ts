@@ -505,6 +505,26 @@ describe("tenants: Single Logout across tenants (D-052)", () => {
     expect(toA.xml).toContain("status:PartialLogout");
   });
 
+  it("a participant's answer arriving at its tenant's URL after that tenant was disabled mid-chain: the chain goes on, and the originator is answered (review 6 I-4)", async () => {
+    const w = await signedInEverywhere();
+    const first = await w.browser.fetch(redirectBindingUrl(w.A.slo, "SAMLRequest", w.lr(w.A.slo).xml, undefined, spSigning(keys.sp.privateKey)));
+    const toB = postForm(await first.text());
+    // B's tenant is disabled while its SP handles the LogoutRequest; its answer comes back to B's URL.
+    await w.tenants("/update", { organizationId: w.orgB.id, enabled: false });
+    const answerB = buildLogoutResponse({ issuer: ONLY_B.entityId, destination: w.B.slo, inResponseTo: /ID="([^"]+)"/.exec(toB.xml)![1]!, status: ["Success"], now: new Date() });
+    const next = await w.browser.fetch(redirectBindingUrl(w.B.slo, "SAMLResponse", answerB, toB.relayState, spSigning(keys.idpNext.privateKey)));
+    const toRoot = await redirected(next.headers.get("location")!, "SAMLRequest");
+    expect(toRoot.target).toBe(ROOT.slo);
+    const answerRoot = buildLogoutResponse({ issuer: ROOT.entityId, destination: `${AUTH_BASE}/saml2/idp/slo`, inResponseTo: /ID="([^"]+)"/.exec(toRoot.xml)![1]!, status: ["Success"], now: new Date() });
+    const done = await w.browser.fetch(redirectBindingUrl(`${AUTH_BASE}/saml2/idp/slo`, "SAMLResponse", answerRoot, toRoot.relayState, spSigning(keys.sp.privateKey)));
+    const toA = await redirected(done.headers.get("location")!, "SAMLResponse");
+    expect(issuer(toA.xml)).toBe(w.A.metadata);
+    // B's answer can't be checked against a disabled tenant's identity: reported, not trusted.
+    expect(toA.xml).toContain("status:PartialLogout");
+    // A LogoutRequest at the disabled tenant's URL still finds nothing.
+    expect(await code(await w.browser.fetch(redirectBindingUrl(w.B.slo, "SAMLRequest", w.lr(w.B.slo).xml, undefined, spSigning(keys.sp.privateKey))))).toBe("UNKNOWN_SERVICE_PROVIDER");
+  });
+
   it("a POST LogoutRequest's continuation re-entered at another tenant's SLO URL is refused, and ends nothing", async () => {
     const w = await signedInEverywhere();
     const { signedPostMessage } = await import("../../src/saml/logout");

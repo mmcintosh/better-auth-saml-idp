@@ -218,25 +218,15 @@ async function handleSlo(ctx: SloContext, state: PluginState, tenantKey?: string
   const isPost = ctx.request?.method === "POST";
   const input = ((isPost ? ctx.body : ctx.query) ?? {}) as z.infer<typeof params>;
   const route = await routeIdentity(ctx, state, tenantKey);
-  if (!route) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", "logout: unknown tenant");
-  const routeTenant = route.tenantId ?? "";
   const now = new Date();
-  const parseOpts = { now, clockSkewSeconds: options.clockSkewSeconds, sloUrl: route.sloUrl };
   const sigOpts = { allowInsecureSha1: options.signing.allowInsecureSha1 };
 
   try {
-    // Re-entry of an HTTP-POST LogoutRequest on a same-site GET (cookies now present).
-    if (!isPost && input.cid !== undefined) {
-      const req = await consume<PendingLogoutRequest>(ctx.context.internalAdapter, CONTINUE_PREFIX, input.cid);
-      if (!req) return fail(ctx, state, "LOGOUT_STATE_NOT_FOUND", "unknown or used logout continuation");
-      const sp = await spById(ctx, state, req.spId);
-      if (!sp?.singleLogoutService) return fail(ctx, state, "LOGOUT_NOT_SUPPORTED", `SP ${req.spId}`, { spId: req.spId, ...tenantOf(sp ?? {}) });
-      if ((sp.tenantId ?? "") !== routeTenant) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", `logout: SP ${sp.id} changed tenant`, { spId: sp.id, ...tenantOf(sp) });
-      return await handleLogoutRequest(ctx, state, sp, req);
-    }
-
-    // A participant's answer to our LogoutRequest: continue the chain whatever it says.
-    if (input.SAMLResponse !== undefined) {
+    // A participant's answer to our LogoutRequest: continue the chain whatever it says. Matched to
+    // its hop by RelayState wherever it arrives, even at a URL whose tenant was disabled since the
+    // chain started (review 6 I-4), and checked against its own tenant's SLO URL: the rest of the
+    // chain and the originator's answer aren't lost.
+    if (input.SAMLResponse !== undefined && (isPost || input.cid === undefined)) {
       const raw = rawFrom(ctx, isPost, "SAMLResponse");
       const ls = await consume<LogoutState>(ctx.context.internalAdapter, STATE_PREFIX, raw.relayState);
       if (!ls?.current) return fail(ctx, state, "LOGOUT_STATE_NOT_FOUND", "unknown or used logout state");
@@ -245,7 +235,7 @@ async function handleSlo(ctx: SloContext, state: PluginState, tenantKey?: string
         const sent = sp && (await spIdentity(ctx, state, sp));
         if (!sp || !sent) throw new Error("its SP or tenant is gone");
         const xml = await decodeAuthnRequest(raw);
-        const info = await parseLogoutResponse(xml, options.schemaValidator, { ...parseOpts, sloUrl: sent.sloUrl });
+        const info = await parseLogoutResponse(xml, options.schemaValidator, { now, clockSkewSeconds: options.clockSkewSeconds, sloUrl: sent.sloUrl });
         if (info.issuer !== sp.entityId || info.inResponseTo !== ls.current.requestId) throw new Error("not the answer we're waiting for");
         const ready = await prepareSp(ctx, state, sp);
         if (mustSign(ready)) {
@@ -260,6 +250,20 @@ async function handleSlo(ctx: SloContext, state: PluginState, tenantKey?: string
       }
       ls.current = undefined;
       return await nextHop(ctx, state, ls);
+    }
+
+    if (!route) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", "logout: unknown tenant");
+    const routeTenant = route.tenantId ?? "";
+    const parseOpts = { now, clockSkewSeconds: options.clockSkewSeconds, sloUrl: route.sloUrl };
+
+    // Re-entry of an HTTP-POST LogoutRequest on a same-site GET (cookies now present).
+    if (!isPost && input.cid !== undefined) {
+      const req = await consume<PendingLogoutRequest>(ctx.context.internalAdapter, CONTINUE_PREFIX, input.cid);
+      if (!req) return fail(ctx, state, "LOGOUT_STATE_NOT_FOUND", "unknown or used logout continuation");
+      const sp = await spById(ctx, state, req.spId);
+      if (!sp?.singleLogoutService) return fail(ctx, state, "LOGOUT_NOT_SUPPORTED", `SP ${req.spId}`, { spId: req.spId, ...tenantOf(sp ?? {}) });
+      if ((sp.tenantId ?? "") !== routeTenant) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", `logout: SP ${sp.id} changed tenant`, { spId: sp.id, ...tenantOf(sp) });
+      return await handleLogoutRequest(ctx, state, sp, req);
     }
 
     // An SP's LogoutRequest.
