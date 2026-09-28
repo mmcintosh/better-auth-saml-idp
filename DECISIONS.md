@@ -1519,3 +1519,70 @@ From the "Reach, trust and B2B" roadmap lane: prove the plugin on the stacks mos
 - **CI:** a `runtimes` job, bun and deno, with `oven-sh/setup-bun` and `denoland/setup-deno` pinned by SHA.
 - **Scope:** a smoke test, not the whole suite. The suite needs Vitest's Node and workerd pools, and Better Auth's own runtime support is Bun's and Deno's Node compatibility.
 
+## D-052: Multi-tenant IdP, phase 1: an IdP identity per organization under the shared key (2026-09-28)
+
+The roadmap item "One IdP identity per organization", built as phase 1 of `docs/review/multi-tenant-design.md`, on the maintainer's decisions in its §9: host administrators create tenants; membership is mandatory; `tenantKey` defaults to the organization id, may be chosen at creation, never changes; KMS/HSM deferred. Phases 2 (per-tenant keys) and 3 (delegation) are not built. Guide: `docs/guide/multi-tenant.md`.
+
+**What it is.** `tenants: { enabled: true }`, off by default.
+- A tenant is an organization with a `samlIdpTenant` row, created through the registry API (`/saml-idp/tenants/*`, the `samlTenant` access-control resource). Its entity ID is its metadata URL; its URLs are `/saml2/idp/{metadata,sso,slo}/<tenantKey>`. All tenants sign with `signing` (`keys: "shared"`, the only value).
+- SPs join one with `tenant` (code or stored). `spId` stays globally unique, so replay keys, SessionIndexes, participants, pending requests and audit rows are unchanged; entity IDs are unique per tenant through `lookupKey` (a hash of tenant and entity ID, UNIQUE), so AWS or Google can be in several tenants.
+
+**Isolation doesn't rest on the SP checking Issuer.**
+- The URL decides the identity. An entity ID is looked up in the URL's tenant only: code SPs by `(tenant, entityId)`, stored SPs by `lookupKey`, then the loaded row must be of that tenant with exactly that entity ID (a hand-edited key can't cross tenants). The root URLs find root SPs only.
+- Beyond the design: a request carries the tenant of the **URL** it came to (not of the SP found), and issuance refuses it when the SP's current tenant differs. A lookup that ever crossed tenants would still get nothing (a second layer; mutation 3 below shows the first layer is tested on its own).
+- `Destination` is checked against the URL the request arrived at. A POST continuation re-entered at another tenant's URL, or the root's, is refused.
+- A disabled or deleted tenant: its URLs answer like an unknown one; its SPs get nothing through any route (IdP-initiated included); Single Logout skips them (`PartialLogout`). Never the root identity instead.
+
+**`IdpIdentity` (design §5.8).** `src/saml/identity.ts` builds `{ tenantId, tenantKey, entityId, signing, ssoUrl, sloUrl, metadataUrl }` for the root or a tenant. Responses, error Responses, logout messages and metadata take an identity, not `options`. `test/unit/identity-lint.test.ts` fails if any other source file reads `options.entityId` or the signing key (option resolution, the CLI and the SP-metadata importer's own `options.entityId` are allowed). It's internal: not exported.
+
+**The rest of phase 1, as designed.**
+- Membership of the tenant's organization is implied and can't be turned off; an `organization` rule on a tenant SP may only be `{ id: <its tenant>, roles? }` (a slug or another id is refused). Issuance also refuses a tenant SP whose rule is missing (defence in depth). Organization attributes without `only` then cover the tenant's organization only.
+- Persistent NameIDs of tenant SPs: `HMAC(secret, "saml-idp:persistent\0" + tenantId + "\0" + entityId + "\0" + userId)`; the root's derivation is unchanged.
+- SLO: each participant gets its LogoutRequest from its own tenant's identity, the originator its LogoutResponse from its own, and a participant's answer is checked against its own tenant's SLO URL (it may arrive at any SLO URL; the hop is in its RelayState).
+- Startup errors: no organization plugin, no pinned base URL (samlIdp's or Better Auth's, including `BETTER_AUTH_URL`; with only Better Auth's, the plugin pins it), `tenants.delegation` (needs `keys: "per-tenant"`), `keys: "per-tenant"` (not available yet).
+- The host-administrator overlap warning (design §5.1 c): an SP with the same entity ID **and** an ACS URL as an SP in another tenant or the root. At startup for code SPs; in the registry record's `warnings` and the log for stored ones.
+- `tenantId` in `assertion.issued`, `denied` and `logout` events and each `session.ended` participant (absent for the root IdP, so root events are unchanged), an audit-log column, `ServiceProviderInfo.tenantId` (`null` for the root; `public-api.test.ts` updated deliberately), and registry records (only with tenants on). The login page gets `tenant=<tenantKey>` on the redirect from a tenant's request.
+- Tenant metadata: 404 identical (status, content type, body) for an unknown key, a disabled tenant, an organization that isn't a tenant and a malformed key; no organization name or slug in the document.
+
+**Byte-identical when off.** `test/integration/tenants-off.test.ts` was committed first (`edde4bf`), its snapshots recorded from the code before any tenant change: metadata (plain; signed with SLO; with a rotation certificate), the signed Response and its auto-POST page, the persistent NameID derivation, the POST binding's 303, the login redirect, a NoPassive Response, an error page, an IdP-initiated Response, a LogoutRequest to a POST participant and the LogoutResponse to the originator, and the plugin's schema and routes with every optional feature on and off. Only per-run values are normalised (certificates, random IDs, instants, digests, signature values, nonces, tokens); signatures are verified. They pass unchanged after every commit, on both runtimes, with `CI=true` (snapshots can't be rewritten).
+
+**Choices the design left open, or where it was changed (the safer option each time).**
+1. **Tenants need `registry.enabled`.** Tenants and their stored SPs live in the database and are managed through the registry API; the design didn't say. A startup error otherwise.
+2. **`lookupKey` is required, not nullable.** Better Auth refuses a UNIQUE table-level index on an optional field, and without that index MongoDB doesn't enforce uniqueness (D-033). Checked: removing the index entry lets concurrent duplicates in on MongoDB. The cost: Better Auth's migrator won't add a required column to a populated table, so a registry with rows adds it nullable by hand, runs the migrator, backfills, then sets NOT NULL. Verified by hand on Postgres 17 and MySQL 8.4 containers, and by the SQLite tests.
+3. **The backfill is a server-only endpoint, `auth.api.samlIdpBackfillServiceProviderKeys()`,** not D1 SQL plus a CLI helper as the design suggested: the key can't be computed in SQL (SHA-256 isn't in SQLite/D1, and Postgres text can't hold the NUL separator). Rows without a key are found by no lookup until then (no lazy dual path, as the design wanted), and their registry records say so.
+4. **The old `UNIQUE(entityId)` stays** on databases that had the registry (the migrator never drops it), so a second tenant's copy of an entity ID gets 409: the safe direction, tested. The guide gives the SQL to drop it, with the constraint and index names Better Auth's migrator actually creates, checked on Postgres 17 and MySQL 8.4, and the D1 table rebuild, which `tenants-shared-entity.test.ts` applies. The test D1 keeps the constraint (tenants-off tests rely on it); migration `0007_tenants.sql` there also adds the organization plugin's tables, so tenant tests run on workerd.
+5. **The overlap warning** needs the same entity ID and a shared ACS URL: with different ACS URLs no assertion can land at the other SP.
+6. **Registry records carry `tenantId` only with tenants on**, to keep responses unchanged without them; `ServiceProviderInfo` always has it, as the design says.
+7. **A code SP's tenant must exist (and be enabled)** in the database to be used; otherwise its sign-ins are refused.
+8. **Not built from the design's lists:** `canManage` receiving `tenantId` (§5.4; for phase 3, and not knowable for every route before the row is loaded, which would turn 403s into an existence oracle), `keys` in `TenantRecord` (phase 2), the CLI's `--tenant` options (§6; not in §7's phase-1 list).
+
+**Tests** (`test/integration/tenants.test.ts`, `tenants-shared-entity.test.ts`, `tenants-off.test.ts`, `test/unit/sp-directory.test.ts`, `identity-lint.test.ts`, `client.test.ts`; Node and workerd except the lint test):
+- configuration and startup errors;
+- one entity ID in tenants A and B (in code, and stored): each URL's Issuer, verified by samlify against that tenant's metadata; an SP pinned to A refusing B's assertion (`ERR_UNMATCH_ISSUER`: what the shared key leaves to the SP);
+- lookups per tenant in each direction and at the root; `Destination` of A at B; replay per SP; unknown and disabled tenants; the POST binding at a tenant URL; the continuation at another URL; the login redirect's `tenant`; IdP-initiated; a request whose SP changed tenant before resume;
+- membership, roles, attribute scoping, `authorize`'s `tenantId`;
+- metadata (XSD-valid, signed, no organization name, identical 404s);
+- SLO across A, B and the root, the participant Destination rule, a disabled participant's tenant, a LogoutRequest at another tenant's URL;
+- events and audit rows; the tenant API (CRUD, immutability, refusals, 403 for non-managers and for the organization's own owner, the `samlTenant` permission); stored SPs (tenant, filtering, immutability, overlap warning); the upgrade and backfill path.
+- **Adapter matrix:** a tenants block on a second fresh database (the `lookupKey` race, one entity ID in two tenants, per-tenant lookups, tenant booleans). Run locally against Postgres 17, MySQL 8.4, Drizzle on both, Prisma on Postgres and MongoDB 8.2: 11/11 each.
+- **Full suite:** 139 files passed, 10 skipped; 1322 tests passed, 58 skipped (before: 132 files, 1218 passed, 54 skipped).
+
+**Mutation proof** (each broken on purpose, a test failed, restored with `git checkout`):
+1. stored lookup without the row-tenant re-check (unit test);
+2. code-SP lookup ignoring the tenant (7 tests on Node, 4 on workerd);
+3. a tenant URL falling back to root code SPs, and the root URL finding tenant SPs (unit tests: the flow tests pass because issuance's tenant check refuses both, see 4);
+4. issuance's request-tenant check removed (resume after the SP changed tenant); with 3 as well, the root-URL test fails too;
+5. implied membership removed (16 tests, via the issuance guard); with the guard removed too, non-members are admitted (3 tests). The guard alone removed: nothing fails, as expected of a second layer;
+6. persistent NameID without the tenant; and the root's with it (tenants-off snapshot test);
+7. participants' LogoutRequests from the root identity; 8. the originator answered from the root identity; 9. a participant's answer checked against the route's SLO URL;
+10. a missing tenant resolving to the root identity: **survived at first** (issuance refuses anyway), then caught once the disabled-participant SLO test was added (Single Logout uses the identity directly);
+11. the delegation gate; 12. the pinned-baseURL check; 13. the organization-plugin check;
+14. disabled tenants treated as enabled (4 tests); 15. an SP's tenant changeable on update; 16. an SP in an organization that isn't a tenant;
+17. the tenant update body not strict; 18. deleting a tenant that has SPs; 19. the continuation's route check;
+20. no overlap warning; 21. the directory's tenant-column check; 22. the tenant lookup's exact-match check;
+23. a hard-wired `state.options.entityId` in SLO (the identity lint test); 24. a slug rule on a tenant SP accepted;
+25. the audit `tenantId` column dropped; 26. tenant routes checked against `samlServiceProvider`; 27. no manager check on tenant create;
+28. SLO lookup crossing tenants; 29. `Destination` compared with the root SSO URL; 30. the `lookupKey` index entry removed (MongoDB matrix).
+
+**Not verified:** a live interop run with real SPs in two tenants (design §8, "Interop, live"); the upgrade steps on a populated MongoDB collection; the tenant SLO continuation's route check (`/slo/<key>?cid=`), which has no test of its own.
+
