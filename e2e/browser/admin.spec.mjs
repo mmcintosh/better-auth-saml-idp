@@ -14,6 +14,10 @@ const SP_METADATA = `<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:
 </md:SPSSODescriptor></md:EntityDescriptor>`;
 
 test.describe.serial("example admin page", () => {
+  // Sign-ups are rate limited per IP (3 per 10 s) and this spec does two: leave the window
+  // empty for the specs that follow, which sign up too.
+  test.afterAll(async () => new Promise((r) => setTimeout(r, 11_000)));
+
   test("a signed-in user who isn't a listed admin is refused", async ({ browser }) => {
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
