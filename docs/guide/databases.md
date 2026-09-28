@@ -22,12 +22,24 @@ The database-dependent behaviours run against a real server in CI (`test/adapter
 | PostgreSQL 17 | Kysely (a `pg` pool) | `npx auth migrate` | ✅ CI |
 | MySQL 8.4 | Kysely (a `mysql2` pool) | `npx auth migrate` | ✅ CI |
 | MongoDB 8.2 (replica set) | `mongodbAdapter` | created by the adapter | ✅ CI |
-| PostgreSQL 17 | Drizzle (`drizzle-orm/node-postgres`) | `npx auth generate`, then your migration | ✅ CI |
-| MySQL 8.4 | Drizzle (`drizzle-orm/mysql2`) | `npx auth generate`, then your migration | ✅ CI |
-| PostgreSQL 17 | Prisma 6 | `npx auth generate`, then `prisma migrate` | ✅ CI |
-
-In CI, the Drizzle and Prisma schemas are built from Better Auth's own table definitions (`getAuthTables`, in `test/adapters/orm-schemas.ts`), the way `npx auth generate` does, so they include every plugin table and column. The tables are created by Better Auth's migrator; Prisma's client is generated from the schema on each run.
+| PostgreSQL 17 | Drizzle (`drizzle-orm/node-postgres`) | `npx auth generate`, then your migration | ✅ CI as the query layer; tables from Better Auth's migrator ([below](#drizzle-and-prisma)) |
+| MySQL 8.4 | Drizzle (`drizzle-orm/mysql2`) | `npx auth generate`, then your migration | ✅ CI as the query layer; tables from Better Auth's migrator |
+| PostgreSQL 17 | Prisma 6 | `npx auth generate`, then `prisma migrate` | ✅ CI as the query layer; tables from Better Auth's migrator |
 | Any | Better Auth's memory adapter | | ❌ doesn't enforce uniqueness: development only |
+
+### Drizzle and Prisma
+
+What CI checks for Drizzle and Prisma is the **adapter**: every behaviour above, through Drizzle or Prisma queries. The **tables** in those runs are created by Better Auth's Kysely migrator, not from a Drizzle or Prisma schema, so CI doesn't check that a schema you generate carries the plugin's unique keys. The ORM schemas the tests query with are built from Better Auth's own table definitions (`getAuthTables`, in `test/adapters/orm-schemas.ts`), the way `npx auth generate` builds them; Prisma's client is generated from that schema on each run.
+
+If you create the tables from a generated schema, check that it has these unique keys before going live; without them, the protections that rely on them are silently off:
+
+| Table | Unique | What relies on it |
+|---|---|---|
+| `samlIdpSeenRequest` | `key` | AuthnRequest replay protection |
+| `samlIdpServiceProvider` | `spId`; `entityId` (tenants off) or `lookupKey` (tenants on) | the registry: one SP per id and entity ID |
+| `samlIdpSessionParticipant` | `key` | Single Logout: each SP once per session |
+| `samlIdpTenant` | `organizationId`, `tenantKey` | tenants: one per organization, one per key |
+| `samlIdpRetiredTenantKey` | `tenantKey` | tenants: a deleted tenant's key is never reused |
 
 ## Creating the tables
 
