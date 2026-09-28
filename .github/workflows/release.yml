@@ -53,11 +53,12 @@ jobs:
       # The SBOM describes what a user installs: the tarball's runtime dependency tree.
       # The package and its runtime dependencies as a user gets them, from the pinned lockfile
       # (not resolved afresh at release time); peers (better-auth) are the host's and left out.
-      - run: pnpm --filter better-auth-saml-idp deploy --prod --legacy sbom-root
+      - run: pnpm --filter better-auth-saml-idp deploy --prod --legacy --config.node-linker=hoisted sbom-root
       - uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           path: sbom-root
           format: cyclonedx-json
+          config: .github/syft.yaml
           output-file: out/better-auth-saml-idp-${{ steps.meta.outputs.version }}.cdx.json
           upload-artifact: false
           upload-release-assets: false
