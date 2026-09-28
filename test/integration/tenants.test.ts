@@ -491,6 +491,20 @@ describe("tenants: Single Logout across tenants (D-052)", () => {
     expect((await redirected(done.headers.get("location")!, "SAMLResponse")).xml).toContain("status:PartialLogout");
   });
 
+  it("a participant whose tenant was disabled since is skipped (PartialLogout), never sent a LogoutRequest from another identity", async () => {
+    const w = await signedInEverywhere();
+    await w.tenants("/update", { organizationId: w.orgB.id, enabled: false });
+    const first = await w.browser.fetch(redirectBindingUrl(w.A.slo, "SAMLRequest", w.lr(w.A.slo).xml, undefined, spSigning(keys.sp.privateKey)));
+    // Straight to the root SP: nothing went to B's.
+    const toRoot = await redirected(first.headers.get("location")!, "SAMLRequest");
+    expect(toRoot.target).toBe(ROOT.slo);
+    const answerRoot = buildLogoutResponse({ issuer: ROOT.entityId, destination: `${AUTH_BASE}/saml2/idp/slo`, inResponseTo: /ID="([^"]+)"/.exec(toRoot.xml)![1]!, status: ["Success"], now: new Date() });
+    const done = await w.browser.fetch(redirectBindingUrl(`${AUTH_BASE}/saml2/idp/slo`, "SAMLResponse", answerRoot, toRoot.relayState, spSigning(keys.sp.privateKey)));
+    const toA = await redirected(done.headers.get("location")!, "SAMLResponse");
+    expect(issuer(toA.xml)).toBe(w.A.metadata);
+    expect(toA.xml).toContain("status:PartialLogout");
+  });
+
   it("an SP's LogoutRequest at another tenant's SLO URL finds nothing, and ends nothing", async () => {
     const w = await signedInEverywhere();
     const res = await w.browser.fetch(redirectBindingUrl(w.B.slo, "SAMLRequest", w.lr(w.B.slo).xml, undefined, spSigning(keys.sp.privateKey)));
