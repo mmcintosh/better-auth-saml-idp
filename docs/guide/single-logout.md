@@ -128,7 +128,7 @@ samlIdp({
 
 Also consider `sessionNotOnOrAfter` (a server option, and per SP). It tells SPs up front when to end their session: `"idp-session"` for the IdP session's end, or `{ maxSeconds }`. Shibboleth and SimpleSAMLphp honour it; many SaaS SPs don't, and Slack is documented to ignore it.
 
-Which SPs accept a logout without a browser (the SAML SOAP binding): Shibboleth SP and SimpleSAMLphp. Okta and Salesforce accept logout only through the browser; AWS IAM Identity Center, Google Workspace and Slack take no IdP-initiated logout. The plugin doesn't send SOAP logout yet (DECISIONS D-043, and the [design review](../review/session-end-review.md)).
+Which SPs accept a logout without a browser (the SAML SOAP binding): Shibboleth SP and SimpleSAMLphp. Okta and Salesforce accept logout only through the browser; AWS IAM Identity Center, Google Workspace and Slack take no IdP-initiated logout. The plugin doesn't send SOAP logout yet (DECISIONS D-043).
 
 ## Limits
 
