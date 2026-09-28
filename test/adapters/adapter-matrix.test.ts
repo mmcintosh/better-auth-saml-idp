@@ -31,7 +31,7 @@ interface Db {
 }
 
 /** One small function per database: a fresh, empty database and Better Auth's `database` option. */
-const databases: Record<string, () => Promise<Db>> = {
+const databases: Record<string, (tenants?: boolean) => Promise<Db>> = {
   async postgres() {
     const { Pool } = await import("pg");
     const name = `saml_matrix_${Date.now().toString(36)}`;
@@ -75,9 +75,9 @@ const databases: Record<string, () => Promise<Db>> = {
   },
 
   // The same servers, through Drizzle (the most common Better Auth adapter after Kysely).
-  "drizzle-postgres": async () => withDrizzle(await databases.postgres!(), "pg"),
-  "drizzle-mysql": async () => withDrizzle(await databases.mysql!(), "mysql"),
-  "prisma-postgres": async () => withPrisma(await databases.postgres!()),
+  "drizzle-postgres": async (tenants) => withDrizzle(await databases.postgres!(), "pg", tenants),
+  "drizzle-mysql": async (tenants) => withDrizzle(await databases.mysql!(), "mysql", tenants),
+  "prisma-postgres": async (tenants) => withPrisma(await databases.postgres!(), tenants),
 
   async mongodb() {
     const { MongoClient } = await import("mongodb");
@@ -100,8 +100,8 @@ const databases: Record<string, () => Promise<Db>> = {
 let db: Db;
 let auth: Awaited<ReturnType<typeof build>>;
 
-/** The options every entry runs with; `database` is the entry's. */
-const optionsFor = (database: unknown) => ({
+/** The options every entry runs with; `database` is the entry's. `tenants`: the multi-tenant schema (D-052). */
+const optionsFor = (database: unknown, tenants = false) => ({
     baseURL: BASE_URL,
     secret: "test-secret-that-is-at-least-32-characters-long",
     telemetry: { enabled: false },
@@ -117,6 +117,7 @@ const optionsFor = (database: unknown) => ({
           registry: { enabled: true, canManage: ({ user }) => user.role === "admin", cacheSeconds: 0 },
           singleLogout: { enabled: true },
           auditLog: { enabled: true },
+          ...(tenants ? { tenants: { enabled: true, cacheSeconds: 0 } } : {}),
         }),
       ),
     ],
@@ -127,16 +128,16 @@ const optionsFor = (database: unknown) => ({
  * host running `npx auth migrate` would), then the plugin runs through drizzleAdapter with a
  * schema built from the same table definitions (orm-schemas.ts).
  */
-async function withDrizzle(raw: Db, provider: "pg" | "mysql"): Promise<Db> {
+async function withDrizzle(raw: Db, provider: "pg" | "mysql", tenants = false): Promise<Db> {
   const { getMigrations } = await import("better-auth/db/migration");
-  await (await getMigrations(optionsFor(raw.database) as any)).runMigrations();
+  await (await getMigrations(optionsFor(raw.database, tenants) as any)).runMigrations();
   const { drizzleAdapter } = await import("better-auth/adapters/drizzle");
   const schemas = await import("./orm-schemas");
   const drizzleDb =
     provider === "pg"
       ? (await import("drizzle-orm/node-postgres")).drizzle(raw.database as any)
       : (await import("drizzle-orm/mysql2")).drizzle(raw.database as any);
-  const schema = provider === "pg" ? await schemas.drizzlePgSchema(optionsFor(null) as any) : await schemas.drizzleMysqlSchema(optionsFor(null) as any);
+  const schema = provider === "pg" ? await schemas.drizzlePgSchema(optionsFor(null, tenants) as any) : await schemas.drizzleMysqlSchema(optionsFor(null, tenants) as any);
   return { database: drizzleAdapter(drizzleDb as any, { provider, schema: schema as any }), migrate: false, close: raw.close };
 }
 
@@ -144,9 +145,9 @@ async function withDrizzle(raw: Db, provider: "pg" | "mysql"): Promise<Db> {
  * A Prisma entry: tables from Better Auth's migrator, then a Prisma client generated from a schema
  * built from the same table definitions (`prisma generate` into a temporary directory).
  */
-async function withPrisma(raw: Db): Promise<Db> {
+async function withPrisma(raw: Db, tenants = false): Promise<Db> {
   const { getMigrations } = await import("better-auth/db/migration");
-  await (await getMigrations(optionsFor(raw.database) as any)).runMigrations();
+  await (await getMigrations(optionsFor(raw.database, tenants) as any)).runMigrations();
   const { mkdirSync, mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
   const { join } = await import("node:path");
   const { execFileSync } = await import("node:child_process");
@@ -156,7 +157,7 @@ async function withPrisma(raw: Db): Promise<Db> {
   mkdirSync(cache, { recursive: true });
   const dir = mkdtempSync(join(cache, "saml-prisma-"));
   const { prismaSchema } = await import("./orm-schemas");
-  writeFileSync(join(dir, "schema.prisma"), prismaSchema(optionsFor(null) as any, join(dir, "client")));
+  writeFileSync(join(dir, "schema.prisma"), prismaSchema(optionsFor(null, tenants) as any, join(dir, "client")));
   execFileSync(join(process.cwd(), "node_modules/.bin/prisma"), ["generate", "--schema", join(dir, "schema.prisma")], { stdio: "pipe" });
   const { PrismaClient } = (await import(pathToFileURL(join(dir, "client/index.js")).href)) as any;
   const prisma = new PrismaClient({ datasources: { db: { url: raw.url } } });
@@ -172,9 +173,9 @@ async function withPrisma(raw: Db): Promise<Db> {
   };
 }
 
-async function build() {
-  const a = betterAuth(optionsFor(db.database));
-  if (db.migrate) {
+async function build(from: Db = db, tenants = false) {
+  const a = betterAuth(optionsFor(from.database, tenants));
+  if (from.migrate) {
     const { getMigrations } = await import("better-auth/db/migration");
     await (await getMigrations((await a.$context).options)).runMigrations();
   }
@@ -322,5 +323,52 @@ describe.skipIf(!KIND)(`adapter matrix: ${KIND}`, { timeout: 60_000 }, () => {
     }, Date.now(), { participants: true });
     const rows = (await c.adapter.findMany({ model: "samlIdpSeenRequest", where: [{ field: "spId", value: "sp-sweep" }] })) as { requestId: string }[];
     expect(rows.map((r) => r.requestId)).toEqual(["_new"]);
+  });
+});
+
+// Multi-tenant IdP (D-052), on a second fresh database with the tenant schema: entity IDs are unique
+// per tenant through the lookupKey UNIQUE index (on MongoDB, the table-level `indexes` entry).
+describe.skipIf(!KIND)(`adapter matrix: ${KIND}, tenants`, { timeout: 60_000 }, () => {
+  let tdb: Db;
+  let tauth: Awaited<ReturnType<typeof build>>;
+  beforeAll(async () => {
+    tdb = await (databases[KIND as string] as (tenants?: boolean) => Promise<Db>)(true);
+    tauth = await build(tdb, true);
+  });
+  afterAll(async () => {
+    await tdb?.close();
+  });
+
+  it("one entity ID in two tenants; within one tenant the database's UNIQUE lookup key lets exactly one of concurrent creates win; each tenant's URL finds its own", async () => {
+    const c = (await tauth.$context) as any;
+    const admin = new Browser(tauth);
+    const adminUser = await admin.signUp();
+    await c.adapter.update({ model: "user", where: [{ field: "id", value: adminUser.id }], update: { role: "admin" } });
+    const post = (path: string, body: unknown) =>
+      admin.fetch(`${AUTH_BASE}/saml-idp${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const user = new Browser(tauth);
+    const u = await user.signUp();
+    const orgs: string[] = [];
+    for (const name of ["ta", "tb"]) {
+      const o = await c.adapter.create({ model: "organization", data: { name, slug: `${name}-${Date.now()}`, createdAt: new Date() } });
+      await c.adapter.create({ model: "member", data: { organizationId: o.id, userId: u.id, role: "member", createdAt: new Date() } });
+      expect((await post("/tenants/create", { organizationId: o.id })).status).toBe(200);
+      orgs.push(String(o.id));
+    }
+    const shared = { entityId: "urn:amazon:webservices", acsUrls: ["https://signin.aws.amazon.com/saml"] };
+    const racing = await Promise.all(Array.from({ length: 5 }, (_, i) => post("/service-providers/create", { serviceProvider: { id: `aws-a${i}`, ...shared, tenant: orgs[0] } })));
+    expect(racing.filter((r) => r.status === 200)).toHaveLength(1);
+    expect(racing.filter((r) => r.status === 409)).toHaveLength(4);
+    expect((await post("/service-providers/create", { serviceProvider: { id: "aws-b", ...shared, tenant: orgs[1] } })).status).toBe(200);
+    for (const org of orgs) {
+      const sso = `${AUTH_BASE}/saml2/idp/sso/${org}`;
+      const url = (await redirectUrl(authnRequestXml({ issuer: shared.entityId, acsUrl: shared.acsUrls[0], destination: sso }).xml)).replace(`${AUTH_BASE}/saml2/idp/sso`, sso);
+      const { xml } = await readAutoPost(await user.fetch(url));
+      expect(/<saml:Issuer>([^<]+)</.exec(xml)?.[1]).toBe(`${AUTH_BASE}/saml2/idp/metadata/${org}`);
+    }
+    // Tenant rows: booleans round-trip, and a disabled tenant is gone from its URLs.
+    expect((await post("/tenants/update", { organizationId: orgs[1], enabled: false })).status).toBe(200);
+    expect((await tauth.handler(new Request(`${AUTH_BASE}/saml2/idp/metadata/${orgs[1]}`))).status).toBe(404);
+    expect((await tauth.handler(new Request(`${AUTH_BASE}/saml2/idp/metadata/${orgs[0]}`))).status).toBe(200);
   });
 });
