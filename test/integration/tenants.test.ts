@@ -606,6 +606,36 @@ describe("tenants: the tenant API, host administrators only (D-052, maintainer d
   });
 });
 
+describe("tenants: admin-plugin permissions (D-052)", () => {
+  it("the tenant routes need `samlTenant`: managing SPs (`samlServiceProvider`) isn't enough", async () => {
+    const { createAccessControl } = await import("better-auth/plugins/access");
+    const { adminAc, defaultStatements } = await import("better-auth/plugins/admin/access");
+    const { samlIdpStatements } = await import("../../src/access");
+    const ac = createAccessControl({ ...defaultStatements, ...samlIdpStatements });
+    const roles = {
+      admin: ac.newRole({ ...adminAc.statements, samlServiceProvider: ["list", "read", "create", "update", "delete"], samlTenant: ["list", "read", "create", "update", "delete"] }),
+      spAdmin: ac.newRole({ samlServiceProvider: ["list", "read", "create", "update", "delete"] }),
+    };
+    const database = await createHostDatabase();
+    const saml = { registry: { enabled: true, permissions: true }, tenants: { enabled: true }, serviceProviders: [] };
+    const { auth } = await createHost({ database, plugins: [organization()], adminOptions: { ac, roles }, saml });
+    const ctx = (await auth.$context) as any;
+    const org = await ctx.adapter.create({ model: "organization", data: { name: "P", slug: `p-${Date.now().toString(36)}${n++}`, createdAt: new Date() } });
+    const as = async (role: string) => {
+      const b = new Browser(auth);
+      const u = await b.signUp();
+      await ctx.adapter.update({ model: "user", where: [{ field: "id", value: u.id }], update: { role } });
+      return (path: string, body?: unknown) =>
+        b.fetch(`${AUTH_BASE}/saml-idp${path}`, { method: body ? "POST" : "GET", headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+    };
+    const spAdmin = await as("spAdmin");
+    expect((await spAdmin("/service-providers")).status).toBe(200);
+    expect((await spAdmin("/tenants")).status).toBe(403);
+    expect((await spAdmin("/tenants/create", { organizationId: org.id })).status).toBe(403);
+    expect((await (await as("admin"))("/tenants/create", { organizationId: org.id })).status).toBe(200);
+  });
+});
+
 describe("tenants: stored SPs through the registry API (D-052)", () => {
   it("an SP joins a tenant with `tenant`; records say which; the list filters by tenant in the query", async () => {
     const w = await world({ code: standard });
