@@ -180,7 +180,9 @@ async function handleSso(ctx: SsoContext, state: PluginState, tenantKey?: string
       subject: info.subject,
       createdAt: now.getTime(),
       ...(info.requestedAuthnContext ? { authnContext: info.requestedAuthnContext } : {}),
-      ...tenantOf(sp),
+      // The URL's tenant, not the SP's: issuance refuses the two differing, so a lookup that ever
+      // crossed tenants would still get nothing.
+      ...(route.tenantId ? { tenantId: route.tenantId } : {}),
     };
   } catch (e) {
     if (e instanceof SamlRequestError) return fail(ctx, state, e.code, e.detail);
