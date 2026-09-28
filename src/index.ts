@@ -12,7 +12,7 @@ import { nameIdFieldProblem } from "./nameid";
 import { resolveOptions, SamlIdpConfigError } from "./options";
 import { idpCache, SSO_PATH, tenantIdpCache, withBasePath } from "./saml/idp";
 import { TenantDirectory } from "./saml/tenant-directory";
-import { backfillEndpoint, tenantEndpoints } from "./endpoints/tenants";
+import { backfillEndpoint, organizationDeletedHook, tenantEndpoints } from "./endpoints/tenants";
 import { tenantOf } from "./endpoints/issue";
 import { samlIdpSchema } from "./schema";
 import { SpMetadataCache } from "./saml/sp-metadata-refresh";
@@ -202,6 +202,8 @@ export const samlIdp = (options: SamlIdpOptions) => {
           }
         : {}),
     },
+    // Tenants (D-053): a tenant whose organization is deleted through Better Auth is disabled.
+    ...(resolved.tenants ? { hooks: { after: [organizationDeletedHook(state)] } } : {}),
     // A fresh schema object per plugin: mergeSchema mutates its first argument, so a shared
     // module-level object would leak one instance's renames into every other (finding #10).
     schema: mergeSchema(

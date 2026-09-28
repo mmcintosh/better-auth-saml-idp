@@ -4,12 +4,12 @@
 // a tenant automatically (maintainer decision 1), and an organization's own administrators can't
 // manage one while tenants share the signing key (multi-tenant design §5.1).
 import type { GenericEndpointContext } from "better-auth";
-import { createAuthEndpoint, sensitiveSessionMiddleware } from "better-auth/api";
+import { createAuthEndpoint, createAuthMiddleware, sensitiveSessionMiddleware } from "better-auth/api";
 import * as z from "zod";
 import { tenantIdentity } from "../saml/identity";
 import { idpBaseURL } from "../saml/idp";
 import { lookupKeyOf, SP_MODEL, type StoredSpRow, isEnabled } from "../saml/sp-directory";
-import { TENANT_KEY, TENANT_MODEL, type TenantRow } from "../saml/tenant-directory";
+import { instant, RETIRED_KEY_MODEL, TENANT_KEY, TENANT_MODEL, type TenantRow } from "../saml/tenant-directory";
 import type { TenantRecord } from "../types";
 import type { PluginState } from "./issue";
 import { adapterOf, fail, manager } from "./registry";
@@ -37,6 +37,12 @@ function record(ctx: GenericEndpointContext, state: PluginState, row: TenantRow)
 async function findTenant(ctx: GenericEndpointContext, organizationId: string): Promise<TenantRow | null> {
   const row = (await adapterOf(ctx).findOne({ model: TENANT_MODEL, where: [{ field: "organizationId", value: organizationId }] })) as TenantRow | null;
   return row && row.organizationId === organizationId ? row : null;
+}
+
+/** Was this key a deleted tenant's? Exact match, whatever the collation (R4-L8). */
+async function retired(ctx: GenericEndpointContext, tenantKey: string): Promise<boolean> {
+  const row = (await adapterOf(ctx).findOne({ model: RETIRED_KEY_MODEL, where: [{ field: "tenantKey", value: tenantKey }] })) as { tenantKey?: string } | null;
+  return row?.tenantKey === tenantKey;
 }
 
 export function tenantEndpoints(state: PluginState) {
@@ -78,8 +84,12 @@ export function tenantEndpoints(state: PluginState) {
       async (ctx) => {
         const user = await manager(ctx, state, "create", "samlTenant");
         const { organizationId } = ctx.body;
-        const org = (await adapterOf(ctx).findOne({ model: "organization", where: [{ field: "id", value: organizationId }] })) as { id?: string } | null;
-        if (org?.id !== organizationId) throw fail("BAD_REQUEST", "INVALID_TENANT", { issues: [`organizationId: no organization "${organizationId}"`] });
+        const org = (await adapterOf(ctx).findOne({ model: "organization", where: [{ field: "id", value: organizationId }] })) as { id?: unknown; createdAt?: unknown } | null;
+        if (org == null || String(org.id) !== organizationId) throw fail("BAD_REQUEST", "INVALID_TENANT", { issues: [`organizationId: no organization "${organizationId}"`] });
+        // The tenant is bound to this organization, not just its id, which a database may hand
+        // out again after a delete (R6-1): its creation time is kept with the tenant.
+        const organizationCreatedAt = instant(org.createdAt);
+        if (Number.isNaN(organizationCreatedAt)) throw fail("BAD_REQUEST", "INVALID_TENANT", { issues: [`organizationId: organization "${organizationId}" has no createdAt`] });
         // The key names the tenant in its URLs and entity ID, which SPs pin: by default the
         // organization's id, which never changes (a slug can, and can be claimed; design §1).
         const tenantKey = ctx.body.tenantKey ?? organizationId;
@@ -87,15 +97,33 @@ export function tenantEndpoints(state: PluginState) {
           throw fail("BAD_REQUEST", "INVALID_TENANT", {
             issues: [`tenantKey: must be 1-64 characters of A-Z a-z 0-9 _ -${ctx.body.tenantKey === undefined ? " (the organization id isn't; choose a tenantKey)" : ""}`],
           });
+        // A key names another organization's URLs by default: taking it would make a URL that
+        // looks like that organization's name this one (review 6 I-3).
+        if (tenantKey !== organizationId) {
+          // A key that can't be an id here (text in a serial id column) makes some databases throw: no such organization.
+          const other = (await adapterOf(ctx)
+            .findOne({ model: "organization", where: [{ field: "id", value: tenantKey }] })
+            .catch(() => null)) as { id?: unknown } | null;
+          if (other != null && String(other.id) === tenantKey) throw fail("BAD_REQUEST", "INVALID_TENANT", { issues: ["tenantKey: is another organization's id"] });
+        }
+        // A deleted tenant's key is never used again: its SPs still trust its entity ID (R6-2).
+        if (await retired(ctx, tenantKey)) throw fail("CONFLICT", "TENANT_KEY_RETIRED");
         const now = new Date();
-        const data = { organizationId, tenantKey, enabled: ctx.body.enabled ?? true, createdAt: now, updatedAt: now, updatedBy: user.id };
+        const data = { organizationId, tenantKey, organizationCreatedAt: new Date(organizationCreatedAt), enabled: ctx.body.enabled ?? true, createdAt: now, updatedAt: now, updatedBy: user.id };
+        let created: { id?: unknown } | null;
         try {
-          await adapterOf(ctx).create({ model: TENANT_MODEL, data });
+          created = (await adapterOf(ctx).create({ model: TENANT_MODEL, data })) as { id?: unknown } | null;
         } catch (e) {
           // The UNIQUE columns decide; the reads only classify the failure.
           const taken = (await findTenant(ctx, organizationId)) ?? (await adapterOf(ctx).findOne({ model: TENANT_MODEL, where: [{ field: "tenantKey", value: tenantKey }] }));
           if (taken) throw fail("CONFLICT", "TENANT_EXISTS");
           throw e;
+        }
+        // A delete of the key's previous tenant may have retired it between the check and the
+        // insert (it retires before it deletes): look again, and undo.
+        if (await retired(ctx, tenantKey)) {
+          await adapterOf(ctx).delete({ model: TENANT_MODEL, where: [{ field: "id", value: String(created?.id) }] });
+          throw fail("CONFLICT", "TENANT_KEY_RETIRED");
         }
         changed();
         audit(ctx, `user ${user.id} created tenant ${tenantKey} for organization ${organizationId}${data.enabled ? "" : ", disabled"}`);
@@ -130,9 +158,13 @@ export function tenantEndpoints(state: PluginState) {
         const inCode = state.directory.codeSps().some((sp) => sp.tenantId === row.organizationId);
         const stored = (await adapterOf(ctx).findMany({ model: SP_MODEL, where: [{ field: "tenantId", value: row.organizationId }], limit: 1 })) as StoredSpRow[];
         if (inCode || stored.length > 0) throw fail("CONFLICT", "TENANT_HAS_SERVICE_PROVIDERS");
+        // Retire the key first (R6-2): SPs configured for this tenant still trust its entity ID,
+        // so no other tenant may ever have it. Already retired: an earlier delete stopped here.
+        if (!(await retired(ctx, row.tenantKey)))
+          await adapterOf(ctx).create({ model: RETIRED_KEY_MODEL, data: { tenantKey: row.tenantKey, organizationId: row.organizationId, retiredAt: new Date(), retiredBy: user.id } });
         await adapterOf(ctx).delete({ model: TENANT_MODEL, where: [{ field: "id", value: row.id }] });
         changed();
-        audit(ctx, `user ${user.id} deleted tenant ${row.tenantKey} (organization ${row.organizationId})`);
+        audit(ctx, `user ${user.id} deleted tenant ${row.tenantKey} (organization ${row.organizationId}); the key is retired`);
         return ctx.json({ deleted: row.organizationId });
       },
     ),
@@ -172,3 +204,33 @@ export const backfillEndpoint = (state: PluginState) =>
     ctx.context.logger.info(`[saml-idp] backfill: ${updated} SP row(s) given a lookup key${skipped.length ? `; skipped (config isn't valid JSON): ${skipped.join(", ")}` : ""}`);
     return ctx.json({ updated, skipped });
   });
+
+/**
+ * When an organization is deleted through Better Auth (`/organization/delete`), its tenant is
+ * switched off, so the tenant list shows it (review 6 R6-1). Its SPs and key stay: the host's
+ * administrators decide what to remove. Routing and issuance don't depend on this: they check
+ * the organization themselves, so a delete made straight in the database is covered too.
+ */
+export const organizationDeletedHook = (state: PluginState) => ({
+  matcher: (ctx: { path?: string }) => ctx.path === "/organization/delete",
+  handler: createAuthMiddleware(async (ctx) => {
+    const returned = (ctx.context as { returned?: unknown }).returned;
+    const organizationId = (ctx.body as { organizationId?: unknown } | undefined)?.organizationId;
+    if (typeof organizationId !== "string" || returned instanceof Error) return;
+    try {
+      const row = await findTenant(ctx as unknown as GenericEndpointContext, organizationId);
+      if (!row || !isEnabled(row.enabled)) return;
+      const userId = (ctx.context as { session?: { user?: { id?: string } } | null }).session?.user?.id ?? null;
+      await adapterOf(ctx as unknown as GenericEndpointContext).update({
+        model: TENANT_MODEL,
+        where: [{ field: "id", value: row.id }],
+        update: { enabled: false, updatedAt: new Date(), updatedBy: userId },
+      });
+      state.tenants?.invalidate();
+      state.directory.invalidate();
+      ctx.context.logger.info(`[saml-idp] tenants: organization ${organizationId} was deleted; its tenant ${row.tenantKey} is disabled`);
+    } catch (e) {
+      ctx.context.logger.error(`[saml-idp] could not disable the tenant of deleted organization ${organizationId}`, e);
+    }
+  }),
+});

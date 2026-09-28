@@ -173,10 +173,20 @@ export const samlIdpTenants = sqliteTable("saml_idp_tenants", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").notNull().unique(),
   tenantKey: text("tenant_key").notNull().unique(),
+  organizationCreatedAt: integer("organization_created_at", { mode: "timestamp_ms" }).notNull(),
   enabled: integer("enabled", { mode: "boolean" }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   updatedBy: text("updated_by"),
+});
+
+/** Keys of deleted tenants, never used again (D-053). */
+export const samlIdpRetiredTenantKeys = sqliteTable("saml_idp_retired_tenant_keys", {
+  id: text("id").primaryKey(),
+  tenantKey: text("tenant_key").notNull().unique(),
+  organizationId: text("organization_id").notNull(),
+  retiredAt: integer("retired_at", { mode: "timestamp_ms" }).notNull(),
+  retiredBy: text("retired_by"),
 });
 
 // organization plugin (migration 0007): tenants are organizations, so tenant tests need these on D1.
@@ -226,4 +236,5 @@ export const schema = {
   samlIdpSessionParticipants,
   samlIdpAuditEvents,
   samlIdpTenants,
+  samlIdpRetiredTenantKeys,
 };

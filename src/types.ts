@@ -399,7 +399,11 @@ export interface SamlIdpOptions {
     };
     samlIdpTenant?: {
       modelName?: string;
-      fields?: Partial<Record<"organizationId" | "tenantKey" | "enabled" | "createdAt" | "updatedAt" | "updatedBy", string>>;
+      fields?: Partial<Record<"organizationId" | "tenantKey" | "organizationCreatedAt" | "enabled" | "createdAt" | "updatedAt" | "updatedBy", string>>;
+    };
+    samlIdpRetiredTenantKey?: {
+      modelName?: string;
+      fields?: Partial<Record<"tenantKey" | "organizationId" | "retiredAt" | "retiredBy", string>>;
     };
   };
   /**

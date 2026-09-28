@@ -1,3 +1,5 @@
+// Fixed in D-053; kept as a regression test (tenants.test.ts has the main suite's, including an
+// organization deleted straight from the database). Comments saying "today" describe dac64f3.
 // Review 6 (D-052): a tenant is bound to an organization id and nothing else. When that
 // organization is deleted, the tenant stays enabled (metadata, URLs, SPs). With
 // `generateId: "serial"` on SQLite or D1 (an INTEGER PRIMARY KEY without AUTOINCREMENT), the next
@@ -28,8 +30,9 @@ describe.skipIf(isWorkerd)("R6-1: a deleted tenant organization's id, reused, in
     await w.join(victim, ownerUser.id, "owner");
     expect((await post(owner, "/organization/delete", { organizationId: victim })).status).toBe(200);
 
-    // The tenant is still there, enabled, with its metadata served.
-    expect((await w.auth.handler(new Request(urls("globex").metadata))).status).toBe(200);
+    // Fixed: deleting the organization through Better Auth disables its tenant (today: still
+    // enabled, with its metadata served).
+    expect((await w.auth.handler(new Request(urls("globex").metadata))).status).toBe(404);
 
     // Any user creates an organization (allowed by default) and gets the freed id.
     const other = new Browser(w.auth);

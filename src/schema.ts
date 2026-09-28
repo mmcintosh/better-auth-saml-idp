@@ -89,7 +89,12 @@ function tenantRegistrySchema() {
 /**
  * Tenants (D-052): which organizations have their own IdP identity. Only organizations with a
  * row are tenants; the host's administrators create them. `tenantKey` names the tenant in its
- * URLs and entity ID, so it never changes once set.
+ * URLs and entity ID, so it never changes once set. `organizationCreatedAt` is the organization's
+ * `createdAt` when the tenant was made: it binds the tenant to that organization, not just to an
+ * id that a database may hand out again after a delete (review 6 R6-1, D-053).
+ *
+ * `samlIdpRetiredTenantKey`: the key of every deleted tenant, so it is never used again. SPs
+ * configured for a deleted tenant still trust its entity ID (review 6 R6-2, D-053).
  */
 function tenantSchema() {
   return {
@@ -97,6 +102,7 @@ function tenantSchema() {
       fields: {
         organizationId: { type: "string", required: true, unique: true, input: false },
         tenantKey: { type: "string", required: true, unique: true, input: false },
+        organizationCreatedAt: { type: "date", required: true, input: false },
         enabled: { type: "boolean", required: true, input: false },
         createdAt: { type: "date", required: true, input: false },
         updatedAt: { type: "date", required: true, input: false },
@@ -106,6 +112,15 @@ function tenantSchema() {
         { fields: ["organizationId"], unique: true, name: "saml_idp_tenant_organization_id_unique" },
         { fields: ["tenantKey"], unique: true, name: "saml_idp_tenant_tenant_key_unique" },
       ],
+    },
+    samlIdpRetiredTenantKey: {
+      fields: {
+        tenantKey: { type: "string", required: true, unique: true, input: false },
+        organizationId: { type: "string", required: true, input: false },
+        retiredAt: { type: "date", required: true, input: false },
+        retiredBy: { type: "string", required: false, input: false },
+      },
+      indexes: [{ fields: ["tenantKey"], unique: true, name: "saml_idp_retired_tenant_key_unique" }],
     },
   } satisfies BetterAuthPluginDBSchema;
 }

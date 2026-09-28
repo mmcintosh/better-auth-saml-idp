@@ -587,7 +587,27 @@ describe("tenants: the tenant API, host administrators only (D-052, maintainer d
     expect((await json(await w.tenants("/create", { organizationId: "no-such-org" }))).code).toBe("INVALID_TENANT");
     expect((await json(await w.tenants("/create", { organizationId: w.orgC.id, tenantKey: "has/slash" }))).code).toBe("INVALID_TENANT");
     expect((await json(await w.tenants("/create", { organizationId: w.orgA.id }))).code).toBe("TENANT_EXISTS");
-    expect((await json(await w.tenants("/create", { organizationId: w.orgC.id, tenantKey: w.orgA.id }))).code).toBe("TENANT_EXISTS");
+    // Another organization's id, as a chosen key, would make a URL that looks like that organization's (review 6 I-3).
+    expect((await json(await w.tenants("/create", { organizationId: w.orgC.id, tenantKey: w.orgA.id }))).code).toBe("INVALID_TENANT");
+    const orgD = await w.ctx.adapter.create({ model: "organization", data: { name: "D", slug: `d-${w.t}`, createdAt: new Date() } });
+    expect((await w.tenants("/create", { organizationId: w.orgC.id, tenantKey: `k-${w.t}` })).status).toBe(200);
+    expect((await json(await w.tenants("/create", { organizationId: orgD.id, tenantKey: `k-${w.t}` }))).code).toBe("TENANT_EXISTS");
+  });
+
+  it("a deleted tenant's key is retired: never given to another organization, nor to the same one again (review 6 R6-2)", async () => {
+    const w = await world();
+    const key = `acme-${w.t}`;
+    expect((await w.tenants("/create", { organizationId: w.orgC.id, tenantKey: key })).status).toBe(200);
+    expect((await w.tenants("/delete", { organizationId: w.orgC.id })).status).toBe(200);
+    const orgD = await w.ctx.adapter.create({ model: "organization", data: { name: "D", slug: `d-${w.t}`, createdAt: new Date() } });
+    for (const organizationId of [orgD.id, w.orgC.id]) {
+      const res = await w.tenants("/create", { organizationId, tenantKey: key });
+      expect(res.status).toBe(409);
+      expect((await json(res)).code).toBe("TENANT_KEY_RETIRED");
+    }
+    expect((await w.auth.handler(new Request(urls(key).metadata))).status).toBe(404);
+    // The organization can be a tenant again, under a new key.
+    expect((await w.tenants("/create", { organizationId: w.orgC.id, tenantKey: `${key}-2` })).status).toBe(200);
   });
 
   it("update changes only enabled: the key and organization are fixed (decision 3)", async () => {
@@ -619,6 +639,61 @@ describe("tenants: the tenant API, host administrators only (D-052, maintainer d
     await w.ctx.adapter.create({ model: "member", data: { organizationId: w.orgA.id, userId: owner.id, role: "owner", createdAt: new Date() } });
     for (const [path, body] of [["", undefined], [`/get?organizationId=${w.orgA.id}`, undefined], ["/create", { organizationId: w.orgC.id }], ["/update", { organizationId: w.orgA.id, enabled: false }], ["/delete", { organizationId: w.orgA.id }]] as const)
       expect((await w.tenants(path, body, someone)).status, path).toBe(403);
+  });
+});
+
+describe("tenants: bound to their organization, not just its id (review 6 R6-1, D-053)", () => {
+  const post = (b: Browser, path: string, body: unknown) =>
+    b.fetch(`${AUTH_BASE}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  it("an organization deleted through Better Auth: its tenant is disabled (listed so) and answers nothing", async () => {
+    const w = await world({ code: standard });
+    const owner = new Browser(w.auth);
+    const ownerUser = await owner.signUp();
+    await w.ctx.adapter.create({ model: "member", data: { organizationId: w.orgA.id, userId: ownerUser.id, role: "owner", createdAt: new Date() } });
+    await w.join(w.orgA.id);
+    expect((await post(owner, "/organization/delete", { organizationId: w.orgA.id })).status).toBe(200);
+    expect((await json(await w.tenants(`/get?organizationId=${w.orgA.id}`))).tenant).toMatchObject({ enabled: false });
+    expect((await w.auth.handler(new Request(w.A.metadata))).status).toBe(404);
+    expect(await code(await w.browser.fetch(await authn(w.A.sso, { issuer: ONLY_A.entityId, acsUrl: ONLY_A.acs })))).toBe("UNKNOWN_SERVICE_PROVIDER");
+    // B is untouched.
+    expect((await w.auth.handler(new Request(w.B.metadata))).status).toBe(200);
+  });
+
+  it("an organization deleted straight from the database: its tenant answers nothing, by any route", async () => {
+    const w = await world({ code: standard });
+    await w.join(w.orgA.id);
+    expect(issuer((await readAutoPost(await w.browser.fetch(await authn(w.A.sso, { issuer: ONLY_A.entityId, acsUrl: ONLY_A.acs })))).xml)).toBe(w.A.metadata);
+    await w.ctx.adapter.delete({ model: "organization", where: [{ field: "id", value: w.orgA.id }] });
+    expect((await w.auth.handler(new Request(w.A.metadata))).status).toBe(404);
+    expect(await code(await w.browser.fetch(await authn(w.A.sso, { issuer: ONLY_A.entityId, acsUrl: ONLY_A.acs })))).toBe("UNKNOWN_SERVICE_PROVIDER");
+    expect(await code(await w.browser.fetch(`${AUTH_BASE}/saml2/idp/init?sp=only-a`))).toBe("UNKNOWN_SERVICE_PROVIDER");
+  });
+
+  it.skipIf(isWorkerd)("serial ids (SQLite reuses a freed id): a new organization given a deleted one's id doesn't inherit its tenant", async () => {
+    const database = await createHostDatabase();
+    const serial = { advanced: { database: { generateId: "serial" as const } } };
+    const saml = { registry: { enabled: true, canManage, cacheSeconds: 0 }, tenants: { enabled: true, cacheSeconds: 0 }, serviceProviders: [] };
+    const { auth } = await createHost({ database, plugins: [organization()], saml, auth: serial });
+    const ctx = (await auth.$context) as any;
+    const admin = new Browser(auth);
+    const adminUser = await admin.signUp();
+    await ctx.adapter.update({ model: "user", where: [{ field: "id", value: adminUser.id }], update: { role: "admin" } });
+    const api = (path: string, body: unknown) => post(admin, `/saml-idp${path}`, body);
+    const org = await ctx.adapter.create({ model: "organization", data: { name: "Old", slug: `old-${n++}`, createdAt: new Date(Date.now() - 60_000) } });
+    const id = String(org.id);
+    expect((await api("/tenants/create", { organizationId: id, tenantKey: "old" })).status).toBe(200);
+    const sp = { id: "old-sp", entityId: "https://old.test/sp", acsUrls: ["https://old.test/acs"], tenant: id };
+    expect((await api("/service-providers/create", { serviceProvider: sp })).status).toBe(200);
+    // Deleted in the database (no hook runs), and a new organization gets the same id.
+    await ctx.adapter.delete({ model: "organization", where: [{ field: "id", value: id }] });
+    const reused = await ctx.adapter.create({ model: "organization", data: { name: "New", slug: `new-${n++}`, createdAt: new Date() } });
+    expect(String(reused.id)).toBe(id);
+    const other = new Browser(auth);
+    const otherUser = await other.signUp();
+    await ctx.adapter.create({ model: "member", data: { organizationId: id, userId: otherUser.id, role: "owner", createdAt: new Date() } });
+    expect((await auth.handler(new Request(urls("old").metadata))).status).toBe(404);
+    expect(await code(await other.fetch(await authn(urls("old").sso, { issuer: sp.entityId, acsUrl: sp.acsUrls[0] })))).toBe("UNKNOWN_SERVICE_PROVIDER");
   });
 });
 

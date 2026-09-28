@@ -292,7 +292,18 @@ const optionsSchema = z
           .object({
             modelName: z.string().min(1).optional(),
             fields: z
-              .object(Object.fromEntries(["organizationId", "tenantKey", "enabled", "createdAt", "updatedAt", "updatedBy"].map((f) => [f, z.string().min(1)])))
+              .object(Object.fromEntries(["organizationId", "tenantKey", "organizationCreatedAt", "enabled", "createdAt", "updatedAt", "updatedBy"].map((f) => [f, z.string().min(1)])))
+              .partial()
+              .strict()
+              .optional(),
+          })
+          .strict()
+          .optional(),
+        samlIdpRetiredTenantKey: z
+          .object({
+            modelName: z.string().min(1).optional(),
+            fields: z
+              .object(Object.fromEntries(["tenantKey", "organizationId", "retiredAt", "retiredBy"].map((f) => [f, z.string().min(1)])))
               .partial()
               .strict()
               .optional(),

@@ -8,10 +8,23 @@ CREATE TABLE IF NOT EXISTS saml_idp_tenants (
   id TEXT PRIMARY KEY NOT NULL,
   organization_id TEXT NOT NULL UNIQUE,
   tenant_key TEXT NOT NULL UNIQUE,
+  -- The organization's created_at when the tenant was made: binds the tenant to that organization,
+  -- not just to an id that may be handed out again (DECISIONS.md D-053).
+  organization_created_at INTEGER NOT NULL,
   enabled INTEGER NOT NULL,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   updated_by TEXT
+);
+
+-- Keys of deleted tenants, never used again: SPs set up for a deleted tenant still trust its
+-- entity ID (DECISIONS.md D-053).
+CREATE TABLE IF NOT EXISTS saml_idp_retired_tenant_keys (
+  id TEXT PRIMARY KEY NOT NULL,
+  tenant_key TEXT NOT NULL UNIQUE,
+  organization_id TEXT NOT NULL,
+  retired_at INTEGER NOT NULL,
+  retired_by TEXT
 );
 
 -- Stored SPs: their tenant ('' for the root IdP) and the per-tenant UNIQUE lookup key. Rows saved
