@@ -51,10 +51,9 @@ jobs:
           fi
       - run: pnpm build && mkdir -p out && pnpm pack --pack-destination out
       # The SBOM describes what a user installs: the tarball's runtime dependency tree.
-      - run: |
-          mkdir -p sbom-root && cd sbom-root && npm init -y >/dev/null
-          # --legacy-peer-deps: peers (better-auth) are the host's, not part of this package.
-          npm install --ignore-scripts --no-audit --no-fund --legacy-peer-deps ../out/*.tgz
+      # The package and its runtime dependencies as a user gets them, from the pinned lockfile
+      # (not resolved afresh at release time); peers (better-auth) are the host's and left out.
+      - run: pnpm --filter better-auth-saml-idp deploy --prod --legacy sbom-root
       - uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           path: sbom-root
@@ -73,7 +72,7 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     environment: npm
-    permissions: { contents: write, id-token: write }
+    permissions: { contents: write, id-token: write, attestations: write }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
@@ -85,15 +84,23 @@ jobs:
       # environment (no token anywhere), and the trusted publisher may only *stage*. The version
       # goes live after a maintainer approves it on npmjs.com (or `npm stage approve`) with 2FA,
       # so a compromised GitHub account alone can't publish. `npm stage` needs npm >= 11.15.
-      - run: npm install -g npm@11.20.0 && npm --version
+      # npm >= 11.15 for `npm stage`, pinned by integrity in .github/npm-cli/package-lock.json.
+      - run: npm ci --prefix .github/npm-cli --no-audit --no-fund && .github/npm-cli/node_modules/.bin/npm --version
       # Pre-releases (X.Y.Z-rc.N) go to the `next` dist-tag, so a plain install never gets one;
       # npm refuses a pre-release without an explicit tag anyway.
       - id: tag
         env: { VERSION: "${{ needs.package.outputs.version }}" }
         run: case "$VERSION" in *-*) echo "tag=next" >> "$GITHUB_OUTPUT" ;; *) echo "tag=latest" >> "$GITHUB_OUTPUT" ;; esac
       # "./": without it, npm reads out/<file>.tgz as GitHub shorthand (user/repo) and tries git.
-      - run: npm stage publish ./out/*.tgz --provenance --access public --tag "$TAG"
+      - run: ./.github/npm-cli/node_modules/.bin/npm stage publish ./out/*.tgz --provenance --access public --tag "$TAG"
         env: { TAG: "${{ steps.tag.outputs.tag }}" }
+      # A signed SLSA provenance of the tarball, also attached to the GitHub release as
+      # <tarball>.sigstore.json, so the release itself carries its signature.
+      - id: attest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with: { subject-path: "out/*.tgz" }
+      - run: for t in out/*.tgz; do cp "$BUNDLE" "$t.sigstore.json"; done
+        env: { BUNDLE: "${{ steps.attest.outputs.bundle-path }}" }
       - env: { GH_TOKEN: "${{ github.token }}", VERSION: "${{ needs.package.outputs.version }}", TAG: "${{ steps.tag.outputs.tag }}" }
         run: |
           awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {on=1; next} on && /^## \[/ {exit} on' CHANGELOG.md > notes.md

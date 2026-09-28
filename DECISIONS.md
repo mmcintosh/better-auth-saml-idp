@@ -1482,3 +1482,19 @@ An external review of everything since 4a44664 (`docs/review/review-5-findings.m
 ## D-049: CI runners pinned to ubuntu-24.04 (2026-09-28)
 
 GitHub moves `ubuntu-latest` to Ubuntu 26 from 2026-10-19 (actions/runner-images#14748). Every job in every workflow now runs on `ubuntu-24.04`, which is what `ubuntu-latest` means today, so nothing changes now. The wasm reproducibility check (`wasm/xsd.wasm` rebuilt byte-for-byte), the e2e Docker stack and the release build should change image only deliberately. To move to Ubuntu 26: change all 13 `runs-on` lines together, run CI, the e2e and a release dry run, and record it here.
+
+## D-050: OpenSSF Scorecard (2026-09-28)
+
+The published Scorecard was 6.7. Fixed:
+- **Pinned-Dependencies (8/10):** two npm installs weren't pinned by hash, both in `release.yml`.
+  - The npm CLI for `npm stage` now installs with `npm ci` from `.github/npm-cli/package-lock.json`, verified by integrity. Dependabot watches that directory.
+  - The SBOM tree is now `pnpm deploy --prod` from the repo's frozen lockfile, rather than a fresh `npm install` of the tarball.
+- **Signed-Releases (0/10):** releases now carry a signed SLSA provenance of the tarball, `<tarball>.sigstore.json` (actions/attest-build-provenance, pinned by SHA). For 1.0.0-rc.1, npm's own provenance bundle was attached after the fact. Its signed subject digest equals the release tarball's sha512, from `release.yml` at `refs/tags/v1.0.0-rc.1` on a GitHub-hosted runner.
+- **CII-Best-Practices (0/10):** needs the maintainer to claim the badge at bestpractices.dev. Answers are prepared in `docs/review/openssf-best-practices.md`.
+
+**Out of reach for a single-maintainer project**, recorded rather than gamed:
+- Code-Review needs approved pull requests from a second person.
+- Contributors needs contributors from several organizations.
+- Maintained scores 0 until the repository is 90 days old.
+- Branch-Protection at maximum needs required reviews, which would block the only maintainer.
+- Binary-Artifacts flags `wasm/xsd.wasm`: deliberate and checked, since CI rebuilds it byte-for-byte from source (wasm-reproducible.yml).

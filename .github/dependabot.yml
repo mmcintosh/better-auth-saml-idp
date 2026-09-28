@@ -12,6 +12,10 @@ updates:
     ignore:
       - dependency-name: better-auth
       - dependency-name: "@better-auth/*"
+  # The npm CLI the release job stages with (pinned by integrity; npm stage needs >= 11.15).
+  - package-ecosystem: npm
+    directory: /.github/npm-cli
+    schedule: { interval: weekly }
   # e2e container images, pinned by digest (R4-L10).
   - package-ecosystem: docker-compose
     directory: /e2e
