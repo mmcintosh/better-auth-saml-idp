@@ -107,7 +107,8 @@
   "pnpm": {
     "overrides": {
       "@better-auth/utils": "0.4.2",
-      "sharp@<0.35.4": "0.35.4"
+      "sharp@<0.35.4": "0.35.4",
+      "deepmerge-ts@<8.0.0": "^8.0.0"
     }
   },
   "types": "./dist/index.d.ts",
