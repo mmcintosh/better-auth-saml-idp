@@ -1,0 +1,369 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`tenants off: output is unchanged (D-052) > IdP-initiated SSO > unsolicited response 1`] = `"<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_ID1" Version="2.0" IssueInstant="[instant]" Destination="https://sp.test/acs"><saml:Issuer>https://auth.test/api/auth/saml2/idp</saml:Issuer><ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/><ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/><ds:Reference URI="#_ID1"><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/><ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>[digest]</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>[signature]</ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>[cert:idp]</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature><samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status><saml:Assertion ID="_ID2" Version="2.0" IssueInstant="[instant]"><saml:Issuer>https://auth.test/api/auth/saml2/idp</saml:Issuer><ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/><ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/><ds:Reference URI="#_ID2"><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/><ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>[digest]</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>[signature]</ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>[cert:idp]</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature><saml:Subject><saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">[email]</saml:NameID><saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData NotOnOrAfter="[instant]" Recipient="https://sp.test/acs"/></saml:SubjectConfirmation></saml:Subject><saml:Conditions NotBefore="[instant]" NotOnOrAfter="[instant]"><saml:AudienceRestriction><saml:Audience>https://sp.test/metadata</saml:Audience></saml:AudienceRestriction></saml:Conditions><saml:AuthnStatement AuthnInstant="[instant]" SessionIndex="[session-index]"><saml:AuthnContext><saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified</saml:AuthnContextClassRef></saml:AuthnContext></saml:AuthnStatement></saml:Assertion></samlp:Response>"`;
+
+exports[`tenants off: output is unchanged (D-052) > SP-initiated SSO: the signed Response, the persistent NameID derivation, and the POST binding's re-entry > auto-post page 1`] = `"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Signing in…</title><style nonce="[nonce]">body{font:16px system-ui,sans-serif;margin:2rem}</style></head><body><form method="post" action="https://sp.test/acs"><input type="hidden" name="SAMLResponse" value="[response]"><input type="hidden" name="RelayState" value="rs-1"><noscript><p>JavaScript is disabled. Continue to finish signing in.</p><button type="submit">Continue</button></noscript></form><script nonce="[nonce]">document.forms[0].submit()</script></body></html>"`;
+
+exports[`tenants off: output is unchanged (D-052) > SP-initiated SSO: the signed Response, the persistent NameID derivation, and the POST binding's re-entry > post binding 303 1`] = `
+"status 303
+content-type: -
+cache-control: no-store
+vary: -
+location: https://auth.test/api/auth/saml2/idp/sso?cid=[token]"
+`;
+
+exports[`tenants off: output is unchanged (D-052) > SP-initiated SSO: the signed Response, the persistent NameID derivation, and the POST binding's re-entry > response 1`] = `
+"status 200
+content-type: text/html; charset=utf-8
+cache-control: no-store
+vary: -
+location: -
+
+<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_ID1" Version="2.0" IssueInstant="[instant]" Destination="https://sp.test/acs" InResponseTo="[request-id]"><saml:Issuer>https://auth.test/api/auth/saml2/idp</saml:Issuer><ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/><ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/><ds:Reference URI="#_ID1"><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/><ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>[digest]</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>[signature]</ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>[cert:idp]</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature><samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status><saml:Assertion ID="_ID2" Version="2.0" IssueInstant="[instant]"><saml:Issuer>https://auth.test/api/auth/saml2/idp</saml:Issuer><ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/><ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/><ds:Reference URI="#_ID2"><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/><ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>[digest]</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>[signature]</ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>[cert:idp]</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature><saml:Subject><saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">[email]</saml:NameID><saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData NotOnOrAfter="[instant]" Recipient="https://sp.test/acs" InResponseTo="[request-id]"/></saml:SubjectConfirmation></saml:Subject><saml:Conditions NotBefore="[instant]" NotOnOrAfter="[instant]"><saml:AudienceRestriction><saml:Audience>https://sp.test/metadata</saml:Audience></saml:AudienceRestriction></saml:Conditions><saml:AuthnStatement AuthnInstant="[instant]" SessionIndex="[session-index]"><saml:AuthnContext><saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified</saml:AuthnContextClassRef></saml:AuthnContext></saml:AuthnStatement></saml:Assertion></samlp:Response>"
+`;
+
+exports[`tenants off: output is unchanged (D-052) > Single Logout: the LogoutRequest to a participant (POST), and the LogoutResponse to the originator (Redirect) > to originator: LogoutResponse 1`] = `"<samlp:LogoutResponse xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_ID1" Version="2.0" IssueInstant="[instant]" Destination="https://sp.test/slo" InResponseTo="[logout-request-id]"><saml:Issuer>https://auth.test/api/auth/saml2/idp</saml:Issuer><samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status></samlp:LogoutResponse>"`;
+
+exports[`tenants off: output is unchanged (D-052) > Single Logout: the LogoutRequest to a participant (POST), and the LogoutResponse to the originator (Redirect) > to originator: redirect 1`] = `
+"{
+ "status": 302,
+ "target": "https://sp.test/slo",
+ "params": "SAMLResponse&RelayState&SigAlg&Signature",
+ "sigAlg": "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
+}"
+`;
+
+exports[`tenants off: output is unchanged (D-052) > Single Logout: the LogoutRequest to a participant (POST), and the LogoutResponse to the originator (Redirect) > to participant: LogoutRequest 1`] = `"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_ID1" Version="2.0" IssueInstant="[instant]" Destination="https://b.test/slo" NotOnOrAfter="[instant]" Reason="urn:oasis:names:tc:SAML:2.0:logout:user"><saml:Issuer>https://auth.test/api/auth/saml2/idp</saml:Issuer><ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/><ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/><ds:Reference URI="#_ID1"><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/><ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>[digest]</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>[signature]</ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>[cert:idp]</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature><saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">[email]</saml:NameID><samlp:SessionIndex>[session-index]</samlp:SessionIndex></samlp:LogoutRequest>"`;
+
+exports[`tenants off: output is unchanged (D-052) > Single Logout: the LogoutRequest to a participant (POST), and the LogoutResponse to the originator (Redirect) > to participant: headers 1`] = `
+"status 200
+content-type: text/html; charset=utf-8
+cache-control: no-store
+vary: -
+location: -"
+`;
+
+exports[`tenants off: output is unchanged (D-052) > metadata: plain, signed with Single Logout, and with a rotation certificate > plain 1`] = `
+"status 200
+content-type: application/samlmetadata+xml; charset=utf-8
+cache-control: private, max-age=300
+vary: Host, X-Forwarded-Host, X-Forwarded-Proto
+location: -
+
+<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:assertion="urn:oasis:names:tc:SAML:2.0:assertion" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" entityID="https://auth.test/api/auth/saml2/idp"><IDPSSODescriptor WantAuthnRequestsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><KeyDescriptor use="signing"><ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:X509Data><ds:X509Certificate>[cert:idp]</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor><NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</NameIDFormat><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://auth.test/api/auth/saml2/idp/sso"></SingleSignOnService><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://auth.test/api/auth/saml2/idp/sso"></SingleSignOnService></IDPSSODescriptor></EntityDescriptor>"
+`;
+
+exports[`tenants off: output is unchanged (D-052) > metadata: plain, signed with Single Logout, and with a rotation certificate > rotation 1`] = `
+"status 200
+content-type: application/samlmetadata+xml; charset=utf-8
+cache-control: private, max-age=300
+vary: Host, X-Forwarded-Host, X-Forwarded-Proto
+location: -
+
+<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:assertion="urn:oasis:names:tc:SAML:2.0:assertion" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" entityID="https://auth.test/api/auth/saml2/idp"><IDPSSODescriptor WantAuthnRequestsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><KeyDescriptor use="signing"><ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:X509Data><ds:X509Certificate>[cert:idp]</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor><KeyDescriptor use="signing"><ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:X509Data><ds:X509Certificate>[cert:idpNext]</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor><NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</NameIDFormat><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://auth.test/api/auth/saml2/idp/sso"></SingleSignOnService><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://auth.test/api/auth/saml2/idp/sso"></SingleSignOnService></IDPSSODescriptor></EntityDescriptor>"
+`;
+
+exports[`tenants off: output is unchanged (D-052) > metadata: plain, signed with Single Logout, and with a rotation certificate > signed 1`] = `
+"status 200
+content-type: application/samlmetadata+xml; charset=utf-8
+cache-control: private, max-age=300
+vary: Host, X-Forwarded-Host, X-Forwarded-Proto
+location: -
+
+<EntityDescriptor ID="_ID1" xmlns="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:assertion="urn:oasis:names:tc:SAML:2.0:assertion" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" entityID="https://auth.test/api/auth/saml2/idp"><ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/><ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/><ds:Reference URI="#_ID1"><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/><ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>[digest]</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>[signature]</ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>[cert:idp]</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature><IDPSSODescriptor WantAuthnRequestsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><KeyDescriptor use="signing"><ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:X509Data><ds:X509Certificate>[cert:idp]</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor><SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://auth.test/api/auth/saml2/idp/slo"/><SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://auth.test/api/auth/saml2/idp/slo"/><NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</NameIDFormat><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://auth.test/api/auth/saml2/idp/sso"/><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://auth.test/api/auth/saml2/idp/sso"/></IDPSSODescriptor></EntityDescriptor>"
+`;
+
+exports[`tenants off: output is unchanged (D-052) > signed-out and refused requests: the login redirect, a SAML error Response, an error page > NoPassive response 1`] = `"<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_ID1" Version="2.0" IssueInstant="[instant]" Destination="https://sp.test/acs" InResponseTo="[request-id]"><saml:Issuer>https://auth.test/api/auth/saml2/idp</saml:Issuer><ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/><ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/><ds:Reference URI="#_ID1"><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/><ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>[digest]</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>[signature]</ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>[cert:idp]</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature><samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Responder"><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:NoPassive"/></samlp:StatusCode><samlp:StatusMessage>The user is not signed in at the identity provider</samlp:StatusMessage></samlp:Status></samlp:Response>"`;
+
+exports[`tenants off: output is unchanged (D-052) > signed-out and refused requests: the login redirect, a SAML error Response, an error page > login redirect 1`] = `
+"status 302
+content-type: application/json
+cache-control: -
+vary: -
+location: https://auth.test/sign-in?callbackURL=https%3A%2F%2Fauth.test%2Fapi%2Fauth%2Fsaml2%2Fidp%2Fresume%3Frid%3D[token]"
+`;
+
+exports[`tenants off: output is unchanged (D-052) > signed-out and refused requests: the login redirect, a SAML error Response, an error page > unknown SP page 1`] = `
+"status 400
+content-type: text/html; charset=utf-8
+cache-control: no-store
+vary: -
+location: -
+
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Sign-in error</title><style nonce="[nonce]">body{font:16px system-ui,sans-serif;margin:2rem}code{color:#666}</style></head><body><h1>Sign-in could not be completed</h1><p>Unknown SAML service provider</p><p><code>UNKNOWN_SERVICE_PROVIDER</code></p></body></html>"
+`;
+
+exports[`tenants off: output is unchanged (D-052) > the schema and the routes, with every optional feature on > routes, all features 1`] = `
+"getSamlIdpMetadata "GET" /saml2/idp/metadata
+samlIdpSingleSignOn ["GET","POST"] /saml2/idp/sso
+samlIdpResume "GET" /saml2/idp/resume
+samlIdpInitiatedSignOn "GET" /saml2/idp/init
+samlIdpListServiceProviders "GET" /saml-idp/service-providers
+samlIdpGetServiceProvider "GET" /saml-idp/service-providers/get
+samlIdpCreateServiceProvider "POST" /saml-idp/service-providers/create
+samlIdpUpdateServiceProvider "POST" /saml-idp/service-providers/update
+samlIdpDeleteServiceProvider "POST" /saml-idp/service-providers/delete
+samlIdpSingleLogout ["GET","POST"] /saml2/idp/slo
+samlIdpLogout "GET" /saml2/idp/logout
+samlIdpListSessionParticipants "POST" (server only)"
+`;
+
+exports[`tenants off: output is unchanged (D-052) > the schema and the routes, with every optional feature on > routes, defaults 1`] = `
+"getSamlIdpMetadata "GET" /saml2/idp/metadata
+samlIdpSingleSignOn ["GET","POST"] /saml2/idp/sso
+samlIdpResume "GET" /saml2/idp/resume
+samlIdpInitiatedSignOn "GET" /saml2/idp/init"
+`;
+
+exports[`tenants off: output is unchanged (D-052) > the schema and the routes, with every optional feature on > schema, all features 1`] = `
+"{
+ "samlIdpServiceProvider": {
+  "fields": {
+   "spId": {
+    "type": "string",
+    "required": true,
+    "unique": true,
+    "input": false
+   },
+   "entityId": {
+    "type": "string",
+    "required": true,
+    "unique": true,
+    "input": false
+   },
+   "config": {
+    "type": "string",
+    "required": true,
+    "input": false
+   },
+   "enabled": {
+    "type": "boolean",
+    "required": true,
+    "input": false
+   },
+   "createdAt": {
+    "type": "date",
+    "required": true,
+    "input": false
+   },
+   "updatedAt": {
+    "type": "date",
+    "required": true,
+    "input": false
+   },
+   "updatedBy": {
+    "type": "string",
+    "required": false,
+    "input": false
+   }
+  },
+  "indexes": [
+   {
+    "fields": [
+     "spId"
+    ],
+    "unique": true,
+    "name": "saml_idp_service_provider_sp_id_unique"
+   },
+   {
+    "fields": [
+     "entityId"
+    ],
+    "unique": true,
+    "name": "saml_idp_service_provider_entity_id_unique"
+   }
+  ]
+ },
+ "samlIdpAuditEvent": {
+  "fields": {
+   "type": {
+    "type": "string",
+    "required": true,
+    "input": false,
+    "index": true
+   },
+   "at": {
+    "type": "date",
+    "required": true,
+    "input": false,
+    "index": true
+   },
+   "spId": {
+    "type": "string",
+    "required": false,
+    "input": false,
+    "index": true
+   },
+   "userId": {
+    "type": "string",
+    "required": false,
+    "input": false,
+    "index": true
+   },
+   "code": {
+    "type": "string",
+    "required": false,
+    "input": false
+   },
+   "ipAddress": {
+    "type": "string",
+    "required": false,
+    "input": false
+   },
+   "userAgent": {
+    "type": "string",
+    "required": false,
+    "input": false
+   },
+   "details": {
+    "type": "string",
+    "required": true,
+    "input": false
+   },
+   "expiresAt": {
+    "type": "date",
+    "required": true,
+    "input": false,
+    "index": true
+   }
+  }
+ },
+ "samlIdpSessionParticipant": {
+  "fields": {
+   "key": {
+    "type": "string",
+    "required": true,
+    "unique": true,
+    "input": false
+   },
+   "sessionKey": {
+    "type": "string",
+    "required": true,
+    "input": false,
+    "index": true
+   },
+   "userId": {
+    "type": "string",
+    "required": false,
+    "input": false,
+    "index": true
+   },
+   "endedAt": {
+    "type": "date",
+    "required": false,
+    "input": false
+   },
+   "spId": {
+    "type": "string",
+    "required": true,
+    "input": false
+   },
+   "nameId": {
+    "type": "string",
+    "required": true,
+    "input": false
+   },
+   "nameIdFormat": {
+    "type": "string",
+    "required": true,
+    "input": false
+   },
+   "sessionIndex": {
+    "type": "string",
+    "required": true,
+    "input": false
+   },
+   "expiresAt": {
+    "type": "date",
+    "required": true,
+    "input": false,
+    "index": true
+   }
+  },
+  "indexes": [
+   {
+    "fields": [
+     "key"
+    ],
+    "unique": true,
+    "name": "saml_idp_session_participant_key_unique"
+   }
+  ]
+ },
+ "samlIdpSeenRequest": {
+  "fields": {
+   "key": {
+    "type": "string",
+    "required": true,
+    "unique": true,
+    "input": false
+   },
+   "spId": {
+    "type": "string",
+    "required": true,
+    "input": false
+   },
+   "requestId": {
+    "type": "string",
+    "required": true,
+    "input": false
+   },
+   "expiresAt": {
+    "type": "date",
+    "required": true,
+    "input": false,
+    "index": true
+   }
+  },
+  "indexes": [
+   {
+    "fields": [
+     "key"
+    ],
+    "unique": true,
+    "name": "saml_idp_seen_request_key_unique"
+   }
+  ]
+ }
+}"
+`;
+
+exports[`tenants off: output is unchanged (D-052) > the schema and the routes, with every optional feature on > schema, defaults 1`] = `
+"{
+ "samlIdpSeenRequest": {
+  "fields": {
+   "key": {
+    "type": "string",
+    "required": true,
+    "unique": true,
+    "input": false
+   },
+   "spId": {
+    "type": "string",
+    "required": true,
+    "input": false
+   },
+   "requestId": {
+    "type": "string",
+    "required": true,
+    "input": false
+   },
+   "expiresAt": {
+    "type": "date",
+    "required": true,
+    "input": false,
+    "index": true
+   }
+  },
+  "indexes": [
+   {
+    "fields": [
+     "key"
+    ],
+    "unique": true,
+    "name": "saml_idp_seen_request_key_unique"
+   }
+  ]
+ }
+}"
+`;
