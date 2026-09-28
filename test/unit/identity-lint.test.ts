@@ -48,8 +48,8 @@ const FAIL_WITH_SP = /\bfail\(ctx, state,[^;]*?\{ spId:([^}]*)\}/g;
 
 describe.skipIf(isWorkerd)("refusals naming an SP carry its tenant", () => {
   it("the pattern finds a call with spId and no tenantOf, and accepts one with it", () => {
-    const bad = 'return fail(ctx, state, "X", `SP ${sp.id}`, { spId: sp.id });';
-    const good = 'return fail(ctx, state, "X", `SP ${sp.id}`, { spId: sp.id, ...tenantOf(sp) });';
+    const bad = 'return fail(ctx, state, "X", "SP", { spId: sp.id });';
+    const good = 'return fail(ctx, state, "X", "SP", { spId: sp.id, ...tenantOf(sp) });';
     expect([...bad.matchAll(FAIL_WITH_SP)].filter((m) => !m[1]!.includes("tenantOf"))).toHaveLength(1);
     expect([...good.matchAll(FAIL_WITH_SP)].filter((m) => !m[1]!.includes("tenantOf"))).toHaveLength(0);
   });

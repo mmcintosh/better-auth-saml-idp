@@ -76,20 +76,26 @@ The answer, like every tenant route's, is a `TenantRecord`:
 }
 ```
 
-- **`tenantKey`** is the organization's id unless you choose one (1 to 64 of `A–Z a–z 0–9 _ -`). It is in the tenant's URLs and entity ID, which its SPs pin, so **it can't change** afterwards. Never derive it from the organization's slug: slugs change, and a freed slug can be taken by another organization. With `generateId: "serial"`, organization ids are guessable; choose random keys if that matters to you ([Metadata](#metadata)).
+- **`tenantKey`** is the organization's id unless you choose one (1 to 64 of `A–Z a–z 0–9 _ -`, and not another organization's id). It is in the tenant's URLs and entity ID, which its SPs pin, so **it can't change** afterwards, and **it is never used again** once the tenant is deleted ([below](#deleting-tenants-and-organizations)). Never derive it from the organization's slug: slugs change, and a freed slug can be taken by another organization. With `generateId: "serial"`, organization ids are guessable; choose random keys if that matters to you ([Metadata](#metadata)).
 - The **entity ID is the metadata URL** (as authentik does): self-describing, and built from nothing that can change.
 
 | Route | What it does |
 |---|---|
 | `GET /saml-idp/tenants` | List (`authClient.samlIdp.tenants()`). |
 | `GET /saml-idp/tenants/get?organizationId=` | One tenant. 404 `TENANT_NOT_FOUND`. |
-| `POST /saml-idp/tenants/create` | `{ organizationId, tenantKey?, enabled? }`. 400 `INVALID_TENANT` for an unknown organization or a bad key; 409 `TENANT_EXISTS` when the organization or key is taken. |
+| `POST /saml-idp/tenants/create` | `{ organizationId, tenantKey?, enabled? }`. 400 `INVALID_TENANT` for an unknown organization, a bad key or another organization's id as the key; 409 `TENANT_EXISTS` when the organization or key is taken; 409 `TENANT_KEY_RETIRED` when the key was a deleted tenant's. |
 | `POST /saml-idp/tenants/update` | `{ organizationId, enabled }`: switch it off or on. Nothing else can change. |
-| `POST /saml-idp/tenants/delete` | `{ organizationId }`. 409 `TENANT_HAS_SERVICE_PROVIDERS` while it has SPs, in code or stored. |
+| `POST /saml-idp/tenants/delete` | `{ organizationId }`. 409 `TENANT_HAS_SERVICE_PROVIDERS` while it has SPs, in code or stored. The key is retired. |
 
 The routes are mounted with the SP registry API, under the same checks: a signed-in, non-impersonated user, re-read from the database, that `canManage` approves, and with `registry.permissions`, one whose role grants the action on **`samlTenant`** (add it to your access controller next to `samlServiceProvider`: [permissions](users-and-access.md#registry-permissions)). An organization's own owners and admins get nothing here.
 
 A **disabled** tenant answers exactly like one that doesn't exist: its metadata is 404, its URLs find no SPs, and its SPs can't be signed in to by any route (IdP-initiated SSO included). They are skipped by Single Logout (reported `PartialLogout`). Nothing is ever issued for them under another identity.
+
+### Deleting tenants and organizations
+
+- **A deleted tenant's key is retired.** Its SPs may still trust its entity ID (the customer's IT team configured them), so no tenant, for any organization, may ever have that key again, not even the same organization's: create it again under a new key. Retired keys are kept in `samlIdpRetiredTenantKey` (409 `TENANT_KEY_RETIRED`). Two customers called Acme get `acme` and `acme-2`.
+- **A tenant belongs to the organization it was made for**, not just to an organization id: it stores the organization's `createdAt`. When that organization is gone, or its id now belongs to another organization (with `generateId: "serial"`, SQLite and D1 give a freed id to the next row), the tenant answers like a disabled one, whatever its `enabled`, even if the organization was deleted straight from the database.
+- **Deleting an organization through Better Auth** (`/organization/delete`) also disables its tenant, so the tenant list shows it. Its SPs and key stay until you remove them. To stop organization owners deleting an organization that is a tenant, refuse it in the organization plugin's `organizationHooks.beforeDeleteOrganization`.
 
 ## Add SPs to a tenant
 
@@ -197,7 +203,7 @@ New installs that enable tenants get the table without `UNIQUE(entityId)`.
 
 There is one IdP session per user, whatever the tenant: signing out from any SP ends it and reaches the SPs of every tenant the user signed in to in that session. Each SP is sent its LogoutRequest from **its own tenant's identity** (the one it got its assertion from), the originating SP is answered from its own, and a participant's LogoutResponse must be addressed to its own tenant's SLO URL (it may arrive at any SLO URL: the hop is found by its RelayState). A participant whose tenant was disabled since is skipped and the logout reported `PartialLogout`.
 
-The chain is browser redirects: each SP sees only its own tenant's messages. What an SP could observe is timing, nothing else.
+The chain is browser redirects: each SP sees only its own tenant's messages. What an SP could observe is timing, nothing else. A participant's answer is matched to the chain by its RelayState wherever it arrives, even at a tenant URL disabled since the chain started, so the rest of the chain goes on.
 
 ## Metadata
 
@@ -213,12 +219,12 @@ A cached tenant answers slightly faster than a database miss; that timing differ
 
 ## Events and the audit log
 
-`assertion.issued`, `denied` and `logout` events carry `tenantId` when the SP belongs to a tenant, and so does each participant in `session.ended` (root IdP: absent, so root events are unchanged). The audit log gets a `tenantId` column (null for the root IdP), for filtering in SQL.
+`assertion.issued`, `denied` and `logout` events carry `tenantId` when the SP belongs to a tenant (every refusal that names a tenant's SP), and so does each participant in `session.ended` (root IdP: absent, so root events are unchanged). The audit log gets a `tenantId` column (null for the root IdP), for filtering in SQL. Creating, disabling and deleting tenants is logged (`logger.info`), not yet written to the audit log.
 
 ## Database
 
 With `tenants.enabled` ([schema](schema.md#samlidptenant-with-tenantsenabled)):
-- a new table, `samlIdpTenant`;
+- new tables, `samlIdpTenant` and `samlIdpRetiredTenantKey`;
 - `samlIdpServiceProvider` gains `tenantId` (`""` for the root IdP, never NULL) and `lookupKey` (UNIQUE: a hash of tenant and entity ID), and its `entityId` is no longer UNIQUE on new installs;
 - `samlIdpAuditEvent` gains `tenantId`, with `auditLog.enabled`.
 
@@ -237,12 +243,23 @@ With `tenants.enabled` ([schema](schema.md#samlidptenant-with-tenantsenabled)):
    ```ts
    const { updated, skipped } = await auth.api.samlIdpBackfillServiceProviderKeys();
    ```
-   Each row's key is computed from its own config. `skipped` lists rows whose config isn't readable JSON. Running it again changes nothing.
+   Each row's key is computed from its own config. `skipped` lists rows whose config isn't readable JSON, and `failed` rows whose write failed (logged; the other rows are still done): check both are empty. Running it again changes nothing.
 4. Make it NOT NULL (Postgres: `ALTER TABLE "samlIdpServiceProvider" ALTER COLUMN "lookupKey" SET NOT NULL`; MySQL: `ALTER TABLE samlIdpServiceProvider MODIFY lookupKey varchar(255) NOT NULL`). SQLite can't; Better Auth then logs that the column "stays nullable", which is harmless once every row has a key.
 
-Until step 3, **existing stored SPs aren't found** (sign-in to them fails with `UNKNOWN_SERVICE_PROVIDER`), and their registry records say "no lookupKey yet". Do steps 1 to 3 in one go. The key can't be computed in SQL: it's a SHA-256 over text containing a NUL separator, which Postgres text can't hold and SQLite can't hash.
+Until step 3, **existing stored SPs aren't found** (sign-in to them fails with `UNKNOWN_SERVICE_PROVIDER`), and their registry records say "no lookupKey yet". Do steps 1 to 3 in one go. The key can't be computed in SQL: it's a SHA-256 over text containing a NUL separator, which Postgres text can't hold and SQLite can't hash. To let one entity ID into several tenants, drop the old `UNIQUE(entityId)` ([above](#the-same-sp-in-several-tenants)) **after** step 3, not before: until then, an SP created at the root with an old SP's entity ID would take the key that old row needs, and its backfill would fail.
 
-On MongoDB there is no column to add (step 1) or constrain (step 4); run step 3 before the UNIQUE index on `lookupKey` is created, since a unique index can't be built while several documents lack the key. (The upgrade steps were checked on Postgres 17, MySQL 8.4 and SQLite, not on a populated MongoDB collection.)
+**MongoDB** has no column to add (step 1) or constrain (step 4), and step 3 is different. Better Auth's MongoDB adapter builds a collection's indexes before its first write, and the UNIQUE index on `lookupKey` can't be built while two or more documents lack the key; so the endpoint above can't write there. Instead, **before** turning tenants on, run once with the `Db` you give `mongodbAdapter`:
+
+```ts
+import { backfillMongoServiceProviderKeys } from "better-auth-saml-idp";
+
+const { updated, skipped, failed } = await backfillMongoServiceProviderKeys(db);
+// with usePlural or a renamed model: backfillMongoServiceProviderKeys(db, { collection: "samlIdpServiceProviders" })
+```
+
+It writes the same keys through the driver. Then turn tenants on: the index is built on the first write. If tenants are already on, run it anyway (restart afterwards, or wait `registry.cacheSeconds`): the index is built on the next write, and `samlIdpBackfillServiceProviderKeys()` reports the rows it couldn't write in `failed` until then. The whole path, with two stored SPs, is checked on MongoDB 8.2 in CI.
+
+**Turning tenants off again** isn't supported once tenant SPs exist: with tenants off, a stored lookup goes by entity ID alone and can land on a tenant's row, which is then refused (its `tenant` needs tenants on), so a root SP with the same entity ID stops working. It fails closed.
 
 ## Not in this version
 

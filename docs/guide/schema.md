@@ -186,6 +186,7 @@ Organizations with their own IdP identity ([Multi-tenant IdP](multi-tenant.md)).
 | `id` | string | primary | Row id. |
 | `organizationId` | string | **unique** | The organization (organization plugin). |
 | `tenantKey` | string | **unique** | The tenant's name in its URLs and entity ID; the organization id unless another was chosen. Never changes. |
+| `organizationCreatedAt` | date | | The organization's `createdAt` when the tenant was made. A tenant whose organization is gone, or whose id now names an organization with another `createdAt`, is treated as nonexistent (D-053). |
 | `enabled` | boolean | | A disabled tenant is treated as nonexistent. |
 | `createdAt` | date | | |
 | `updatedAt` | date | | |
@@ -198,10 +199,18 @@ export const samlIdpTenants = sqliteTable("saml_idp_tenants", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").notNull().unique(),
   tenantKey: text("tenant_key").notNull().unique(),
+  organizationCreatedAt: integer("organization_created_at", { mode: "timestamp_ms" }).notNull(),
   enabled: integer("enabled", { mode: "boolean" }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   updatedBy: text("updated_by"),
+});
+export const samlIdpRetiredTenantKeys = sqliteTable("saml_idp_retired_tenant_keys", {
+  id: text("id").primaryKey(),
+  tenantKey: text("tenant_key").notNull().unique(),
+  organizationId: text("organization_id").notNull(),
+  retiredAt: integer("retired_at", { mode: "timestamp_ms" }).notNull(),
+  retiredBy: text("retired_by"),
 });
 // and on samlIdpServiceProviders:
 //   tenantId: text("tenant_id").notNull().default(""),
@@ -209,6 +218,18 @@ export const samlIdpTenants = sqliteTable("saml_idp_tenants", {
 // and on samlIdpAuditEvents: tenantId: text("tenant_id"),
 ```
 </details>
+
+## `samlIdpRetiredTenantKey` (with `tenants.enabled`)
+
+The key of every deleted tenant, so it is never used again: SPs set up for a deleted tenant may still trust its entity ID ([Multi-tenant IdP](multi-tenant.md#deleting-tenants-and-organizations), D-053).
+
+| Field | Type | Key | Description |
+|---|---|---|---|
+| `id` | string | primary | Row id. |
+| `tenantKey` | string | **unique** | The retired key. |
+| `organizationId` | string | | The organization whose tenant it was. |
+| `retiredAt` | date | | When the tenant was deleted. |
+| `retiredBy` | string | | The user id who deleted it (optional). |
 
 ## Other storage
 

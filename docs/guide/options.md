@@ -90,7 +90,7 @@ An IdP identity per Better Auth organization: its own entity ID, metadata and SS
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `enabled` | `boolean` | **required** | Adds the [`samlIdpTenant`](schema.md#samlidptenant-with-tenantsenabled) table and tenant columns, the `/saml2/idp/{metadata,sso,slo}/<tenantKey>` routes, and the tenant API (with the registry API). Needs the organization plugin, `registry.enabled` and a pinned `baseURL`; each missing is a startup error. |
+| `enabled` | `boolean` | **required** | Adds the [`samlIdpTenant`](schema.md#samlidptenant-with-tenantsenabled) and [`samlIdpRetiredTenantKey`](schema.md#samlidpretiredtenantkey-with-tenantsenabled) tables and tenant columns, the `/saml2/idp/{metadata,sso,slo}/<tenantKey>` routes, and the tenant API (with the registry API). Needs the organization plugin, `registry.enabled` and a pinned `baseURL`; each missing is a startup error. |
 | `keys` | `"shared"` | `"shared"` | What tenants sign with: `signing`, in this version. `"per-tenant"` is a startup error until it exists. |
 | `cacheSeconds` | `number` | `registry.cacheSeconds` | How long each isolate caches a tenant, and a miss. 0 to 3600. |
 
@@ -113,7 +113,7 @@ schema: {
   samlIdpServiceProvider: { modelName: "saml_sps" },
   samlIdpSessionParticipant: { fields: { sessionKey: "session_hash" } },
   samlIdpAuditEvent: { modelName: "saml_audit" },
-  samlIdpTenant: { modelName: "saml_tenants" }, // with tenants
+  samlIdpTenant: { modelName: "saml_tenants" }, // with tenants (and samlIdpRetiredTenantKey)
 }
 ```
 

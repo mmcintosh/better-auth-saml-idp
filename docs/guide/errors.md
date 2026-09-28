@@ -50,10 +50,11 @@ The codes are exported as `SAML_IDP_ERROR_CODES` (and appear on the plugin's `$E
 | `SERVICE_PROVIDER_EXISTS` | 409 | The `id` or `entityId` is taken by another stored SP. |
 | `SERVICE_PROVIDER_IN_CODE` | 409 | The `id` or `entityId` belongs to an SP defined in code, which always wins. |
 | `SERVICE_PROVIDER_NOT_FOUND` | 404 | `get`, `update` or `delete` of an id that isn't stored. |
-| `INVALID_TENANT` | 400 | [Tenant](multi-tenant.md#create-a-tenant) creation: no organization with that id, or a `tenantKey` that isn't 1 to 64 of `A–Z a–z 0–9 _ -` (the organization id is used by default, and may not qualify); `issues` says which. |
+| `INVALID_TENANT` | 400 | [Tenant](multi-tenant.md#create-a-tenant) creation: no organization with that id, a `tenantKey` that isn't 1 to 64 of `A–Z a–z 0–9 _ -` (the organization id is used by default, and may not qualify), or one that is another organization's id; `issues` says which. |
 | `TENANT_EXISTS` | 409 | The organization is already a tenant, or the `tenantKey` is taken. |
 | `TENANT_NOT_FOUND` | 404 | `get`, `update` or `delete` of an organization that isn't a tenant. |
 | `TENANT_HAS_SERVICE_PROVIDERS` | 409 | Deleting a tenant that still has SPs, in code or stored. Remove them first. |
+| `TENANT_KEY_RETIRED` | 409 | Creating a tenant with a key that belonged to a deleted tenant. Keys are never reused ([why](multi-tenant.md#deleting-tenants-and-organizations)); choose another. |
 
 With tenants, `INVALID_SERVICE_PROVIDER` also covers an SP naming a `tenant` that doesn't exist, a change of `tenant` on update, and an `organization` rule on a tenant SP other than `{ id: <its tenant>, roles? }`. A request at an unknown or disabled tenant's URL, or naming an SP of another tenant, is the sign-in error `UNKNOWN_SERVICE_PROVIDER`; a tenant's metadata URL answers a plain `404 Not Found`.
 
