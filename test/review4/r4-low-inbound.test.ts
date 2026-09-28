@@ -41,6 +41,8 @@ describe("R4-L6: log-safe text has no characters that make it read differently",
   it("C0, C1, bidi overrides and invisible formatting characters are replaced", () => {
     for (const c of ["\u0000", "\u001b", "\u007f", "\u0085", "\u009b", "؜", "​", "‎", "‮", "⁦", "⁩", "﻿"])
       expect(logSafe(`a${c}b`)).toBe("a?b");
+    // Line and paragraph separators, which some log viewers break lines on (pre-release review).
+    expect(logSafe("a\u2028b\u2029c")).toBe("a?b?c");
     expect(logSafe("Ünïcødé text, 日本語")).toBe("Ünïcødé text, 日本語");
   });
 });

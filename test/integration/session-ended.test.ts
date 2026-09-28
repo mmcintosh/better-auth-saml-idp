@@ -78,6 +78,7 @@ describe("session.ended (D-043)", () => {
       for (const r of rows) expect(r.endedAt).toBeTruthy();
     });
     const listA = await (auth.api as any).samlIdpListSessionParticipants({ body: { userId: a.user.id } });
+    expect(listA.truncated).toBe(false);
     expect(listA.participants.map((p: any) => [p.spId, p.endedAt !== null]).sort()).toEqual([
       ["other-sp", true],
       ["test-sp", true],
@@ -113,6 +114,51 @@ describe("session.ended (D-043)", () => {
     await vi.waitFor(() => expect(events.filter((e) => e.type === "logout")).toHaveLength(1));
     await new Promise((r) => setTimeout(r, 50));
     expect(ended(events)).toEqual([]);
+  });
+
+  it("a logout whose session delete fails doesn't hide a later revoke of that session (pre-release review L-1)", async () => {
+    const { auth, ctx, events } = await host();
+    const { browser, user } = await signedInToBoth(auth);
+    const deleteSession = ctx.internalAdapter.deleteSession.bind(ctx.internalAdapter);
+    ctx.internalAdapter.deleteSession = (async () => {
+      throw new Error("database unavailable");
+    }) as any;
+    try {
+      const res = await browser.fetch(`${AUTH_BASE}/saml2/idp/logout?returnTo=/`);
+      expect(res.status).toBeGreaterThanOrEqual(500);
+    } finally {
+      ctx.internalAdapter.deleteSession = deleteSession;
+    }
+    await ctx.internalAdapter.deleteUserSessions(user.id);
+    await vi.waitFor(() => expect(ended(events)).toHaveLength(1));
+    expect(ended(events)[0]).toMatchObject({ reason: "revoked", truncated: false });
+    expect(ended(events)[0]!.participants).toHaveLength(2);
+  });
+
+  it("a stale SLO marker (over a minute old) is ignored", async () => {
+    const { markEndingBySlo, consumeEndingBySlo } = await import("../../src/storage/participants");
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      markEndingBySlo("s-fresh");
+      expect(consumeEndingBySlo("s-fresh")).toBe(true);
+      expect(consumeEndingBySlo("s-fresh")).toBe(false); // consumed
+      markEndingBySlo("s-stale");
+      vi.setSystemTime(Date.now() + 61_000);
+      expect(consumeEndingBySlo("s-stale")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("lists say when they were cut at 200 (pre-release review S-2)", async () => {
+    const { endParticipants, listUserParticipants, sessionKeyOf } = await import("../../src/storage/participants");
+    const sessionKey = await sessionKeyOf("s-big");
+    const rows = Array.from({ length: 201 }, (_, i) => ({ spId: `sp${i}`, nameId: "n", nameIdFormat: "f", sessionIndex: "_s", sessionKey, userId: "u-big", expiresAt: new Date(Date.now() + 60_000) }));
+    const fake = { findMany: async (a: any) => rows.slice(0, a.limit), updateMany: async () => rows.length } as any;
+    const ended = await endParticipants(fake, "s-big", new Date());
+    expect([ended.participants.length, ended.truncated]).toEqual([200, true]);
+    const listed = await listUserParticipants(fake, "u-big");
+    expect([listed.participants.length, listed.truncated]).toEqual([200, true]);
   });
 
   it("Better Auth's own /sign-out reports reason signed-out, and it is audited", async () => {

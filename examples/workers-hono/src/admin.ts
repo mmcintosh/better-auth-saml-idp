@@ -28,18 +28,22 @@ const newNonce = () => btoa(String.fromCharCode(...crypto.getRandomValues(new Ui
 
 /** The signed-in admin, or a Response to send instead (sign-in redirect, or 403). */
 async function requireAdmin(c: C, auth: Auth): Promise<{ email: string } | Response> {
-  const session = await auth.api.getSession({ headers: c.req.raw.headers });
+  const session = await auth.api.getSession({ headers: c.req.raw.headers, query: { disableCookieCache: true } });
   if (!session) return c.redirect(`/sign-in?callbackURL=${encodeURIComponent("/admin")}`);
-  if (!isRegistryAdmin(c.env, session.user)) {
+  // The user as the database has it now (a demotion or ban applies at once), and never an admin
+  // acting as someone else: the registry API refuses impersonated sessions too.
+  const user = (await (await auth.$context).internalAdapter.findUserById(session.user.id)) as { email: string; emailVerified?: boolean; banned?: boolean } | null;
+  const impersonated = Boolean((session.session as { impersonatedBy?: string | null }).impersonatedBy);
+  if (!user || user.banned || impersonated || !isRegistryAdmin(c.env, user)) {
     const nonce = newNonce();
     return html(
       `<!doctype html><meta charset="utf-8"><title>Not allowed</title><style nonce="${nonce}">body{font:16px system-ui;margin:2rem}</style>` +
-        `<h1>Not an administrator</h1><p>${esc(session.user.email)} isn't in <code>SAML_REGISTRY_ADMINS</code>, or its email isn't verified.</p><p><a href="/">Home</a></p>`,
+        `<h1>Not an administrator</h1><p>${esc(session.user.email)} isn't in <code>SAML_REGISTRY_ADMINS</code>, its email isn't verified, or this is an impersonated session.</p><p><a href="/">Home</a></p>`,
       nonce,
       403,
     );
   }
-  return { email: session.user.email };
+  return { email: user.email };
 }
 
 /** Same-origin JSON POSTs only (the page's own fetches). */
@@ -79,6 +83,7 @@ export function registerAdmin(app: Hono<{ Bindings: Env }>, authFor: (c: C) => A
       const admin = await requireAdmin(c, authFor(c));
       if (admin instanceof Response) return c.json({ error: "not allowed" }, 403);
       if (!sameOrigin(c)) return c.json({ error: "cross-origin" }, 403);
+      if (Number(c.req.header("content-length") ?? 0) > 1_100_000) return c.json({ error: "metadata too large" }, 413);
       const body = (await c.req.json().catch(() => null)) as { xml?: unknown; id?: unknown } | null;
       if (!body || typeof body.xml !== "string" || typeof body.id !== "string" || body.xml.length > 1_000_000) return c.json({ error: "send { id, xml }" }, 400);
       try {
@@ -136,7 +141,7 @@ th{font-weight:600;white-space:nowrap}code{font-size:.85em;word-break:break-all}
 button,.btn{font:inherit;padding:.3rem .7rem;border:1px solid #c9ced6;border-radius:6px;background:#fff;cursor:pointer;text-decoration:none;color:inherit;display:inline-block;margin:0 .2rem .2rem 0}
 button.primary{background:#1d4ed8;color:#fff;border-color:#1d4ed8}button.danger{color:#b42318}textarea,input{font:13px ui-monospace,monospace;width:100%;box-sizing:border-box;padding:.5rem;border:1px solid #c9ced6;border-radius:6px}
 textarea{min-height:10rem}label{display:block;margin:.6rem 0 .25rem;font-weight:600}#msg{position:sticky;top:0;padding:.5rem 1rem;display:none}#msg.show{display:block}#msg.err{background:#fee4e2}#msg.info{background:#d1fadf}
-ul.issues{margin:.2rem 0;padding-left:1.1rem}.pill{font-size:.8em;border-radius:99px;padding:.05rem .5rem;border:1px solid #d0d5dd}
+ul.issues{margin:.2rem 0;padding-left:1.1rem}input.check{width:auto}.pill{font-size:.8em;border-radius:99px;padding:.05rem .5rem;border:1px solid #d0d5dd}
 </style></head><body>
 <header><h1>SAML IdP admin</h1><span>${esc(d.who)} · <a href="/">Home</a></span></header>
 <div id="msg" role="status"></div>
@@ -153,7 +158,7 @@ ul.issues{margin:.2rem 0;padding-left:1.1rem}.pill{font-size:.8em;border-radius:
 <section id="editor" hidden><h2 id="editorTitle">Edit</h2>
 <label for="cfg">Configuration (JSON, the same shape as a <code>serviceProviders</code> entry, without functions)</label>
 <textarea id="cfg" spellcheck="false"></textarea>
-<label><input id="enabled" type="checkbox" style="width:auto"> Enabled (used for sign-in)</label>
+<label><input id="enabled" type="checkbox" class="check"> Enabled (used for sign-in)</label>
 <p><button id="save" class="primary">Save</button> <button id="cancel">Cancel</button></p></section>
 
 <section><h2>Add a service provider</h2>

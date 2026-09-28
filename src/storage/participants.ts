@@ -72,13 +72,16 @@ export async function listParticipants(adapter: Adapter, sessionId: string): Pro
  * The session ended without Single Logout (D-043): mark its participant rows ended (kept until
  * they expire, so the host can still find and act on them) and return them.
  */
-export async function endParticipants(adapter: Adapter, sessionId: string, endedAt: Date): Promise<Participant[]> {
+export async function endParticipants(adapter: Adapter, sessionId: string, endedAt: Date): Promise<{ participants: Participant[]; truncated: boolean }> {
   const sessionKey = await sessionKeyOf(sessionId);
-  const rows = ((await adapter.findMany({ model: PARTICIPANT_MODEL, where: [{ field: "sessionKey", value: sessionKey }], limit: MAX_PARTICIPANTS })) as ParticipantRow[]).filter(
-    (r) => !r.endedAt,
-  );
+  const all = (await adapter.findMany({ model: PARTICIPANT_MODEL, where: [{ field: "sessionKey", value: sessionKey }], limit: MAX_PARTICIPANTS + 1 })) as ParticipantRow[];
+  const rows = all.filter((r) => !r.endedAt);
+  // Every row is marked, even beyond the reporting cap.
   if (rows.length) await adapter.updateMany({ model: PARTICIPANT_MODEL, where: [{ field: "sessionKey", value: sessionKey }], update: { endedAt } });
-  return rows.map(({ spId, nameId, nameIdFormat, sessionIndex }) => ({ spId, nameId, nameIdFormat, sessionIndex }));
+  return {
+    participants: rows.slice(0, MAX_PARTICIPANTS).map(({ spId, nameId, nameIdFormat, sessionIndex }) => ({ spId, nameId, nameIdFormat, sessionIndex })),
+    truncated: all.length > MAX_PARTICIPANTS,
+  };
 }
 
 export interface UserParticipant extends Participant {
@@ -87,10 +90,14 @@ export interface UserParticipant extends Participant {
   expiresAt: Date;
 }
 
-/** A user's SP sessions, live or ended but not yet expired (for the host's retry, D-043). */
-export async function listUserParticipants(adapter: Adapter, userId: string, now = new Date()): Promise<UserParticipant[]> {
-  const rows = (await adapter.findMany({ model: PARTICIPANT_MODEL, where: [{ field: "userId", value: userId }], limit: MAX_PARTICIPANTS })) as ParticipantRow[];
-  return rows
+/**
+ * A user's SP sessions, live or ended but not yet expired (for the host's retry, D-043).
+ * `truncated`: more than MAX_PARTICIPANTS rows exist, so the list isn't complete.
+ */
+export async function listUserParticipants(adapter: Adapter, userId: string, now = new Date()): Promise<{ participants: UserParticipant[]; truncated: boolean }> {
+  const found = (await adapter.findMany({ model: PARTICIPANT_MODEL, where: [{ field: "userId", value: userId }], limit: MAX_PARTICIPANTS + 1 })) as ParticipantRow[];
+  const participants = found
+    .slice(0, MAX_PARTICIPANTS)
     // Exact match, as findRow does (R4-L8): a case-insensitive collation must not widen it.
     .filter((r) => r.userId === userId && new Date(r.expiresAt).getTime() > now.getTime())
     .map(({ spId, nameId, nameIdFormat, sessionIndex, endedAt, expiresAt }) => ({
@@ -101,6 +108,7 @@ export async function listUserParticipants(adapter: Adapter, userId: string, now
       endedAt: endedAt ? new Date(endedAt) : null,
       expiresAt: new Date(expiresAt),
     }));
+  return { participants, truncated: found.length > MAX_PARTICIPANTS };
 }
 
 /**
@@ -109,13 +117,17 @@ export async function listUserParticipants(adapter: Adapter, userId: string, now
  * consumed by the hook, and pruned after a minute in case it never runs.
  */
 const endingBySlo = new Map<string, number>();
+const ENDING_TTL_MS = 60_000;
 export function markEndingBySlo(sessionId: string): void {
   const now = Date.now();
-  for (const [id, at] of endingBySlo) if (now - at > 60_000) endingBySlo.delete(id);
+  for (const [id, at] of endingBySlo) if (now - at > ENDING_TTL_MS) endingBySlo.delete(id);
   endingBySlo.set(sessionId, now);
 }
+/** True only for a fresh marker: a stale one (the delete never happened) must not hide a later end. */
 export function consumeEndingBySlo(sessionId: string): boolean {
-  return endingBySlo.delete(sessionId);
+  const at = endingBySlo.get(sessionId);
+  endingBySlo.delete(sessionId);
+  return at !== undefined && Date.now() - at <= ENDING_TTL_MS;
 }
 
 export async function forgetParticipants(adapter: Adapter, sessionId: string): Promise<void> {

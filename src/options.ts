@@ -407,6 +407,11 @@ interface SpDefaults {
 
 /** Per-SP checks and defaults, shared by code SPs and database-registry SPs. */
 function resolveServiceProvider(sp: ParsedServiceProvider, path: string, d: SpDefaults, issues: string[], warnings: string[]): ResolvedServiceProvider {
+  // "ignore" + metadata: the metadata's signing certificates are never used, so logout requests
+  // are authenticated by SessionIndex alone (pre-release review L-2). Legitimate when metadata is
+  // only for the encryption certificate; say so.
+  if (sp.requestSignatures === "ignore" && sp.metadata)
+    warnings.push(`${path}: requestSignatures is "ignore", so the signing certificates from metadata are never checked and LogoutRequests are authenticated by SessionIndex alone`);
   if (sp.metadata && sp.metadata.signingCertificates === undefined)
     warnings.push(`${path}.metadata: the metadata's signature isn't pinned (signingCertificates); its certificates are trusted on TLS alone`);
 

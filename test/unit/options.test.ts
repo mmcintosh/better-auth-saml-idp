@@ -212,6 +212,11 @@ describe("resolveOptions: service providers", () => {
     ]);
   });
 
+  it('warns when "ignore" is combined with a metadata URL (logout then rests on SessionIndex; pre-release review L-2)', () => {
+    const r = resolveOptions(baseOptions({ serviceProviders: [sp({ requestSignatures: "ignore", metadata: { url: "https://sp.test/md.xml", signingCertificates: keys.sp.certificate } })] }));
+    expect(r.warnings.join(" ")).toMatch(/requestSignatures is "ignore", so the signing certificates from metadata are never checked/);
+  });
+
   it("derives requestSignatures from what the SP was given", () => {
     const policies = resolveOptions(
       baseOptions({

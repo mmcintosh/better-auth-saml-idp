@@ -175,6 +175,7 @@ authorize: async ({ user, session }) => {
   - If the SP asked for no interaction (`IsPassive`), the SP gets a `NoPassive` status instead.
   - If the user already signed in again for this request and is still refused, it's a plain `ACCESS_DENIED`: no loop.
   - Your login page must honour `prompt=login`, and ask for credentials (and the second factor) even when signed in.
+  - "Signed in again" means a session created after the request. If your app can create sessions without credentials (for example Better Auth's `device-authorization` or `bearer` plugins minting a new session from an existing one), don't rely on that alone: have `authorize` check a field your real sign-in sets, such as the time the second factor was completed. The same applies to an SP's ForceAuthn.
 
 ## Registry permissions
 

@@ -1366,3 +1366,45 @@ The flow:
 - **Test note:** node-saml requests `PasswordProtectedTransport` by default. The broker claims `unspecified`, since how the user authenticated was decided upstream. So the test app sets `disableRequestedAuthnContext`. A real broker should set `authnContextClassRef` to what its upstreams guarantee.
 - The guide page `docs/guide/better-auth-sso.md` described the broker before this test existed. It now carries the tested recipe.
 
+## D-046: Pre-release review (2026-09-27)
+
+Before the first release candidate, two independent reviews ran over everything since the last review (4a44664): a security review and a docs/API consistency review. The mechanical checks alongside them:
+- the packed tarball's contents;
+- publint and Are the Types Wrong;
+- a fresh-project install of the tarball with Better Auth 1.7.6: CLI keygen, a login verified by node-saml;
+- `npm audit` of the runtime dependencies (0 vulnerabilities; 16 packages, all MIT);
+- the full-history secret scan;
+- a release dry run (workflow_dispatch: tests, pack and SBOM passed; publish skipped).
+
+**Security review:** no Critical, High or Medium findings. Fixed:
+- **L-1:** a logout whose session delete failed left the "ending by SLO" marker, so a later revoke of that session emitted no `session.ended` and left its rows looking live. Now the marker is cleared when the delete throws, and a marker over a minute old is ignored. Regression tests reproduce the reviewer's scenario.
+- **L-2:** `requestSignatures: "ignore"` with a metadata URL makes logout rest on SessionIndex alone, since the metadata's signing certificates are never checked. This corrects D-040 decision 4's "same outcome as the old `mustSign`": the old rule forced signing whenever metadata was set. The combination is legitimate (metadata used only for the encryption certificate), so it gets a startup warning rather than an error.
+- **L-3 (example):** the admin page now re-reads the user from the database, refuses impersonated sessions and bypasses the cookie cache, as the registry API does.
+- **S-2:** the per-user participant list and `session.ended` were cut at 200 without saying so. Both now carry `truncated`; every row is still marked ended.
+- **Info:**
+  - `logSafe` also strips U+2028 and U+2029;
+  - the admin `from-metadata` route checks Content-Length before parsing;
+  - an inline style the admin CSP blocked was moved to a class.
+- **S-1 (documented):** "signed in again" means a session newer than the request. Hosts with credential-less session minting (`device-authorization`, `bearer`) should have `authorize` check a field their real sign-in sets. This was already true of ForceAuthn.
+
+**Also found by the checks:**
+- CI had been red since the broker test: gitleaks flagged a fake test secret. The allow-list now covers the fixed test-secret pattern.
+- samlify printed "missing endpoint of SingleLogoutService" on every IdP without SLO; that one message is now filtered during construction.
+- The release workflow now tags pre-releases `next` and marks them as GitHub pre-releases.
+
+**Docs/API review:** every must-fix was fixed (98bc59d):
+- stale "waits for / requires better-auth-cloudflare 0.4" claims (the plugin doesn't depend on it; 0.3.1 works with verification and rate limits in the database);
+- the release-candidate install instructions;
+- a documented `serviceProviders.list` call that doesn't exist;
+- snippets that didn't type-check;
+- missing options in the README;
+- schema reference gaps;
+- the CHANGELOG, rewritten as first-release notes.
+
+**Mutation proof:** five mutations for the fixes, each caught:
+1. no unmark on failure;
+2. no marker age check;
+3. no L-2 warning;
+4. no separators in `logSafe`;
+5. no `truncated`.
+

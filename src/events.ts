@@ -92,6 +92,8 @@ export interface SessionEndedEvent extends EventBase {
     nameIdFormat: string;
     sessionIndex: string;
   }[];
+  /** More SPs took part than the event lists (the cap is 200); all of them were marked ended. */
+  truncated: boolean;
 }
 
 export type SamlIdpEvent = AssertionIssuedEvent | DeniedEvent | LogoutEvent | SessionEndedEvent;

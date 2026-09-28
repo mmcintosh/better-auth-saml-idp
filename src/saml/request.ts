@@ -52,9 +52,10 @@ export const invalid = (detail: string) => new SamlRequestError("INVALID_SAML_RE
 /** Attacker-controlled text in debug logs: bounded length, no control characters. */
 export function logSafe(s: string, max = 120): string {
   // C0 and C1 controls, and the Unicode bidi and invisible formatting characters that can make a
-  // log line or a SIEM view read differently from what it contains (R4-L6).
+  // log line or a SIEM view read differently from what it contains (R4-L6), and the Unicode line
+  // and paragraph separators, which some log viewers break lines on (pre-release review).
   // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping control characters is the point
-  const clean = s.replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g, "?");
+  const clean = s.replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2028\u2029\u2060-\u2069\ufeff]/g, "?");
   return clean.length > max ? `${clean.slice(0, max)}…` : clean;
 }
 

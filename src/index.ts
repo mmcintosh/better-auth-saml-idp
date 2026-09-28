@@ -123,7 +123,7 @@ export const samlIdp = (options: SamlIdpOptions) => {
                     try {
                       if (!session?.id || consumeEndingBySlo(session.id)) return;
                       const now = new Date();
-                      const ended = await endParticipants(ctx.adapter as any, session.id, now);
+                      const { participants: ended, truncated } = await endParticipants(ctx.adapter as any, session.id, now);
                       if (ended.length === 0) return;
                       const reason =
                         session.expiresAt && new Date(session.expiresAt).getTime() <= now.getTime() ? "expired" : hookCtx?.path === "/sign-out" ? "signed-out" : "revoked";
@@ -131,7 +131,7 @@ export const samlIdp = (options: SamlIdpOptions) => {
                       const participants = await Promise.all(
                         ended.map(async (p) => ({ ...p, entityId: (await directory.byId(ctx.adapter as any, p.spId, log))?.entityId })),
                       );
-                      emitWithoutRequest(sink, resolved, { type: "session.ended", userId: String(session.userId ?? ""), sessionId: session.id, reason, participants });
+                      emitWithoutRequest(sink, resolved, { type: "session.ended", userId: String(session.userId ?? ""), sessionId: session.id, reason, participants, truncated });
                     } catch (e) {
                       ctx.logger.error("[saml-idp] could not record the end of a session's SAML participants", e);
                     }

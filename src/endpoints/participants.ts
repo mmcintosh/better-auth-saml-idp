@@ -7,9 +7,9 @@ import { lookupLog, type PluginState } from "./issue";
 
 export const listSessionParticipantsEndpoint = (state: PluginState) =>
   createAuthEndpoint.serverOnly({ method: "POST", body: z.object({ userId: z.string().min(1).max(255) }) }, async (ctx) => {
-    const rows = await listUserParticipants(ctx.context.adapter as any, ctx.body.userId);
+    const { participants: rows, truncated } = await listUserParticipants(ctx.context.adapter as any, ctx.body.userId);
     const participants = await Promise.all(
       rows.map(async (p) => ({ ...p, entityId: (await state.directory.byId(ctx.context.adapter as any, p.spId, lookupLog(ctx)))?.entityId })),
     );
-    return ctx.json({ participants });
+    return ctx.json({ participants, truncated });
   });
