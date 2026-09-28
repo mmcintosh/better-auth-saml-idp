@@ -1,0 +1,29 @@
+{
+  "name": "example-nextjs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "keys": "node scripts/dev-keys.mjs",
+    "db:migrate": "node --env-file-if-exists=.env.local scripts/migrate.ts",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "smoke": "node scripts/smoke.mjs",
+    "sso": "node scripts/sso.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-auth": "1.7.5",
+    "better-auth-saml-idp": "workspace:*",
+    "next": "16.3.6",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@node-saml/node-saml": "^5.1.0",
+    "@types/node": "^26.6.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "^7.0.2"
+  }
+}

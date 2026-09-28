@@ -1,0 +1,7 @@
+.next/
+next-env.d.ts
+.env.local
+data.db
+data.db-*
+*.tsbuildinfo
+next.log
