@@ -1586,3 +1586,55 @@ The roadmap item "One IdP identity per organization", built as phase 1 of `docs/
 
 **Not verified:** a live interop run with real SPs in two tenants (design §8, "Interop, live"); the upgrade steps on a populated MongoDB collection.
 
+
+## D-053: Review 6 fixes (2026-09-28)
+
+An external review of multi-tenant phase 1 (D-052) and everything since 1.0.0-rc.1 (`docs/review/review-6-findings.md`, proof tests in `test/review6/`, kept as regression tests). Isolation between tenants held; the findings were at the edges of a tenant's life, the MongoDB upgrade, and release plumbing.
+- **R6-1 (Medium):** a tenant was tied to an organization id only. A deleted organization's tenant stayed enabled, and with serial ids (SQLite, D1) the next organization created got the freed id and, with it, the tenant's identity and SPs.
+  - **Fix:** the tenant row stores the organization's `createdAt` (`organizationCreatedAt`). Routing and issuance load the organization with the tenant (cached together) and treat the tenant as absent when the organization is gone, or its id now belongs to an organization with another `createdAt`. This covers an organization deleted straight in the database.
+  - An after-hook on `/organization/delete` also disables the tenant, so the tenant list shows it. SPs and key stay for the administrators to remove. The guide points to `organizationHooks.beforeDeleteOrganization` to refuse such deletes instead.
+  - `createdAt` is compared to the millisecond, after a round trip through the database; the adapter matrix signs in at tenant URLs on every database, which exercises it. Two organizations created in the same millisecond with the same id would still match; accepted.
+- **R6-2 (Low):** deleting a tenant freed its key, and another organization's tenant could take it, with byte-identical entity ID and URLs that the first customer's SPs still trust.
+  - **Fix:** keys are single-use. Deleting a tenant first records its key in a new table, `samlIdpRetiredTenantKey` (UNIQUE `tenantKey`, declared at table level for MongoDB), then deletes the row. Creating a tenant with a retired key is 409 `TENANT_KEY_RETIRED`, for any organization, the same one included: the simplest rule that can't be wrong, and a new key is one argument away.
+  - The retired table is checked before the insert and again after it (a delete retires before it deletes, so a racing create is undone).
+- **R6-3 (Low):** eight refusals naming a tenant SP left `tenantId` out of the `denied` event and the audit row. All now spread `tenantOf(sp)`; root output is unchanged. A lint-style unit test fails if any `fail(ctx, state, …, { spId })` in `src/` lacks it. The proof test's audit-row check was corrected: that refusal comes before the session is read, so it names no user and is never stored (R4-3); it now checks the row the event would make.
+- **R6-4 (Medium):** the documented MongoDB upgrade couldn't work. The MongoDB adapter builds a model's indexes before its first write, and the UNIQUE `lookupKey` index can't be built while two documents lack the key, so the backfill's first write failed, and every later write of the registry with it.
+  - **Fix:** a new export, `backfillMongoServiceProviderKeys(db, { collection? })`, writes the same keys through the driver (the host's `Db`, as given to `mongodbAdapter`), before tenants are turned on. It also recovers a registry where tenants were turned on first. The adapter exposes no raw collection, so a separate function was the only way; a mongosh script would have duplicated the key derivation.
+  - The backfill endpoint no longer stops at the first failed write (see I-1), and names MongoDB's case in the log.
+  - Proven against MongoDB 8.2: the review's proof test (both orders) and a new adapter-matrix case, which CI runs.
+- **R6-5 (Medium, release):** `pnpm audit --prod` at the workspace root covered the examples' production dependencies (285 packages against the plugin's 17), so an advisory in Next.js would block every PR and the release. pnpm 10's audit has no `--filter`.
+  - **Fix:** `scripts/audit-runtime.mjs` audits a copy of the lockfile with only the root importer. `dependencies.yml` and `release.yml` use it. The examples' audit is a separate job with `continue-on-error`: reported, never blocking.
+- **R6-6 (Low, docs):** the databases guide's "✅ CI" for Drizzle and Prisma tables was inaccurate: CI creates the tables with Better Auth's migrator and uses Drizzle and Prisma as the query layer. The table and a new section now say so, and list the unique keys to check in a generated schema. A real check needs `npx auth generate`, which isn't a dependency here.
+- **R6-7 (Low, example):** the Next.js sign-in page's `acr_values` branch couldn't be reached: without `authnContext.levels`, the IdP answers an unsatisfiable RequestedAuthnContext itself. The branch is removed, as in the Workers example, and the README, CHANGELOG and README roadmap corrected. The proof test now checks the corrected claim (NoAuthnContext without the sign-in page) and that the page has no such branch.
+- **R6-8 (Low, docs):** the memory-adapter row is back inside the databases table.
+
+**Info items fixed:**
+- **I-1:** the backfill reads the table in pages of 500 (no cap) and reports rows whose write failed in `failed` (logged) instead of stopping. The guide says to drop the old `UNIQUE(entityId)` after the backfill on Postgres and MySQL too.
+- **I-3:** a chosen `tenantKey` may not be another organization's id (400 `INVALID_TENANT`).
+- **I-4:** a participant's LogoutResponse is matched by its RelayState before the URL's tenant is resolved, so one arriving at a tenant URL disabled since the chain started continues the chain. It's still checked against its own tenant's identity; a disabled one makes it `PartialLogout`.
+- **I-5:** the guide says turning tenants off again isn't supported once tenant SPs exist (it fails closed).
+- The Next.js README says not to deploy from a directory with the throwaway `.env.local`. The README roadmap no longer suggests Prisma is covered on MySQL. `release.yml` attests the tarball before staging it on npm, so a failed attestation leaves nothing staged. D-049's "13 `runs-on` lines" is now 16 (later jobs, and `examples-audit` here).
+
+**Left open:**
+- I-2: tenant administration goes to `logger.info`, not the audit log. That needs a new event type; later.
+- Prisma's engines are downloaded at CI time, not pinned by the lockfile.
+- The Bun and Deno versions in the runtimes job aren't pinned; acceptable for a smoke test.
+- R6-6's real check (tables from generated Drizzle and Prisma schemas) waits until the schema generator can be a dev dependency.
+
+**Tests:** `tenants.test.ts` (organization deleted through Better Auth and straight in the database; serial-id reuse on SQLite; retired keys; a key that is another organization's id; backfill paging and per-row failures; SLO answer at a disabled tenant URL), `sp-directory.test.ts` (the binding, with dates as Date, text and epoch), `identity-lint.test.ts` (R6-3), and the adapter matrix (retired keys on every database; the populated MongoDB upgrade). With tenants off, the snapshots pass unchanged.
+- **Full suite:** 146 files passed, 15 skipped; 1350 tests passed, 72 skipped.
+- **Adapter matrix, locally:** Postgres 17, MySQL 8.4, Drizzle on both and Prisma on Postgres 11/11 each; MongoDB 8.2 12/12. Every `test/review6/` test passes where it applies: Node and workerd, the SQL upgrade check on Postgres and MySQL, the MongoDB one on MongoDB.
+
+**Mutation proof** (each broken on purpose, a test failed, restored with `git checkout`):
+1. the organization's `createdAt` not compared (serial-id reuse; unit test);
+2. the organization not checked at all (database delete, serial reuse);
+3. no organization-delete hook (the tenant stays listed as enabled);
+4. no retired-key checks (both proof and main tests; either check alone suffices);
+5. a chosen key equal to another organization's id accepted;
+6. one R6-3 site without `tenantOf` (lint test; proof test);
+7. the MongoDB backfill writing nothing (matrix and proof);
+8. the backfill endpoint throwing at the first failed write (I-1 test; MongoDB proof);
+9. the backfill reading one page only;
+10. the participant answer requiring an enabled route (I-4 test);
+11. the audit script auditing the whole lockfile (285 dependencies instead of 17);
+12. the old Next.js page restored (R6-7 check).
