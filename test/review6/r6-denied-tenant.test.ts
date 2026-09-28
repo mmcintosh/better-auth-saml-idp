@@ -1,3 +1,6 @@
+// Fixed in D-053; kept as regression tests (the main suite's check is in test/unit/identity-lint.test.ts).
+// Comments saying "today" describe dac64f3. The audit-row check of the first test was corrected: that
+// refusal names no user, so it is never stored (R4-3); it now checks the row it would make.
 // Review 6 (D-052): "denied events carry tenantId when the SP belongs to a tenant", and the audit
 // log's tenantId column is "for filtering in SQL". Several refusals that name a tenant SP leave the
 // tenant out, so their audit rows read as the root IdP's (tenantId NULL):
@@ -6,6 +9,7 @@
 //   sso.ts    "SP changed tenant" (continuation)
 //   slo.ts    LOGOUT_NOT_SUPPORTED (continuation and finish), "changed tenant" (continuation)
 import { describe, expect, it, vi } from "vitest";
+import { auditRow } from "../../src/events";
 import { AUTH_BASE } from "../support/host";
 import { authn, code, ok, urls, world } from "./world";
 
@@ -23,12 +27,9 @@ describe("R6-3: denied events and audit rows of tenant SPs without their tenant"
     expect(await code(await w.browser.fetch(`${AUTH_BASE}/saml2/idp/init?sp=${SP.id}`))).toBe("IDP_INITIATED_NOT_ALLOWED");
     await vi.waitFor(() => expect(events.some((e) => e.code === "IDP_INITIATED_NOT_ALLOWED")).toBe(true));
     expect(events.find((e) => e.code === "IDP_INITIATED_NOT_ALLOWED").tenantId).toBe(w.orgA.id);
-    await vi.waitFor(async () => {
-      const rows = (await w.ctx.adapter.findMany({ model: "samlIdpAuditEvent", where: [{ field: "spId", value: SP.id }] })) as any[];
-      expect(rows).toHaveLength(1);
-      expect(rows[0].code).toBe("IDP_INITIATED_NOT_ALLOWED");
-      expect(rows[0].tenantId).toBe(w.orgA.id);
-    });
+    // This refusal comes before the session is read, so it names no user, and denials without a
+    // user aren't stored (R4-3: anyone can cause them). The row it would make carries the tenant.
+    expect(auditRow(events.find((e) => e.code === "IDP_INITIATED_NOT_ALLOWED"), 1, true).tenantId).toBe(w.orgA.id);
   });
 
   it("ForceAuthn at a tenant's URL resumed with the old session: REAUTHENTICATION_REQUIRED should say the tenant", async () => {

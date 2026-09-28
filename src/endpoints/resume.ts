@@ -2,7 +2,7 @@ import { createAuthEndpoint, getAuthoritativeSessionFromCtx } from "better-auth/
 import * as z from "zod";
 import { resolveAcsUrl } from "../saml/sp-registry";
 import { consumePending, sha256b64url } from "../storage/pending";
-import { fail, issueResponse, type PluginState, spById } from "./issue";
+import { fail, issueResponse, type PluginState, spById, tenantOf } from "./issue";
 import { bindingValue, loginRedirectUrl, RESUME_PATH } from "./sso";
 
 export const resumeEndpoint = (state: PluginState) =>
@@ -42,12 +42,12 @@ export const resumeEndpoint = (state: PluginState) =>
       if (!sp) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", "SP removed since the request was stored");
       // IdP-initiated (no request ID): the SP must still have opted in.
       if (pending.requestId === undefined && !sp.allowIdpInitiated)
-        return fail(ctx, state, "IDP_INITIATED_NOT_ALLOWED", `SP ${sp.id}: opt-in removed since the request was stored`, { spId: sp.id });
+        return fail(ctx, state, "IDP_INITIATED_NOT_ALLOWED", `SP ${sp.id}: opt-in removed since the request was stored`, { spId: sp.id, ...tenantOf(sp) });
       // Configuration may have changed while the user was signing in: re-check the allow-list.
-      if (resolveAcsUrl(sp, pending.acsUrl) !== pending.acsUrl) return fail(ctx, state, "ACS_URL_NOT_ALLOWED", `SP ${sp.id}`, { spId: sp.id });
+      if (resolveAcsUrl(sp, pending.acsUrl) !== pending.acsUrl) return fail(ctx, state, "ACS_URL_NOT_ALLOWED", `SP ${sp.id}`, { spId: sp.id, ...tenantOf(sp) });
 
       if (pending.forceAuthn && new Date(session.session.createdAt).getTime() < pending.createdAt)
-        return fail(ctx, state, "REAUTHENTICATION_REQUIRED", `SP ${sp.id}`, { spId: sp.id });
+        return fail(ctx, state, "REAUTHENTICATION_REQUIRED", `SP ${sp.id}`, { spId: sp.id, ...tenantOf(sp) });
 
       return issueResponse(ctx, state, sp, session as any, pending);
     },

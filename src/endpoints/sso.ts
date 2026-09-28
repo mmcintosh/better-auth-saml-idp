@@ -144,7 +144,7 @@ async function handleSso(ctx: SsoContext, state: PluginState, tenantKey?: string
     const sp = await spById(ctx, state, req.spId);
     if (!sp || resolveAcsUrl(sp, req.acsUrl) !== req.acsUrl) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", "SP changed");
     // Re-entry comes back to the URL the request was sent to, which must still be the SP's tenant.
-    if ((sp.tenantId ?? "") !== routeTenant || (req.tenantId ?? "") !== routeTenant) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", "SP changed tenant", { spId: sp.id });
+    if ((sp.tenantId ?? "") !== routeTenant || (req.tenantId ?? "") !== routeTenant) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", "SP changed tenant", { spId: sp.id, ...tenantOf(sp) });
     return proceed(ctx, state, route, sp, req);
   }
 

@@ -145,7 +145,7 @@ async function nextHop(ctx: GenericEndpointContext, state: PluginState, ls: Logo
 async function finish(ctx: GenericEndpointContext, state: PluginState, ls: LogoutState): Promise<Response | never> {
   if (ls.origin.kind === "idp") throw ctx.redirect(ls.origin.returnTo);
   const sp = await spById(ctx, state, ls.origin.spId);
-  if (!sp?.singleLogoutService) return fail(ctx, state, "LOGOUT_NOT_SUPPORTED", `originating SP ${ls.origin.spId} has no SLO endpoint any more`, { spId: ls.origin.spId });
+  if (!sp?.singleLogoutService) return fail(ctx, state, "LOGOUT_NOT_SUPPORTED", `originating SP ${ls.origin.spId} has no SLO endpoint any more`, { spId: ls.origin.spId, ...tenantOf(sp ?? {}) });
   const identity = await spIdentity(ctx, state, sp);
   if (!identity) return fail(ctx, state, "LOGOUT_NOT_SUPPORTED", `originating SP ${sp.id}'s tenant doesn't exist or is disabled`, { spId: sp.id, ...tenantOf(sp) });
   // Metadata's ResponseLocation, when the SP has one, is where responses go (Metadata §2.2.2).
@@ -230,8 +230,8 @@ async function handleSlo(ctx: SloContext, state: PluginState, tenantKey?: string
       const req = await consume<PendingLogoutRequest>(ctx.context.internalAdapter, CONTINUE_PREFIX, input.cid);
       if (!req) return fail(ctx, state, "LOGOUT_STATE_NOT_FOUND", "unknown or used logout continuation");
       const sp = await spById(ctx, state, req.spId);
-      if (!sp?.singleLogoutService) return fail(ctx, state, "LOGOUT_NOT_SUPPORTED", `SP ${req.spId}`, { spId: req.spId });
-      if ((sp.tenantId ?? "") !== routeTenant) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", `logout: SP ${sp.id} changed tenant`, { spId: sp.id });
+      if (!sp?.singleLogoutService) return fail(ctx, state, "LOGOUT_NOT_SUPPORTED", `SP ${req.spId}`, { spId: req.spId, ...tenantOf(sp ?? {}) });
+      if ((sp.tenantId ?? "") !== routeTenant) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", `logout: SP ${sp.id} changed tenant`, { spId: sp.id, ...tenantOf(sp) });
       return await handleLogoutRequest(ctx, state, sp, req);
     }
 

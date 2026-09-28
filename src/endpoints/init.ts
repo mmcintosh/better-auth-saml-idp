@@ -63,7 +63,7 @@ export const initEndpoint = (state: PluginState) =>
       const spId = ctx.query?.sp;
       const sp = spId === undefined ? undefined : await spById(ctx, state, spId);
       if (!sp) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", `init: unknown sp (${spId?.length ?? 0} chars)`);
-      if (!sp.allowIdpInitiated) return fail(ctx, state, "IDP_INITIATED_NOT_ALLOWED", `SP ${sp.id}`, { spId: sp.id });
+      if (!sp.allowIdpInitiated) return fail(ctx, state, "IDP_INITIATED_NOT_ALLOWED", `SP ${sp.id}`, { spId: sp.id, ...tenantOf(sp) });
 
       const requestedRelayState = ctx.query?.RelayState;
       const relayState = idpInitiatedRelayState(sp, requestedRelayState);
