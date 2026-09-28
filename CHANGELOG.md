@@ -4,6 +4,8 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.0.0-rc.1] - 2026-09-28
+
 The first release. Release candidates are published to npm under the `next` tag (`npm install better-auth-saml-idp@next`). 1.0.0 follows as `latest` once `better-auth-cloudflare` 0.4 is on npm, since Workers users on its current 0.3.1 need two settings (see [Cloudflare Workers](docs/guide/cloudflare-workers.md)).
 
 ### Added
