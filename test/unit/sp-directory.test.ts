@@ -45,7 +45,7 @@ describe("SpDirectory with tenants (D-052)", () => {
     expect(await dir.byId(holding(edited), "s", log)).toBeUndefined();
   });
 
-  it("SPs in code: an entity ID is looked up in one tenant only", () => {
+  it("SPs in code: an entity ID is looked up in one tenant only", async () => {
     const withCode = resolveOptions(
       baseOptions({
         registry: { enabled: true },
@@ -61,6 +61,12 @@ describe("SpDirectory with tenants (D-052)", () => {
     expect(dir.inCode("x", entityId, "org-b")).toBe(false);
     expect(dir.inCode("x", entityId, "")).toBe(false);
     expect(dir.inCode("x", "urn:root-only", "org-a")).toBe(false);
+    const none = { findOne: async () => null };
+    expect(await dir.byEntityId(none, entityId, log, "org-a")).toMatchObject({ id: "a" });
+    expect(await dir.byEntityId(none, entityId, log, "org-b")).toBeUndefined();
+    expect(await dir.byEntityId(none, entityId, log, "")).toBeUndefined();
+    expect(await dir.byEntityId(none, "urn:root-only", log, "")).toMatchObject({ id: "root" });
+    expect(await dir.byEntityId(none, "urn:root-only", log, "org-a")).toBeUndefined();
   });
 });
 
