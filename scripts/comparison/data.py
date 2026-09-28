@@ -75,6 +75,15 @@ ROADMAP = [
    ("SP metadata URL with refresh (done)", "SP certificate rotation picked up automatically; certificates only, optional signature pinning."),
    ("Signed AuthnRequests over HTTP-POST (done)", "Enveloped XML signatures with XSW defences, pinned to the SP's certificates; node-saml interop; each defence mutation-tested."),
  ]),
+ ("Next", "Reach, trust and B2B", "Adoption by Better Auth's mainstream users, trust signals, and what B2B apps ask for next.", [
+   ("Next.js example", "A Next.js App Router example (Node runtime) next to the Workers one: most Better Auth apps are Next.js or Node servers."),
+   ("Prisma and Drizzle on Postgres/MySQL", "The most common Better Auth adapters, proven in the CI adapter matrix alongside Kysely, MongoDB, SQLite and D1."),
+   ("Bun and Deno", "Smoke tests on both runtimes in CI, as Better Auth advertises them."),
+   ("OpenSSF Best Practices badge", "The passing-level self-assessment at bestpractices.dev, with the evidence for each criterion."),
+   ("Raise the OpenSSF Scorecard score", "Work through the checks the published Scorecard marks down, and record what is out of reach for a single-maintainer project."),
+   ("Multi-tenant IdP", "One IdP identity per organization: each customer organization gets its own entity ID, metadata and signing key (organization plugin). Designed with a review before it is built."),
+   ("SCIM provisioning (companion plugin)", "Create, update and deactivate users in SPs automatically, usually asked for alongside SAML. A separate plugin, since provisioning is a separate concern from sign-in."),
+ ]),
  ("Later", "Considered", "Valuable, but needs design first or depends on the host.", [
    ("Step-up authentication (done)", "authnContext levels: RequestedAuthnContext judged against the session's achieved class; the user is sent to sign in again (prompt=login, acr_values) when more is needed, as Keycloak does with levels of authentication (D-047)."),
    ("Declarative attribute mapping (done)", "Per-SP map from attribute name to user field, constant, split list or first/last name; usable from JSON configuration."),
@@ -92,7 +101,6 @@ ROADMAP = [
  ]),
  ("Not planned", "Out of scope", "Deliberately left out.", [
    ("Artifact binding", "Of the products compared, only Keycloak supports it fully (Shibboleth and SimpleSAMLphp for responses); no target SP needs it."),
-   ("Outbound SCIM", "Provisioning is a separate concern from SSO; a separate plugin if ever."),
    ("Admin UI in the plugin", "Better Auth plugins are headless; hosts build their own UI on the registry API, and the example has a reference page to copy."),
  ]),
 ]
@@ -101,10 +109,10 @@ LEADS = [
  ("Replay protection you can check", "AuthnRequest replay is rejected by a database unique key and tested under concurrency across separate instances. Most peers don't document replay handling for inbound requests."),
  ("Strict identity by default", "Only verified email addresses get assertions; admin-impersonation sessions and anonymous users are refused. The user and session are re-read from the database right before signing."),
  ("Honest protocol answers", "IsPassive, RequestedAuthnContext, Subject and NameIDPolicy are honoured, and failures go back as signed SAML status Responses. authentik, Logto and Ory Polis show HTML errors instead."),
- ("Runs where your app runs", "A Better Auth plugin that runs on Cloudflare Workers and Node, verified live against Cloudflare Access, Okta and Auth0. Every other self-hosted option here is a separate server."),
+ ("Runs where your app runs", "A Better Auth plugin that runs on Cloudflare Workers and Node, verified live against Cloudflare Access, Okta, Auth0 and Salesforce. Every other self-hosted option here is a separate server."),
 ]
 TRAILS = [
- ("SP onboarding", "No bundled admin UI: hosts build one on the registry API."),
+ ("SP onboarding", "No admin UI in the plugin (Better Auth plugins are headless): hosts build one on the registry API, starting from the example's reference page."),
 ]
 
 HUBSPOT = [

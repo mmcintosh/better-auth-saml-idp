@@ -77,6 +77,16 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 - [x] **SP metadata URL with refresh**: SP certificate rotation picked up automatically; certificates only, optional signature pinning.
 - [x] **Signed AuthnRequests over HTTP-POST**: Enveloped XML signatures with XSW defences, pinned to the SP's certificates; node-saml interop; each defence mutation-tested.
 
+**Next: Reach, trust and B2B**
+
+- [ ] **Next.js example**: A Next.js App Router example (Node runtime) next to the Workers one: most Better Auth apps are Next.js or Node servers.
+- [ ] **Prisma and Drizzle on Postgres/MySQL**: The most common Better Auth adapters, proven in the CI adapter matrix alongside Kysely, MongoDB, SQLite and D1.
+- [ ] **Bun and Deno**: Smoke tests on both runtimes in CI, as Better Auth advertises them.
+- [ ] **OpenSSF Best Practices badge**: The passing-level self-assessment at bestpractices.dev, with the evidence for each criterion.
+- [ ] **Raise the OpenSSF Scorecard score**: Work through the checks the published Scorecard marks down, and record what is out of reach for a single-maintainer project.
+- [ ] **Multi-tenant IdP**: One IdP identity per organization: each customer organization gets its own entity ID, metadata and signing key (organization plugin). Designed with a review before it is built.
+- [ ] **SCIM provisioning (companion plugin)**: Create, update and deactivate users in SPs automatically, usually asked for alongside SAML. A separate plugin, since provisioning is a separate concern from sign-in.
+
 **Later: Considered**
 
 - [x] **Step-up authentication**: authnContext levels: RequestedAuthnContext judged against the session's achieved class; the user is sent to sign in again (prompt=login, acr_values) when more is needed, as Keycloak does with levels of authentication (D-047).
@@ -97,7 +107,6 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 **Not planned: Out of scope**
 
 - 🚫 **Artifact binding**: Of the products compared, only Keycloak supports it fully (Shibboleth and SimpleSAMLphp for responses); no target SP needs it.
-- 🚫 **Outbound SCIM**: Provisioning is a separate concern from SSO; a separate plugin if ever.
 - 🚫 **Admin UI in the plugin**: Better Auth plugins are headless; hosts build their own UI on the registry API, and the example has a reference page to copy.
 <!-- roadmap:end -->
 
