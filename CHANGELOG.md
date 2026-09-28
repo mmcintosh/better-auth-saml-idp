@@ -6,6 +6,17 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ### Added
 
+- **Multi-tenant IdP, phase 1** (`tenants: { enabled: true }`, off by default; [guide](docs/guide/multi-tenant.md), D-052): an IdP identity per Better Auth organization, next to the root IdP.
+  - A tenant has its own entity ID (its metadata URL), metadata, and SSO and SLO URLs at `/saml2/idp/{metadata,sso,slo}/<tenantKey>`. In this phase every tenant signs with the root `signing` key.
+  - The host's administrators create tenants through the registry API (`authClient.samlIdp.tenants.*`, `samlTenant` in `samlIdpStatements`); nothing is created automatically. `tenantKey` is the organization id unless another is chosen, and never changes.
+  - SPs join a tenant with `tenant` (in code or stored). They're found only through their tenant's URLs, and only the organization's members may sign in to them (`organization` may only add `roles`). Entity IDs are unique per tenant, so one SP (AWS, Google) can be in several.
+  - Persistent NameIDs of tenant SPs differ per tenant; the root's are unchanged.
+  - Single Logout reaches every tenant's SPs in the session, each from its own tenant's identity.
+  - `tenantId` in events, the audit log (a new column), `ServiceProviderInfo`, and registry records (with tenants on).
+  - Startup errors: tenants without the organization plugin, `registry.enabled` or a pinned `baseURL`; `tenants.delegation` (it needs per-tenant keys, which come in phase 2).
+  - Database: a `samlIdpTenant` table and `tenantId`/`lookupKey` on `samlIdpServiceProvider`, only with tenants on. A registry that already has rows needs a one-time step: [the guide](docs/guide/multi-tenant.md#database) and `auth.api.samlIdpBackfillServiceProviderKeys()`. D1: the example's migration `0008_tenants.sql`.
+  - New error codes for the tenant API: `INVALID_TENANT`, `TENANT_EXISTS`, `TENANT_NOT_FOUND`, `TENANT_HAS_SERVICE_PROVIDERS`.
+  - With `tenants` unset, schema, routes and every response are unchanged (pinned by snapshots recorded before the change). Additive only: `serviceProviderInfo.tenantId` (`null`) in `authorize`, the `samlTenant` resource in `samlIdpStatements`, and the four error codes.
 - **Next.js example** ([`examples/nextjs`](examples/nextjs/README.md)): App Router on the Node runtime with `node:sqlite`, a sign-in page that honours `callbackURL`, `prompt=login` and `acr_values`, and a migration script. CI builds it, starts it with `next start`, runs the CLI's `inspect` and `smoke` checks against it and completes a sign-in with node-saml as the SP.
 
 ## [1.0.0-rc.1] - 2026-09-28

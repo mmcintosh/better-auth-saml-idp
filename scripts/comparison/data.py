@@ -81,7 +81,9 @@ ROADMAP = [
    ("Bun and Deno (done)", "The built package smoke-tested on both in CI (test/runtimes/smoke.mjs): CLI keygen, metadata and a full sign-in with the signature verified (D-051)."),
    ("OpenSSF Best Practices badge", "The passing-level self-assessment at bestpractices.dev, with the evidence for each criterion."),
    ("Raise the OpenSSF Scorecard score", "Work through the checks the published Scorecard marks down, and record what is out of reach for a single-maintainer project."),
-   ("Multi-tenant IdP", "One IdP identity per organization: each customer organization gets its own entity ID, metadata and signing key (organization plugin). Designed with a review before it is built."),
+   ("Multi-tenant IdP, phase 1 (done)", "One IdP identity per organization: each tenant gets its own entity ID, metadata and SSO/SLO URLs, under the shared signing key. Host administrators create tenants and manage their SPs; organization membership is mandatory; isolation doesn't rely on SPs checking Issuer (D-052, docs/guide/multi-tenant.md)."),
+   ("Multi-tenant IdP, phase 2: a signing key per tenant", "Keys stored encrypted in the database, generated and rotated per tenant with the three-step rotation. For SPs, moving from the shared key is an ordinary certificate rotation."),
+   ("Multi-tenant IdP, phase 3: delegated administration", "An organization's owners and admins manage their own tenant's SPs. Only with per-tenant keys, which startup enforces; with IDOR checks, a user-field allow-list and a metadata-URL policy."),
    ("SCIM provisioning (companion plugin)", "Create, update and deactivate users in SPs automatically, usually asked for alongside SAML. A separate plugin, since provisioning is a separate concern from sign-in."),
  ]),
  ("Later", "Considered", "Valuable, but needs design first or depends on the host.", [
