@@ -112,6 +112,20 @@ export const samlIdpServiceProviders = sqliteTable("saml_idp_service_providers",
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   updatedBy: text("updated_by"),
+  // Tenants (D-052, migration 0008): "" for the root IdP; lookupKey is UNIQUE (NULL until backfilled).
+  tenantId: text("tenant_id").notNull().default(""),
+  lookupKey: text("lookup_key").unique(),
+});
+
+/** Tenants (only needed with `tenants.enabled`; D-052, migration 0008). */
+export const samlIdpTenants = sqliteTable("saml_idp_tenants", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().unique(),
+  tenantKey: text("tenant_key").notNull().unique(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  updatedBy: text("updated_by"),
 });
 
 /** Which SPs got assertions in which session: for Single Logout (D-028) and `events.onSessionEnded` (D-043). */
@@ -150,6 +164,7 @@ export const samlIdpAuditEvents = sqliteTable(
     userAgent: text("user_agent"),
     details: text("details").notNull(),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    tenantId: text("tenant_id"), // D-052, migration 0008
   },
   (t) => [
     index("saml_idp_audit_events_at_idx").on(t.at),
@@ -160,4 +175,4 @@ export const samlIdpAuditEvents = sqliteTable(
   ],
 );
 
-export const schema = { users, sessions, accounts, verifications, rateLimits, samlIdpSeenRequests, samlIdpServiceProviders, samlIdpSessionParticipants, samlIdpAuditEvents };
+export const schema = { users, sessions, accounts, verifications, rateLimits, samlIdpSeenRequests, samlIdpServiceProviders, samlIdpSessionParticipants, samlIdpAuditEvents, samlIdpTenants };
