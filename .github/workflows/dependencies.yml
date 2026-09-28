@@ -1,6 +1,9 @@
-# Dependency vulnerabilities, in two tiers:
-# - runtime dependencies (what `npm install better-auth-saml-idp` brings in) BLOCK: pnpm audit on
-#   every push and PR, and GitHub's dependency review on what a PR adds;
+# Dependency vulnerabilities, in tiers:
+# - runtime dependencies (what `npm install better-auth-saml-idp` brings in) BLOCK: pnpm audit of
+#   the package alone (scripts/audit-runtime.mjs: at the workspace root, `pnpm audit --prod` also
+#   covers the examples'), on every push and PR, and GitHub's dependency review on what a PR adds;
+# - the examples' production dependencies (Next.js, Hono, …) are audited too, but only REPORTED:
+#   an advisory there must not block a release of a package it isn't part of (review 6 R6-5);
 # - everything in the lockfile, dev tooling included, is scanned by OSV-Scanner and REPORTED
 #   under Security > Code scanning without blocking (dev tools don't ship).
 name: Dependencies
@@ -12,6 +15,17 @@ permissions: { contents: read }
 jobs:
   runtime-audit:
     runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 24, cache: pnpm }
+      - run: node scripts/audit-runtime.mjs --audit-level low
+
+  # The examples' dependencies: reported (a failing step in a green job), never blocking.
+  examples-audit:
+    runs-on: ubuntu-24.04
+    continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
