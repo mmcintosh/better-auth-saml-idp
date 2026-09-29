@@ -101,6 +101,23 @@ export interface TenantRecord {
   keys?: TenantSigningKeyInfo[] | undefined;
 }
 
+/** See `TenantOptions.delegation`. */
+export interface TenantDelegationOptions {
+  /** Organization roles that manage the tenant's SPs. Default `["owner", "admin"]`. */
+  roles?: string[] | undefined;
+  /**
+   * User fields a delegated SP may send, as attributes or as its NameID. Default `["email",
+   * "name", "id"]`. Anything else in your user table (a role, a ban reason, an internal flag) could
+   * otherwise be mapped out to an SP by a tenant's administrator.
+   */
+  userFields?: string[] | undefined;
+  /**
+   * Whether delegated SPs may use `metadata.url`, which makes your server fetch that URL (the
+   * certificate refresh, D-026). Default false: a tenant's administrator would choose what it fetches.
+   */
+  allowMetadataUrl?: boolean | undefined;
+}
+
 /** A tenant's signing key as the API shows it (D-058). */
 export interface TenantSigningKeyInfo {
   kid: string;
@@ -138,6 +155,12 @@ export interface TenantOptions {
    * (24 hours); 0 to 31536000. `activate` with `force: true` skips it (audited; for a leaked key).
    */
   minPublishedSeconds?: number | undefined;
+  /**
+   * Phase 3 (D-059), with `keys: "per-tenant"` only: an organization's own administrators manage
+   * their tenant's SPs through the registry API. Membership is read from the database on every
+   * request, never from the session's active organization, so a demotion takes effect at once.
+   */
+  delegation?: TenantDelegationOptions | undefined;
   /** How long an isolate caches a tenant, and a miss. Default `registry.cacheSeconds` (60 s); 0 to 3600. */
   cacheSeconds?: number | undefined;
 }
@@ -584,7 +607,16 @@ export interface ResolvedSamlIdpOptions {
   auditLog: { retentionDays: number } | undefined;
   registry: { canManage: NonNullable<SamlIdpOptions["registry"]>["canManage"]; permissions: boolean; cacheMs: number; authorize: ResolvedServiceProvider["authorize"] | undefined } | undefined;
   /** Multi-tenant IdP (D-052); undefined when off. */
-  tenants: { cacheMs: number; perTenantKeys: boolean; keyEncryptionSecret: string | undefined; minPublishedMs: number } | undefined;
+  tenants:
+    | {
+        cacheMs: number;
+        perTenantKeys: boolean;
+        keyEncryptionSecret: string | undefined;
+        minPublishedMs: number;
+        /** Phase 3 (D-059): delegated SP management; undefined when off. */
+        delegation: { roles: string[]; userFields: string[]; allowMetadataUrl: boolean } | undefined;
+      }
+    | undefined;
   /** Non-fatal configuration warnings, logged once at startup. */
   warnings: string[];
 }

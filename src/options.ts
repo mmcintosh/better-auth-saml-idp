@@ -338,6 +338,7 @@ const optionsSchema = z
         onLogout: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onLogout"]>>().optional(),
         onSessionEnded: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onSessionEnded"]>>().optional(),
         onTenantChanged: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onTenantChanged"]>>().optional(),
+        onServiceProviderChanged: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onServiceProviderChanged"]>>().optional(),
       })
       .strict()
       .optional(),
@@ -358,8 +359,14 @@ const optionsSchema = z
         keys: z.enum(["shared", "per-tenant"]).optional(),
         keyEncryptionSecret: z.string().min(32).optional(),
         minPublishedSeconds: z.number().int().min(0).max(31_536_000).optional(),
-        // `delegation` is recognised only to refuse it with a reason (below).
-        delegation: z.unknown().optional(),
+        delegation: z
+          .object({
+            roles: z.array(z.string().min(1).max(64)).min(1).max(20).optional(),
+            userFields: z.array(z.string().min(1).max(64)).max(100).optional(),
+            allowMetadataUrl: z.boolean().optional(),
+          })
+          .strict()
+          .optional(),
         cacheSeconds: z.number().int().min(0).max(3600).optional(),
       })
       .strict()
@@ -634,12 +641,8 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
   if (tenants) {
     // Multi-tenant design §5.1: under one shared key, only the Issuer string tells tenants apart,
     // so an organization's own administrators must not manage its SPs until each tenant has its key.
-    if (tenants.delegation !== undefined)
-      issues.push(
-        tenants.keys === "per-tenant"
-          ? "tenants.delegation: not available in this version (organization administrators managing their own SPs comes next, D-058)"
-          : 'tenants.delegation: requires tenants.keys: "per-tenant"; with a shared signing key only the host\'s administrators may manage tenant SPs',
-      );
+    if (tenants.delegation !== undefined && tenants.keys !== "per-tenant")
+      issues.push('tenants.delegation: requires tenants.keys: "per-tenant"; with a shared signing key only the host\'s administrators may manage tenant SPs');
     if (!o.registry?.enabled) issues.push("tenants.enabled: requires registry.enabled (tenants and their SPs are stored in the database)");
   }
 
@@ -706,6 +709,13 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
           perTenantKeys: tenants.keys === "per-tenant",
           keyEncryptionSecret: tenants.keyEncryptionSecret,
           minPublishedMs: (tenants.minPublishedSeconds ?? 86_400) * 1000,
+          delegation: tenants.delegation
+            ? {
+                roles: tenants.delegation.roles ?? ["owner", "admin"],
+                userFields: tenants.delegation.userFields ?? ["email", "name", "id"],
+                allowMetadataUrl: tenants.delegation.allowMetadataUrl ?? false,
+              }
+            : undefined,
         }
       : undefined,
     warnings,

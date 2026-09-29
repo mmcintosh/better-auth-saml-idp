@@ -103,6 +103,7 @@ samlIdpGetServiceProvider "GET" /saml-idp/service-providers/get
 samlIdpCreateServiceProvider "POST" /saml-idp/service-providers/create
 samlIdpUpdateServiceProvider "POST" /saml-idp/service-providers/update
 samlIdpDeleteServiceProvider "POST" /saml-idp/service-providers/delete
+samlIdpListAuditEvents "GET" /saml-idp/audit
 samlIdpSingleLogout ["GET","POST"] /saml2/idp/slo
 samlIdpLogout "GET" /saml2/idp/logout
 samlIdpListSessionParticipants "POST" (server only)"

@@ -25,7 +25,7 @@ import {
 import { emit } from "../events";
 import type { TenantRecord, TenantSigningKeyInfo } from "../types";
 import { keySecret, type PluginState } from "./issue";
-import { adapterOf, fail, manager } from "./registry";
+import { access, adapterOf, fail, inScope, manager } from "./registry";
 
 const MAX_LIST = 1000;
 const orgIdSchema = z.string().min(1).max(256);
@@ -161,8 +161,9 @@ export function tenantEndpoints(state: PluginState) {
       "/saml-idp/tenants/get",
       { method: "GET", use: [sensitiveSessionMiddleware], query: z.object({ organizationId: orgIdSchema }) },
       async (ctx) => {
-        await manager(ctx, state, "read", "samlTenant");
-        const row = await findTenant(ctx, ctx.query.organizationId);
+        // A tenant's administrator may read its own tenant (URLs, certificates), nothing else (D-059).
+        const actor = await access(ctx, state, "read", "samlTenant", { delegated: true });
+        const row = inScope(actor, ctx.query.organizationId) ? await findTenant(ctx, ctx.query.organizationId) : null;
         if (!row) throw fail("NOT_FOUND", "TENANT_NOT_FOUND");
         return ctx.json({ tenant: record(ctx, state, row, state.tenantKeys ? await keyRows(ctx, row.organizationId) : undefined) });
       },
@@ -287,7 +288,8 @@ export function tenantEndpoints(state: PluginState) {
             "/saml-idp/tenants/keys",
             { method: "GET", use: [sensitiveSessionMiddleware], query: z.object({ organizationId: orgIdSchema }) },
             async (ctx) => {
-              await manager(ctx, state, "read", "samlTenant");
+              const actor = await access(ctx, state, "read", "samlTenant", { delegated: true });
+              if (!inScope(actor, ctx.query.organizationId)) throw fail("NOT_FOUND", "TENANT_NOT_FOUND");
               const row = await tenantFor(ctx, ctx.query.organizationId);
               return ctx.json({ tenant: record(ctx, state, row, await keyRows(ctx, row.organizationId)) });
             },

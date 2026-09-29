@@ -58,6 +58,7 @@ export type {
   ServiceProviderEncryptionConfig,
   ServiceProviderInfo,
   ServiceProviderRecord,
+  TenantDelegationOptions,
   TenantOptions,
   TenantRecord,
   TenantSigningKeyInfo,
@@ -67,13 +68,15 @@ export type {
 } from "./types";
 export type { SamlIdpErrorCode } from "./errors";
 export type { StoredServiceProviderConfig } from "./options";
-export type { AssertionIssuedEvent, AuditLogOptions, DeniedEvent, LogoutEvent, SamlIdpEvent, SamlIdpEventHandlers, SessionEndedEvent, TenantChangedEvent } from "./events";
+export type { AssertionIssuedEvent, AuditLogOptions, DeniedEvent, LogoutEvent, SamlIdpEvent, SamlIdpEventHandlers, ServiceProviderChangedEvent, SessionEndedEvent, TenantChangedEvent } from "./events";
 
 export const samlIdp = (options: SamlIdpOptions) => {
   const resolved = resolveOptions(options);
   const directory = new SpDirectory(resolved.serviceProviders, resolved);
   const getIdp = idpCache(resolved);
   const tenants = resolved.tenants ? new TenantDirectory(resolved.tenants.cacheMs) : undefined;
+  // The registry API exists for host managers, and with delegation (D-059) for tenants' administrators.
+  const managed = resolved.registry !== undefined && (resolved.registry.canManage !== undefined || resolved.registry.permissions || resolved.tenants?.delegation !== undefined);
   const tenantKeys = resolved.tenants?.perTenantKeys ? new TenantKeyStore(resolved.tenants.cacheMs) : undefined;
   const state = { options: resolved, directory, metadata: new SpMetadataCache(resolved.schemaValidator), tenants, tenantKeys };
 
@@ -195,7 +198,7 @@ export const samlIdp = (options: SamlIdpOptions) => {
       samlIdpSingleSignOn: ssoEndpoint(state),
       samlIdpResume: resumeEndpoint(state),
       samlIdpInitiatedSignOn: initEndpoint(state),
-      ...(resolved.registry?.canManage || resolved.registry?.permissions ? registryEndpoints(state) : {}),
+      ...(managed ? registryEndpoints(state) : {}),
       ...(resolved.singleLogout ? { samlIdpSingleLogout: sloEndpoint(state), samlIdpLogout: logoutEndpoint(state) } : {}),
       ...(resolved.sessionTracking ? { samlIdpListSessionParticipants: listSessionParticipantsEndpoint(state) } : {}),
       // Multi-tenant IdP (D-052): no route exists unless it's on.
@@ -204,7 +207,7 @@ export const samlIdp = (options: SamlIdpOptions) => {
             getSamlIdpTenantMetadata: tenantMetadataEndpoint(state, tenantIdpCache(resolved)),
             samlIdpTenantSingleSignOn: tenantSsoEndpoint(state),
             ...(resolved.singleLogout ? { samlIdpTenantSingleLogout: tenantSloEndpoint(state) } : {}),
-            ...(resolved.registry?.canManage || resolved.registry?.permissions ? tenantEndpoints(state) : {}),
+            ...(managed ? tenantEndpoints(state) : {}),
             samlIdpBackfillServiceProviderKeys: backfillEndpoint(state),
           }
         : {}),

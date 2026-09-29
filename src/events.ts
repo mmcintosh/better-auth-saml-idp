@@ -120,7 +120,24 @@ export interface TenantChangedEvent extends EventBase {
   forced?: boolean | undefined;
 }
 
-export type SamlIdpEvent = AssertionIssuedEvent | DeniedEvent | LogoutEvent | SessionEndedEvent | TenantChangedEvent;
+/**
+ * A stored SP was created, changed, switched on or off, or deleted through the registry API
+ * (D-059), by a host manager or, with delegation, by a tenant's administrator (`delegated`).
+ */
+export interface ServiceProviderChangedEvent extends EventBase {
+  type: "service-provider.changed";
+  action: "created" | "updated" | "enabled" | "disabled" | "deleted";
+  /** The acting user. */
+  userId: string;
+  spId: string;
+  entityId: string;
+  /** The SP's tenant, when it has one. */
+  tenantId?: string | undefined;
+  /** True when a tenant's administrator did it (delegation), not a host manager. */
+  delegated: boolean;
+}
+
+export type SamlIdpEvent = AssertionIssuedEvent | DeniedEvent | LogoutEvent | SessionEndedEvent | TenantChangedEvent | ServiceProviderChangedEvent;
 
 export interface SamlIdpEventHandlers {
   onAssertionIssued?: ((event: AssertionIssuedEvent) => void | Promise<void>) | undefined;
@@ -133,6 +150,8 @@ export interface SamlIdpEventHandlers {
   onSessionEnded?: ((event: SessionEndedEvent) => void | Promise<void>) | undefined;
   /** A host administrator changed a tenant or its keys (D-058). */
   onTenantChanged?: ((event: TenantChangedEvent) => void | Promise<void>) | undefined;
+  /** A stored SP was created, changed or deleted through the registry API (D-059). */
+  onServiceProviderChanged?: ((event: ServiceProviderChangedEvent) => void | Promise<void>) | undefined;
 }
 
 export interface AuditLogOptions {
@@ -163,7 +182,8 @@ type EventInput =
   | Omit<DeniedEvent, keyof EventBase>
   | Omit<LogoutEvent, keyof EventBase>
   | Omit<SessionEndedEvent, keyof EventBase>
-  | Omit<TenantChangedEvent, keyof EventBase>;
+  | Omit<TenantChangedEvent, keyof EventBase>
+  | Omit<ServiceProviderChangedEvent, keyof EventBase>;
 
 const HANDLER = {
   "assertion.issued": "onAssertionIssued",
@@ -171,6 +191,7 @@ const HANDLER = {
   logout: "onLogout",
   "session.ended": "onSessionEnded",
   "tenant.changed": "onTenantChanged",
+  "service-provider.changed": "onServiceProviderChanged",
 } as const satisfies Record<SamlIdpEvent["type"], keyof SamlIdpEventHandlers>;
 
 /** What delivery needs: the pieces of Better Auth's context, with or without a request. */
