@@ -6,6 +6,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ### Documentation
 
+- **A CharDB example (experimental):** `examples/chardb`, a `chardb init` app that is also a multi-tenant IdP (tenants with per-tenant keys and delegation), with all the plugin's tables in CharDB's Catalog through CharDB's own migrations, and a workerd test of the whole flow run weekly in CI. Experimental because CharDB is 0.1, and outside the versioning promises; built with CharDB from a Better Auth 1.7 branch (`vendor/`) until CharDB publishes one.
 - **The Workers example is a multi-tenant IdP:** Better Auth's organization plugin (migration `0010_organizations.sql`) and `tenants: { enabled: true, keys: "per-tenant", delegation: {} }`. `/admin` gains a Tenants section (create an organization and its tenant, enable or disable it, rotate, activate and retire its key) and a button for the one-time SP backfill after upgrading; the home page lists tenants with their metadata. Only registry admins create organizations there.
 
 ## [1.1.0] - 2026-09-29

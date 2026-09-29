@@ -1,2 +1,4 @@
 packages:
   - "examples/*"
+  # A Bun project (CharDB's scaffold), outside the pnpm workspace: it installs with bun.
+  - "!examples/chardb"

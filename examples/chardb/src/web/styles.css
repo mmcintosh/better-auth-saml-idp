@@ -1,0 +1,32 @@
+:root {
+  color: #171717;
+  background: #f3f1eb;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, input { font: inherit; }
+.shell { width: min(720px, calc(100% - 32px)); margin: 40px auto; }
+header { display: flex; align-items: start; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
+h1, header p { margin: 0; }
+h1 { font-size: 24px; }
+header p, small, .empty { color: #69665e; }
+header code { padding: 4px 8px; border: 1px solid #d4d0c7; border-radius: 999px; font-size: 12px; }
+.organizations { display: grid; gap: 12px; margin-bottom: 16px; }
+.organizations label { display: grid; gap: 6px; }
+.organizations select { width: 100%; }
+.organization-form { grid-template-columns: 1fr 1fr auto; margin: 0; }
+.query-status { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.query-status code { padding: 4px 8px; border: 1px solid #d4d0c7; border-radius: 999px; font-size: 12px; }
+.messages { min-height: 360px; padding: 16px; border: 1px solid #d4d0c7; border-radius: 12px; background: #fff; }
+article { width: fit-content; max-width: 75%; margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; background: #eeeae1; }
+article.mine { margin-left: auto; background: #dce8ff; }
+article p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+form { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 12px; }
+input, select, button { padding: 10px 12px; border: 1px solid #c8c3b8; border-radius: 8px; }
+input { background: #fff; }
+button { color: #fff; background: #1b57d0; border-color: #1b57d0; cursor: pointer; }
+button:disabled { cursor: default; opacity: 0.55; }
+.error { color: #a21d1d; }
+@media (max-width: 640px) { .organization-form { grid-template-columns: 1fr; } }
