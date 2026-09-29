@@ -4,6 +4,12 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-09-29
+
+### Fixed
+
+- **`samlIdpClient()` under TypeScript 5 with `exactOptionalPropertyTypes`.** 1.0.1 fixed the strict-host types under TypeScript 7, which the package is built and checked with. Under TypeScript 5.9, `createAuthClient({ plugins: [samlIdpClient()] })` still failed: `getActions` declared `better-auth/client`'s `BetterFetch`, which TypeScript 5 doesn't treat as the core one `BetterAuthClientPlugin` uses. Its parameters now come from `BetterAuthClientPlugin` itself. `pnpm pack:check` compiles the strict host with TypeScript 5.9 as well as 7; 1.0.1's declarations fail it under 5.9 (D-057). Nothing changed at runtime.
+
 ## [1.0.1] - 2026-09-29
 
 Two fixes found by running the plugin, with multi-tenancy on, in a [CharDB](https://github.com/zpg6/chardb) app (Better Auth on Durable Objects). Everything else passed there: the tables and their UNIQUE keys came through CharDB's migrations, and every `smoke` check passed at the root and at a tenant (D-056).

@@ -61,6 +61,7 @@ A running log of the non-obvious choices, with the options considered and the ev
 - [D-054](#d-054-aws-iam-identity-center-verified-live-2026-09-28): AWS IAM Identity Center verified live (2026-09-28)
 - [D-055](#d-055-repository-clean-up-before-100-2026-09-28): Repository clean-up before 1.0.0 (2026-09-28)
 - [D-056](#d-056-101-from-running-on-chardb-2026-09-29): 1.0.1, from running on CharDB (2026-09-29)
+- [D-057](#d-057-102-the-client-plugin-under-typescript-5-2026-09-29): 1.0.2, the client plugin under TypeScript 5 (2026-09-29)
 
 ---
 
@@ -1738,3 +1739,13 @@ The plugin 1.0.0, with `tenants: { enabled: true }`, in a [CharDB](https://githu
 - **Fixed: the CLI couldn't target a tenant.** `metadataUrl()` kept only URLs ending in `/metadata`, so a tenant's `…/metadata/<tenantKey>` got `/saml2/idp/metadata` appended (a 404). `smoke` derived the auth base from a root SSO URL only. Both now accept a tenant's URLs (the resume route is shared, at the root).
   - Verified against the CharDB tenant: every check passed.
   - `test/cli/cli.test.ts` runs `inspect` and `smoke` against a tenant in-process, and fails on 1.0.0's CLI.
+
+## D-057: 1.0.2, the client plugin under TypeScript 5 (2026-09-29)
+
+Found while checking the published 1.0.1 in a clean app: the strict host (D-056) compiled with TypeScript 5.9 failed on `createAuthClient({ plugins: [samlIdpClient()] })`. It passed with TypeScript 7, which the package is built and checked with, so `pack:check` hadn't seen it.
+- **Isolated.** Better Auth 1.7.5 and 1.7.6 behave the same; only the TypeScript version matters. Better Auth's own client plugins (organization, admin, twoFactor, sso) pass under 5.9, so the fault was ours.
+- **Cause.** The client plugin is typed with `satisfies BetterAuthClientPlugin`. Its declaration gives `getActions` a `$fetch` of `better-auth/client`'s `BetterFetch`, which TypeScript 5.9 doesn't equate with the core `BetterFetch` in `BetterAuthClientPlugin["getActions"]`.
+- **Fix.** The parameters are typed from `Parameters<NonNullable<BetterAuthClientPlugin["getActions"]>>`, so they match under any compiler.
+  - Verified in a clean app: Better Auth 1.7.5 and 1.7.6, each with TypeScript 5.9.3 and 7.0.2, zero errors.
+- **Guard.** `pack:check` now runs the strict host with TypeScript 5.9 as well (the `typescript-5` dev dependency, `npm:typescript@5.9.3`). With 1.0.1's `dist/` it fails under 5.9 and passes under 7.
+- **Lesson.** Type tests of published declarations run on the oldest TypeScript hosts are likely to use, not only on ours.
