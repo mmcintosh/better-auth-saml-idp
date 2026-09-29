@@ -11,6 +11,7 @@ import { resolveOptions } from "../../src/options";
 import { SP_ACS, SP_ENTITY_ID } from "../support/config";
 import { BASE_URL, createHost, type HostOptions } from "../support/host";
 import { authnRequestXml, Browser, readAutoPost, redirectUrl } from "../support/sp";
+import { ok, urls, world } from "../regression/tenant-world";
 
 const keys = inject("keys");
 const dir = mkdtempSync(join(tmpdir(), "saml-cli-"));
@@ -215,6 +216,18 @@ describe("cli: smoke", () => {
   it("passes every check against the in-process IdP", async () => {
     await host();
     const r = await json(["smoke", BASE_URL, "--sp", SP_ENTITY_ID, "--acs", SP_ACS]);
+    expect(failures(r)).toEqual([]);
+    expect(r.report.checks.filter((c) => c.status === "pass").length).toBeGreaterThanOrEqual(15);
+  });
+
+  it("targets a tenant by its metadata URL, and passes every check at its SSO URL (D-052)", async () => {
+    // 1.0.0 took …/metadata/<tenantKey> for a base URL and appended /saml2/idp/metadata (a 404).
+    const w = await world({ sps: ({ a }) => [{ id: "acme-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], tenant: a }] });
+    await ok(w.tenants("/create", { organizationId: String(w.orgA.id), tenantKey: "acme" }));
+    vi.stubGlobal("fetch", (url: string | URL | Request, init?: RequestInit) => w.auth.handler(new Request(url, init)));
+    const inspected = await json(["inspect", urls("acme").metadata]);
+    expect(inspected.stdout).toContain(urls("acme").sso);
+    const r = await json(["smoke", urls("acme").metadata, "--sp", SP_ENTITY_ID, "--acs", SP_ACS]);
     expect(failures(r)).toEqual([]);
     expect(r.report.checks.filter((c) => c.status === "pass").length).toBeGreaterThanOrEqual(15);
   });

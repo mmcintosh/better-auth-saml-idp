@@ -47,10 +47,13 @@ export interface IdpMetadata {
   signed: boolean;
 }
 
-/** `https://host` → `https://host/api/auth/saml2/idp/metadata`; a URL ending in /metadata is kept. */
+/**
+ * `https://host` → `https://host/api/auth/saml2/idp/metadata`. A metadata URL is kept: one ending
+ * in /metadata, or a tenant's, `…/saml2/idp/metadata/<tenantKey>` (D-052).
+ */
 export function metadataUrl(input: string, basePath: string): string {
   const u = new URL(input);
-  if (/\/metadata\/?$/.test(u.pathname)) return u.href;
+  if (/\/metadata\/?$/.test(u.pathname) || /\/saml2\/idp\/metadata\/[^/]+\/?$/.test(u.pathname)) return u.href;
   const base = `${u.origin}${u.pathname.replace(/\/+$/, "")}`;
   const path = u.pathname.replace(/\/+$/, "").endsWith(basePath.replace(/\/+$/, "")) ? "" : basePath.replace(/\/+$/, "");
   return `${base}${path}/saml2/idp/metadata`;

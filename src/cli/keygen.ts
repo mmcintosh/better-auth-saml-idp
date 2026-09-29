@@ -83,8 +83,8 @@ export interface KeygenOptions {
   commonName: string;
   days: number;
   bits: number;
-  certOut?: string;
-  keyOut?: string;
+  certOut?: string | undefined;
+  keyOut?: string | undefined;
   force: boolean;
 }
 

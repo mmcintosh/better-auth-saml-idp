@@ -110,8 +110,8 @@ export async function checkConfig(path: string | undefined): Promise<Report> {
 }
 
 export interface SpFromMetadataCliOptions {
-  id?: string;
-  entityId?: string;
+  id?: string | undefined;
+  entityId?: string | undefined;
   allowHttp: boolean;
 }
 

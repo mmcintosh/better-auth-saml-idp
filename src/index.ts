@@ -177,11 +177,14 @@ export const samlIdp = (options: SamlIdpOptions) => {
         : undefined;
       // SPs POST AuthnRequests cross-origin (HTTP-POST binding), like @better-auth/sso's ACS.
       const existing = ctx.skipOriginCheck;
-      if (existing === true) return options ? { options } : {};
+      // Typed so the empty branch is `{}`, not `{ options?: undefined }`, which hosts compiling with
+      // exactOptionalPropertyTypes can't assign to BetterAuthPlugin.
+      const extra: { options?: NonNullable<typeof options> } = options ? { options } : {};
+      if (existing === true) return extra;
       // /slo too: SPs POST LogoutRequests and LogoutResponses cross-origin (D-028).
       return {
         context: { skipOriginCheck: [...(Array.isArray(existing) ? existing : []), SSO_PATH, ...(resolved.singleLogout ? [SLO_PATH] : [])] },
-        ...(options ? { options } : {}),
+        ...extra,
       };
     },
     endpoints: {

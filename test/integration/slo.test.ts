@@ -72,7 +72,7 @@ async function outgoing(location: string, param: "SAMLRequest" | "SAMLResponse")
   return { url: `${u.origin}${u.pathname}`, xml, relayState: raw.relayState };
 }
 
-async function answer(browser: Browser, request: { xml: string; relayState?: string }, o: { key?: string; issuer?: string; status?: string[]; inResponseTo?: string } = {}) {
+async function answer(browser: Browser, request: { xml: string; relayState?: string | undefined }, o: { key?: string; issuer?: string; status?: string[]; inResponseTo?: string } = {}) {
   const inResponseTo = o.inResponseTo ?? /ID="([^"]+)"/.exec(request.xml)![1]!;
   const xml = buildLogoutResponse({ issuer: o.issuer ?? B.entityId, destination: SLO, inResponseTo, status: o.status ?? ["Success"], now: new Date() });
   return browser.fetch(redirectBindingUrl(SLO, "SAMLResponse", xml, request.relayState, spSigning(o.key ?? keys.idpNext.privateKey)));

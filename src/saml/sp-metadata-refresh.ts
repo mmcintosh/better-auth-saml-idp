@@ -29,12 +29,12 @@ interface Learned {
 }
 
 interface Entry {
-  learned?: Learned;
+  learned?: Learned | undefined;
   nextAttempt: number;
   backoff: number;
-  inflight?: Promise<void>;
-  inflightSince?: number;
-  lastError?: string;
+  inflight?: Promise<void> | undefined;
+  inflightSince?: number | undefined;
+  lastError?: string | undefined;
 }
 
 export interface MetadataLogger {
@@ -44,10 +44,10 @@ export interface MetadataLogger {
 
 export interface MetadataStatus {
   url: string;
-  fetchedAt?: Date;
+  fetchedAt?: Date | undefined;
   certificates: number;
   encryptionFromMetadata: boolean;
-  lastError?: string;
+  lastError?: string | undefined;
 }
 
 /** Read at most `max` bytes of a body (a server may omit or lie about Content-Length). */

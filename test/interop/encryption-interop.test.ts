@@ -6,8 +6,8 @@
 import { constants, privateDecrypt, publicEncrypt } from "node:crypto";
 import { SAML } from "@node-saml/node-saml";
 import { describe, expect, inject, it } from "vitest";
-import type { SamlIdpOptions, ServiceProviderConfig } from "../../src/types";
-import { SP_ACS, SP_ENTITY_ID } from "../support/config";
+import type { ServiceProviderConfig } from "../../src/types";
+import { SP_ACS, SP_ENTITY_ID, type TestSamlOptions } from "../support/config";
 import { createHost, isWorkerd } from "../support/host";
 import { authnRequestXml, Browser, readAutoPost, redirectUrl, SSO_URL, strictSp } from "../support/sp";
 
@@ -19,7 +19,7 @@ const NS_ACS = "https://node-saml.test/acs";
 type Encryption = Omit<NonNullable<ServiceProviderConfig["encryption"]>, "certificate">;
 
 /** An IdP with two SPs (node-saml and the samlify test SP), both encrypting to keys.sp. */
-async function idp(encryption: Encryption = {}, saml: Partial<SamlIdpOptions> = {}) {
+async function idp(encryption: Encryption = {}, saml: TestSamlOptions = {}) {
   const enc = { certificate: keys.sp.certificate, ...encryption };
   return createHost({
     saml: {
@@ -40,7 +40,7 @@ async function idp(encryption: Encryption = {}, saml: Partial<SamlIdpOptions> = 
   });
 }
 
-const nodeSaml = (opts: { decryptionPvk?: string; wantAuthnResponseSigned?: boolean } = {}) =>
+const nodeSaml = (opts: { decryptionPvk?: string | undefined; wantAuthnResponseSigned?: boolean | undefined } = {}) =>
   new SAML({
     issuer: NS_ISSUER,
     callbackUrl: NS_ACS,

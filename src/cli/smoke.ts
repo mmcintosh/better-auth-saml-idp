@@ -8,8 +8,8 @@ import { metadataUrl, parseDoc, readIdpMetadata, verifyEnveloped } from "./saml"
 import { fetchText, httpsOnly, Report, UsageError } from "./util";
 
 export interface SmokeOptions {
-  sp?: string;
-  acs?: string;
+  sp?: string | undefined;
+  acs?: string | undefined;
   basePath: string;
   allowHttp: boolean;
 }
@@ -37,7 +37,8 @@ export async function smoke(target: string | undefined, opts: SmokeOptions): Pro
   const md = readIdpMetadata(mdXml);
   const SSO = md.sso.find((s) => s.binding.endsWith("HTTP-Redirect"))?.location;
   if (!SSO) throw new UsageError("no HTTP-Redirect SSO endpoint in metadata");
-  const AUTH = SSO.replace(/\/saml2\/idp\/sso$/, "");
+  // A tenant's SSO URL ends in /sso/<tenantKey>; the resume route is shared, at the root.
+  const AUTH = SSO.replace(/\/saml2\/idp\/sso(\/[^/]+)?$/, "");
   report.section("Target", { Metadata: mdUrl, SSO, SP, ACS });
 
   const req = (o: { issuer?: string; acs?: string; issueInstant?: string; extra?: string; inner?: string; id?: string } = {}) => {

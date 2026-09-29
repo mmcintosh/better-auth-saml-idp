@@ -176,7 +176,7 @@ const findRow = async (ctx: GenericEndpointContext, id: string) => {
 };
 
 /** The columns that locate an SP: with tenants, its tenant and lookup key too (D-052). */
-async function keyColumns(state: PluginState, config: { entityId: string; tenant?: string }) {
+async function keyColumns(state: PluginState, config: { entityId: string; tenant?: string | undefined }) {
   if (!state.options.tenants) return { entityId: config.entityId };
   const tenantId = config.tenant ?? "";
   return { entityId: config.entityId, tenantId, lookupKey: await lookupKeyOf(tenantId, config.entityId) };

@@ -36,7 +36,7 @@ const warnedClaimable = new Set<string>();
 export function warnClaimableOrganizations(
   logger: { warn(message: string): void },
   plugins: readonly { id: string; options?: unknown }[] | undefined,
-  sp: { id: string; organization?: { slug?: string; id?: string }; attributeMap?: Record<string, unknown> },
+  sp: { id: string; organization?: { slug?: string | undefined; id?: string | undefined } | undefined; attributeMap?: Record<string, unknown> | undefined },
 ): void {
   if (warnedClaimable.has(sp.id) || !usersCanCreateOrganizations(plugins)) return;
   const reasons = claimableOrganizationUse(sp);
@@ -47,7 +47,7 @@ export function warnClaimableOrganizations(
   );
 }
 
-export function claimableOrganizationUse(sp: { organization?: { slug?: string; id?: string }; attributeMap?: Record<string, unknown> }): string[] {
+export function claimableOrganizationUse(sp: { organization?: { slug?: string | undefined; id?: string | undefined } | undefined; attributeMap?: Record<string, unknown> | undefined }): string[] {
   const out: string[] = [];
   if (sp.organization && sp.organization.id === undefined && sp.organization.slug !== undefined)
     out.push(`organization rule by slug "${sp.organization.slug}" (use its id)`);
@@ -89,7 +89,7 @@ export async function loadMemberships(adapter: Adapter, userId: string): Promise
 /** The membership an SP's `organization` rule names, if the user has it (and one of its roles). */
 export function matchOrganization(
   memberships: OrganizationMembership[],
-  rule: { slug?: string; id?: string; roles?: string[] },
+  rule: { slug?: string | undefined; id?: string | undefined; roles?: string[] | undefined },
 ): OrganizationMembership | undefined {
   const m = memberships.find((o) => (rule.id !== undefined ? o.id === rule.id : o.slug === rule.slug));
   if (!m) return undefined;

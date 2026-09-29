@@ -1,7 +1,7 @@
 import { describe, expect, inject, it } from "vitest";
 import { NAMEID_EMAIL, resolveOptions, SamlIdpConfigError } from "../../src/options";
 import type { SamlIdpOptions, ServiceProviderConfig } from "../../src/types";
-import { baseOptions, SP_ACS, SP_ENTITY_ID } from "../support/config";
+import { baseOptions, SP_ACS, SP_ENTITY_ID, type TestSamlOptions } from "../support/config";
 
 const keys = inject("keys");
 
@@ -310,7 +310,7 @@ describe("resolveOptions: limits", () => {
     [{ clockSkewSeconds: -1 }, /clockSkewSeconds/],
     [{ pendingRequestTtlSeconds: 5 }, /pendingRequestTtlSeconds/],
   ])("rejects out-of-range %j", (over, msg) => {
-    expect(issuesFor(baseOptions(over as Partial<SamlIdpOptions>)).join()).toMatch(msg);
+    expect(issuesFor(baseOptions(over as TestSamlOptions)).join()).toMatch(msg);
   });
 
   it("warns when assertion lifetime exceeds 5 minutes", () => {

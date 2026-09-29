@@ -17,16 +17,16 @@ let counter = 0;
 export const newRequestId = () => `_req${Date.now().toString(36)}${(counter++).toString(36)}${Math.random().toString(36).slice(2)}`;
 
 export interface AuthnRequestSpec {
-  id?: string;
-  issuer?: string;
-  acsUrl?: string | null;
-  issueInstant?: Date;
-  destination?: string | null;
-  forceAuthn?: boolean;
-  isPassive?: boolean;
-  nameIdFormat?: string;
-  extraAttrs?: string;
-  inner?: string;
+  id?: string | undefined;
+  issuer?: string | undefined;
+  acsUrl?: string | null | undefined;
+  issueInstant?: Date | undefined;
+  destination?: string | null | undefined;
+  forceAuthn?: boolean | undefined;
+  isPassive?: boolean | undefined;
+  nameIdFormat?: string | undefined;
+  extraAttrs?: string | undefined;
+  inner?: string | undefined;
 }
 
 export function authnRequestXml(spec: AuthnRequestSpec = {}) {
@@ -102,21 +102,21 @@ export class Browser {
   private readonly clientIp = `10.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}.${1 + Math.floor(Math.random() * 250)}`;
   constructor(public auth: AuthLike) {}
 
-  cookieHeader(opts: { crossSite?: boolean } = {}) {
+  cookieHeader(opts: { crossSite?: boolean | undefined } = {}) {
     return [...this.jar]
       .filter(([, c]) => !opts.crossSite || c.sameSite === "none")
       .map(([k, c]) => `${k}=${c.value}`)
       .join("; ");
   }
 
-  async fetch(url: string, init: RequestInit & { crossSite?: boolean } = {}): Promise<Response> {
-    const { crossSite, ...rest } = init;
+  async fetch(url: string, init: Omit<RequestInit, "body"> & { body?: BodyInit | null | undefined; crossSite?: boolean | undefined } = {}): Promise<Response> {
+    const { crossSite, body, ...rest } = init;
     const headers = new Headers(rest.headers);
     const cookie = this.cookieHeader({ crossSite });
     if (cookie) headers.set("cookie", cookie);
     if (!headers.has("origin") && rest.method && rest.method !== "GET") headers.set("origin", BASE_URL);
     if (!headers.has("cf-connecting-ip")) headers.set("cf-connecting-ip", this.clientIp);
-    const res = await this.auth.handler(new Request(url, { ...rest, headers, redirect: "manual" }));
+    const res = await this.auth.handler(new Request(url, { ...rest, ...(body === undefined ? {} : { body }), headers, redirect: "manual" }));
     for (const c of res.headers.getSetCookie()) {
       const [pair, ...attrs] = c.split(";");
       const i = pair!.indexOf("=");

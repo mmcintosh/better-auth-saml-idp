@@ -21,12 +21,12 @@ import { fetchText, httpsOnly, pemCertificates, readFileArg, readInput, Report, 
 
 export interface DecodeOptions {
   cert: string[];
-  idp?: string;
-  key?: string;
-  sp?: string;
-  acs?: string;
-  requestId?: string;
-  sso?: string;
+  idp?: string | undefined;
+  key?: string | undefined;
+  sp?: string | undefined;
+  acs?: string | undefined;
+  requestId?: string | undefined;
+  sso?: string | undefined;
   basePath: string;
   showXml: boolean;
   allowHttp: boolean;
@@ -35,8 +35,8 @@ export interface DecodeOptions {
 interface Message {
   xml: string;
   source: "xml" | "redirect" | "post" | "base64";
-  raw?: RawAuthnRequest;
-  relayState?: string;
+  raw?: RawAuthnRequest | undefined;
+  relayState?: string | undefined;
 }
 
 const looksLikeXml = (b: Buffer) => /^\s*</.test(b.subarray(0, 64).toString("utf8").replace(/^﻿/, ""));

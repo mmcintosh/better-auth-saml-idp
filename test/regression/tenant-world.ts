@@ -3,9 +3,10 @@
 // the organization and tenant tables come from D1 migration 0007). The findings are fixed in D-053.
 import { organization } from "better-auth/plugins";
 import { expect } from "vitest";
-import type { SamlIdpOptions, ServiceProviderConfig } from "../../src/types";
+import type { ServiceProviderConfig } from "../../src/types";
 import { AUTH_BASE, createHost, createHostDatabase, type HostDatabase } from "../support/host";
 import { authnRequestXml, Browser, redirectUrl, SSO_URL } from "../support/sp";
+import type { TestSamlOptions } from "../support/config";
 
 export const code = async (res: Response) => /<code>([A-Z_]+)<\/code>/.exec(await res.clone().text())?.[1];
 export const issuerOf = (xml: string) => /<saml:Issuer>([^<]+)<\/saml:Issuer>/.exec(xml)?.[1];
@@ -25,12 +26,12 @@ export async function authn(ssoUrl: string, spec: Parameters<typeof authnRequest
 let n = 0;
 
 export async function world(
-  o: { saml?: Partial<SamlIdpOptions>; auth?: Record<string, unknown>; database?: HostDatabase; orgPlugin?: unknown; sps?: (orgs: { a: string; b: string }) => ServiceProviderConfig[] } = {},
+  o: { saml?: TestSamlOptions; auth?: Record<string, unknown>; database?: HostDatabase; orgPlugin?: unknown; sps?: (orgs: { a: string; b: string }) => ServiceProviderConfig[] } = {},
 ) {
   const t = `${Date.now().toString(36)}${n++}`;
   const database = o.database ?? (await createHostDatabase());
   const plugins = [o.orgPlugin ?? organization()];
-  const saml = (sps: ServiceProviderConfig[]): Partial<SamlIdpOptions> => ({
+  const saml = (sps: ServiceProviderConfig[]): TestSamlOptions => ({
     registry: { enabled: true, canManage, cacheSeconds: 0 },
     tenants: { enabled: true, cacheSeconds: 0 },
     singleLogout: { enabled: true },

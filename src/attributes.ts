@@ -84,7 +84,7 @@ const warnedWritable = new Set<string>();
 export function warnUserWritableFields(
   logger: { warn(message: string): void },
   userOptions: { additionalFields?: Record<string, { input?: boolean; [key: string]: unknown }> } | undefined,
-  sp: { id: string; attributeMap?: AttributeMap },
+  sp: { id: string; attributeMap?: AttributeMap | undefined },
 ): void {
   if (warnedWritable.has(sp.id)) return;
   const fields = userWritableMappedFields(sp.attributeMap, userOptions?.additionalFields);

@@ -7,15 +7,15 @@ import { metadataUrl, readIdpMetadata } from "./saml";
 import { fetchText, httpsOnly, readFileArg, Report, UsageError } from "./util";
 
 export interface RequestOptions {
-  sp?: string;
-  acs?: string;
+  sp?: string | undefined;
+  acs?: string | undefined;
   binding: string;
-  relayState?: string;
+  relayState?: string | undefined;
   forceAuthn: boolean;
   passive: boolean;
-  nameIdFormat?: string;
-  authnContext?: string;
-  signKey?: string;
+  nameIdFormat?: string | undefined;
+  authnContext?: string | undefined;
+  signKey?: string | undefined;
   sigAlg: string;
   basePath: string;
   allowHttp: boolean;
@@ -35,7 +35,7 @@ const NAMEID: Record<string, string> = {
   unspecified: "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified",
 };
 
-export function buildAuthnRequest(o: { id: string; issuer: string; destination: string; acs?: string; forceAuthn?: boolean; passive?: boolean; nameIdFormat?: string; authnContext?: string; now?: Date }): string {
+export function buildAuthnRequest(o: { id: string; issuer: string; destination: string; acs?: string | undefined; forceAuthn?: boolean | undefined; passive?: boolean | undefined; nameIdFormat?: string | undefined; authnContext?: string | undefined; now?: Date | undefined }): string {
   const attrs = [
     `ID="${o.id}"`,
     `Version="2.0"`,

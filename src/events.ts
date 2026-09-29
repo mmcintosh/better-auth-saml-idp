@@ -27,7 +27,7 @@ export interface AssertionIssuedEvent extends EventBase {
   /** "sp" for a Response to an AuthnRequest, "idp" for IdP-initiated SSO. */
   initiatedBy: "sp" | "idp";
   /** The AuthnRequest's ID (SP-initiated only). */
-  inResponseTo?: string;
+  inResponseTo?: string | undefined;
   acsUrl: string;
   nameIdFormat: string;
   /** The NameID as sent. It may be personal data (an email address). */
@@ -36,7 +36,7 @@ export interface AssertionIssuedEvent extends EventBase {
   attributes: string[];
   encrypted: boolean;
   /** The SP's tenant (an organization id, D-052); absent for the root IdP. */
-  tenantId?: string;
+  tenantId?: string | undefined;
 }
 
 /**
@@ -47,15 +47,15 @@ export interface AssertionIssuedEvent extends EventBase {
 export interface DeniedEvent extends EventBase {
   type: "denied";
   code: SamlIdpErrorCode | "SAML_STATUS";
-  status?: { code: string; subCode?: string };
+  status?: { code: string; subCode?: string } | undefined;
   /** The SP concerned, when the request identified one. */
-  spId?: string;
+  spId?: string | undefined;
   /** The signed-in user, when there was one. */
-  userId?: string;
+  userId?: string | undefined;
   /** Why, as in the debug log (log-safe, at most 300 characters). */
-  detail?: string;
+  detail?: string | undefined;
   /** The tenant (an organization id, D-052) of the SP concerned, when it has one. */
-  tenantId?: string;
+  tenantId?: string | undefined;
 }
 
 /** An IdP session was ended by Single Logout. */
@@ -64,13 +64,13 @@ export interface LogoutEvent extends EventBase {
   /** "sp": an SP's LogoutRequest; "idp": the app's sign-out-everywhere. */
   initiatedBy: "sp" | "idp";
   /** The SP whose LogoutRequest started it (SP-initiated only). */
-  spId?: string;
+  spId?: string | undefined;
   userId: string;
   sessionId: string;
   /** The other SPs that will be sent a LogoutRequest, in order. */
   notifying: string[];
   /** The tenant (D-052) of the SP whose LogoutRequest started it, when it has one. */
-  tenantId?: string;
+  tenantId?: string | undefined;
 }
 
 /**
@@ -93,12 +93,12 @@ export interface SessionEndedEvent extends EventBase {
   participants: {
     spId: string;
     /** The SP's entity ID, if it is still configured. */
-    entityId?: string;
+    entityId?: string | undefined;
     nameId: string;
     nameIdFormat: string;
     sessionIndex: string;
     /** The SP's tenant (D-052), when it has one and is still configured. */
-    tenantId?: string;
+    tenantId?: string | undefined;
   }[];
   /** More SPs took part than the event lists (the cap is 200); all of them were marked ended. */
   truncated: boolean;
@@ -107,25 +107,25 @@ export interface SessionEndedEvent extends EventBase {
 export type SamlIdpEvent = AssertionIssuedEvent | DeniedEvent | LogoutEvent | SessionEndedEvent;
 
 export interface SamlIdpEventHandlers {
-  onAssertionIssued?: (event: AssertionIssuedEvent) => void | Promise<void>;
-  onDenied?: (event: DeniedEvent) => void | Promise<void>;
-  onLogout?: (event: LogoutEvent) => void | Promise<void>;
+  onAssertionIssued?: ((event: AssertionIssuedEvent) => void | Promise<void>) | undefined;
+  onDenied?: ((event: DeniedEvent) => void | Promise<void>) | undefined;
+  onLogout?: ((event: LogoutEvent) => void | Promise<void>) | undefined;
   /**
    * A session ended without Single Logout (D-043). Setting it also turns on the participant
    * tracking it needs (the `samlIdpSessionParticipant` table), even without `singleLogout`.
    */
-  onSessionEnded?: (event: SessionEndedEvent) => void | Promise<void>;
+  onSessionEnded?: ((event: SessionEndedEvent) => void | Promise<void>) | undefined;
 }
 
 export interface AuditLogOptions {
   enabled: boolean;
   /** Days to keep rows; expired rows are swept. Default 90. */
-  retentionDays?: number;
+  retentionDays?: number | undefined;
 }
 
 export const AUDIT_MODEL = "samlIdpAuditEvent";
 
-type Emitter = { events?: SamlIdpEventHandlers; auditLog?: { retentionDays: number }; tenants?: unknown };
+type Emitter = { events?: SamlIdpEventHandlers | undefined; auditLog?: { retentionDays: number } | undefined; tenants?: unknown };
 
 /** The request's client IP, as Better Auth reads it. */
 function clientIp(ctx: GenericEndpointContext): string | undefined {

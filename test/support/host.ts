@@ -9,8 +9,7 @@ import { betterAuth } from "better-auth";
 import { admin } from "better-auth/plugins";
 import { withCloudflare } from "better-auth-cloudflare";
 import { samlIdp } from "../../src/index";
-import type { SamlIdpOptions } from "../../src/types";
-import { baseOptions } from "./config";
+import { baseOptions, type TestSamlOptions } from "./config";
 
 export const BASE_URL = "https://auth.test";
 export const AUTH_BASE = `${BASE_URL}/api/auth`;
@@ -18,17 +17,17 @@ export const AUTH_BASE = `${BASE_URL}/api/auth`;
 export const isWorkerd = typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers";
 
 export interface HostOptions {
-  saml?: Partial<SamlIdpOptions>;
+  saml?: TestSamlOptions | undefined;
   /** Extra Better Auth options merged into withCloudflare's second argument. */
-  auth?: Record<string, unknown>;
+  auth?: Record<string, unknown> | undefined;
   /** Share one database between several auth instances (separate isolates in miniature). */
-  database?: HostDatabase;
+  database?: HostDatabase | undefined;
   /** better-auth-cloudflare options (geolocation tracking forces DB-stored sessions). */
-  cloudflare?: { geolocationTracking?: boolean };
+  cloudflare?: { geolocationTracking?: boolean } | undefined;
   /** More Better Auth plugins (e.g. organization); Node only unless the D1 schema has their tables. */
-  plugins?: unknown[];
+  plugins?: unknown[] | undefined;
   /** Options for the admin plugin (roles / access control). */
-  adminOptions?: Record<string, unknown>;
+  adminOptions?: Record<string, unknown> | undefined;
 }
 
 export type HostDatabase = { kind: "d1"; db: unknown } | { kind: "sqlite"; db: unknown };

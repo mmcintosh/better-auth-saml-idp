@@ -27,17 +27,17 @@ const CONTINUE_PREFIX = "saml-idp-logout-continue:";
 const HOP_TTL_SECONDS = 300;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 
-type Origin = { kind: "sp"; spId: string; requestId: string; relayState?: string } | { kind: "idp"; returnTo: string };
+type Origin = { kind: "sp"; spId: string; requestId: string; relayState?: string | undefined } | { kind: "idp"; returnTo: string };
 interface LogoutState {
   origin: Origin;
   remaining: Participant[];
-  current?: { spId: string; requestId: string };
+  current?: { spId: string; requestId: string } | undefined;
   partial: boolean;
 }
 interface PendingLogoutRequest {
   spId: string;
   requestId: string;
-  relayState?: string;
+  relayState?: string | undefined;
   nameId: string;
   sessionIndexes: string[];
   signed: boolean;
@@ -204,7 +204,7 @@ const sloMetadata = (operationId: string, summary: string) => ({
   openapi: { operationId, summary },
 });
 
-type SloContext = GenericEndpointContext & { query?: z.infer<typeof params>; body?: z.infer<typeof params> };
+type SloContext = GenericEndpointContext & { query?: z.infer<typeof params> | undefined; body?: z.infer<typeof params> | undefined };
 
 /**
  * A logout message at the root SLO URL (`tenantKey` undefined) or a tenant's (D-052). An SP's

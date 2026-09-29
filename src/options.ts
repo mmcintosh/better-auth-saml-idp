@@ -448,7 +448,7 @@ interface SpDefaults {
   sign: SignedParts;
   sessionNotOnOrAfter: SessionLimit;
   relayStateMaxBytes: number;
-  authorize?: ResolvedServiceProvider["authorize"];
+  authorize?: ResolvedServiceProvider["authorize"] | undefined;
   /** `tenants.enabled` (D-052). */
   tenants: boolean;
 }
@@ -668,7 +668,8 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
     },
     serviceProviders,
     schemaValidator: o.schemaValidator ?? defaultSchemaValidator(),
-    schema: o.schema,
+    // Validated above; Zod types unset keys as `| undefined`, which this nested type leaves out.
+    schema: o.schema as SamlIdpOptions["schema"],
     signMetadata: o.signMetadata ?? false,
     sessionNotOnOrAfter: o.sessionNotOnOrAfter ?? false,
     singleLogout: o.singleLogout?.enabled ?? false,

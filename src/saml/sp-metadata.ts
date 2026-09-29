@@ -30,9 +30,9 @@ export interface SpFromMetadataResult {
 
 export interface SpFromMetadataOptions {
   /** When the document is an EntitiesDescriptor (a federation aggregate), which entity to take. */
-  entityId?: string;
+  entityId?: string | undefined;
   /** Defaults to the plugin's default libxml2 validator. */
-  schemaValidator?: SchemaValidator;
+  schemaValidator?: SchemaValidator | undefined;
 }
 
 const children = (el: any, ns: string, name: string): any[] =>

@@ -73,9 +73,9 @@ export interface BuildResponseInput {
   authnInstant: Date;
   sessionIndex: string;
   /** The class this session achieved (step-up, D-047); default `options.authnContextClassRef`. */
-  authnContextClassRef?: string;
+  authnContextClassRef?: string | undefined;
   /** When the SP should end its session (D-043); omitted when undefined. */
-  sessionNotOnOrAfter?: Date;
+  sessionNotOnOrAfter?: Date | undefined;
   now: Date;
 }
 

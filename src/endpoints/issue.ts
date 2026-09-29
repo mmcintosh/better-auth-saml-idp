@@ -57,7 +57,7 @@ export async function routeIdentity(ctx: GenericEndpointContext, state: PluginSt
 }
 
 /** The tenant field of events and requests: present only for a tenant's SP (D-052). */
-export const tenantOf = (sp: { tenantId?: string | null }) => (sp.tenantId ? { tenantId: sp.tenantId } : {});
+export const tenantOf = (sp: { tenantId?: string | null | undefined }) => (sp.tenantId ? { tenantId: sp.tenantId } : {});
 
 /** Find an SP by id: code first, then the database registry. */
 export function spById(ctx: GenericEndpointContext, state: PluginState, id: string) {

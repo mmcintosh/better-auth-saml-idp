@@ -51,7 +51,7 @@
     "build": "node scripts/build.mjs",
     "prepare": "node scripts/build.mjs",
     "docs:check": "node scripts/check-links.mjs",
-    "pack:check": "pnpm build && publint --strict && attw --pack . --profile esm-only",
+    "pack:check": "pnpm build && tsc -p tsconfig.strict-host.json && publint --strict && attw --pack . --profile esm-only",
     "lint": "biome lint --error-on-warnings"
   },
   "peerDependencies": {

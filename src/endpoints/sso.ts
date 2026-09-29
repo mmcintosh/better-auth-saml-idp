@@ -44,7 +44,7 @@ const params = z.object({
 });
 
 /** Where the browser goes to sign in, carrying the resume URL as `callbackURL`. */
-export function loginRedirectUrl(ctx: GenericEndpointContext, state: PluginState, rid: string, opts: { reauthenticate?: boolean; acr?: string; tenant?: string } = {}): string {
+export function loginRedirectUrl(ctx: GenericEndpointContext, state: PluginState, rid: string, opts: { reauthenticate?: boolean | undefined; acr?: string | undefined; tenant?: string | undefined } = {}): string {
   const base = idpBaseURL(state.options, ctx.context.baseURL);
   const login = new URL(state.options.loginPage, new URL(base).origin);
   login.searchParams.set("callbackURL", `${base}${RESUME_PATH}?rid=${rid}`);
@@ -87,7 +87,7 @@ async function proceed(ctx: GenericEndpointContext, state: PluginState, identity
   return parkForLogin(ctx, state, req);
 }
 
-type SsoContext = GenericEndpointContext & { query?: z.infer<typeof params>; body?: z.infer<typeof params> };
+type SsoContext = GenericEndpointContext & { query?: z.infer<typeof params> | undefined; body?: z.infer<typeof params> | undefined };
 
 const ssoMetadata = (operationId: string, summary: string) => ({
   // A browser navigation (or an SP's POST), not something to call from the client (API decision 2).

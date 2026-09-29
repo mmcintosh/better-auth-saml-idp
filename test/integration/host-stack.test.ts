@@ -91,6 +91,8 @@ describe("R5 negative host config: KV secondary storage without storeInDatabase"
     // A real database, so the only thing wrong is the storage routing.
     const database = await createHostDatabase();
     const run = async () => {
+      // better-auth-cloudflare 0.3.1's plugin types don't satisfy BetterAuthPlugin under
+      // exactOptionalPropertyTypes (the same class of bug fixed here in 1.0.1), hence the cast.
       const auth = betterAuth({
         baseURL: BASE_URL,
         secret: "test-secret-that-is-at-least-32-characters-long",
@@ -110,7 +112,7 @@ describe("R5 negative host config: KV secondary storage without storeInDatabase"
             plugins: [samlIdp(baseOptions())],
           },
         ),
-      });
+      } as Parameters<typeof betterAuth>[0]);
       await auth.$context;
       return auth.handler(new Request(`${AUTH_BASE}/saml2/idp/metadata`));
     };

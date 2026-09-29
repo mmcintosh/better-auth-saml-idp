@@ -38,7 +38,7 @@ export interface ServiceProviderInfo {
   readonly acsUrls: readonly string[];
   readonly nameIdFormat: string;
   /** The SP's organization rule, if it has one. */
-  readonly organization: Readonly<{ slug?: string; id?: string; roles?: readonly string[] }> | undefined;
+  readonly organization: Readonly<{ slug?: string | undefined; id?: string | undefined; roles?: readonly string[] | undefined }> | undefined;
   /** The SP's tenant (an organization id, D-052), or null for an SP of the root IdP. */
   readonly tenantId: string | null;
 }
@@ -70,7 +70,7 @@ export interface ServiceProviderRecord {
    * Only with `tenants.enabled` (D-052): the SP's tenant (an organization id), or null for an SP
    * of the root IdP. Absent otherwise, so records are unchanged without tenants.
    */
-  tenantId?: string | null;
+  tenantId?: string | null | undefined;
 }
 
 /**
@@ -101,9 +101,9 @@ export interface TenantOptions {
    * What tenants sign with. Only `"shared"` in this version: every tenant signs with `signing`,
    * so only the host's administrators may manage tenant SPs (D-052). Per-tenant keys are planned.
    */
-  keys?: "shared";
+  keys?: "shared" | undefined;
   /** How long an isolate caches a tenant, and a miss. Default `registry.cacheSeconds` (60 s); 0 to 3600. */
-  cacheSeconds?: number;
+  cacheSeconds?: number | undefined;
 }
 
 /**
@@ -164,7 +164,7 @@ export interface ServiceProviderConfig {
    */
   acsUrls: [string, ...string[]];
   /** Defaults to `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`. */
-  nameIdFormat?: string;
+  nameIdFormat?: string | undefined;
   /**
    * Value of `<NameID>`. Default depends on `nameIdFormat`:
    * - emailAddress / unspecified: the user's (verified) email;
@@ -177,48 +177,48 @@ export interface ServiceProviderConfig {
    * field with `input: false`. Anything else is refused, since the NameID is the user's identity
    * at the SP. A user with no value in the field is denied.
    */
-  nameId?: ((user: SamlIdpUser) => string) | NameIdSource;
+  nameId?: (((user: SamlIdpUser) => string) | NameIdSource) | undefined;
   /**
    * Attributes to include in the `<AttributeStatement>`: a function, or a declarative map from
    * attribute name to source (usable from JSON configuration), e.g.
    * `{ email: "email", groups: { field: "role", split: "," }, firstName: { field: "name", part: "first" } }`.
    */
-  attributes?: ((user: SamlIdpUser, context: AttributeContext) => Record<string, SamlAttributeValue>) | AttributeMap;
+  attributes?: (((user: SamlIdpUser, context: AttributeContext) => Record<string, SamlAttributeValue>) | AttributeMap) | undefined;
   /**
    * Only members of this Better Auth organization (organization plugin) may use this SP, and, with
    * `roles`, only members holding one of them. Give `slug` or `id`. Evaluated before `authorize`.
    */
-  organization?: { slug?: string; id?: string; roles?: string[] };
+  organization?: { slug?: string | undefined; id?: string | undefined; roles?: string[] | undefined } | undefined;
   /**
    * What to do with signatures on this SP's requests (see {@link RequestSignaturePolicy}).
    * Default: `"verify-if-signed"` when `spCertificates` or `metadata` is set, else `"ignore"`.
    */
-  requestSignatures?: RequestSignaturePolicy;
+  requestSignatures?: RequestSignaturePolicy | undefined;
   /**
    * PEM X.509 certificate(s) the SP signs its requests with: one, or several during the SP's
    * key rotation (e.g. Cloudflare Access publishes two); a signature from any of them is accepted.
    */
-  spCertificates?: string | string[];
+  spCertificates?: string | string[] | undefined;
   /**
    * Allow IdP-initiated (unsolicited) SSO to this SP via `GET /saml2/idp/init?sp=<id>`.
    * Default false. The Response carries no `InResponseTo`, so the SP must accept unsolicited
    * Responses and track assertion IDs itself (docs/security.md).
    */
-  allowIdpInitiated?: boolean;
+  allowIdpInitiated?: boolean | undefined;
   /**
    * RelayState sent with IdP-initiated Responses when the caller supplies none, or one that is
    * not in `allowedRelayStates` (commonly the SP-side landing URL). Requires `allowIdpInitiated`.
    */
-  idpInitiatedRelayState?: string;
+  idpInitiatedRelayState?: string | undefined;
   /**
    * Caller-supplied `RelayState` values accepted on `/saml2/idp/init`, matched exactly. Any
    * other value is ignored (the default above is used): an IdP-initiated RelayState is usually
    * a redirect target at the SP, so accepting arbitrary values would make the IdP an
    * open-redirect launcher for the SP. Requires `allowIdpInitiated`.
    */
-  allowedRelayStates?: string[];
+  allowedRelayStates?: string[] | undefined;
   /** Decide whether this user may use this SP. Denial issues no assertion. */
-  authorize?: (ctx: AuthorizeContext) => AuthorizeResult | Promise<AuthorizeResult>;
+  authorize?: ((ctx: AuthorizeContext) => AuthorizeResult | Promise<AuthorizeResult>) | undefined;
   /**
    * Keep this SP's certificates current from its metadata URL (D-026). Only certificates are
    * taken from it: signing certificates (added to `spCertificates`) and, when `encryption` is on,
@@ -229,50 +229,50 @@ export interface ServiceProviderConfig {
     /** https only. Fetched with a 5 s timeout, redirects not followed, at most 1 MiB. */
     url: string;
     /** Default 86400 (a day); 300 to 604800. */
-    refreshSeconds?: number;
+    refreshSeconds?: number | undefined;
     /**
      * Pin the metadata's own signature (recommended; required by federations). When set,
      * unsigned or wrongly signed metadata is rejected and the last good copy is kept.
      */
-    signingCertificates?: string | string[];
+    signingCertificates?: string | string[] | undefined;
   };
   /**
    * Where this SP receives SAML Single Logout messages (its SingleLogoutService). Needed for the
    * SP to take part in logout (D-028). Default binding: HTTP-Redirect.
    */
-  singleLogoutService?: { url: string; binding?: "redirect" | "post"; /** Where LogoutResponses go, if not `url` (metadata ResponseLocation). */ responseUrl?: string };
+  singleLogoutService?: { url: string; binding?: "redirect" | "post"; /** Where LogoutResponses go, if not `url` (metadata ResponseLocation). */ responseUrl?: string } | undefined;
   /** Override the global `signing.sign` for this SP. */
-  sign?: SignedParts;
+  sign?: SignedParts | undefined;
   /**
    * Encrypt the assertion to this SP (`<saml:EncryptedAssertion>`, XML Encryption 1.1).
    * The assertion is signed first, then encrypted, then the Response is signed
    * ("sign-then-encrypt"), as `sign` says. Omit to send plaintext assertions.
    */
-  encryption?: ServiceProviderEncryptionConfig;
+  encryption?: ServiceProviderEncryptionConfig | undefined;
   /** Override the global `sessionNotOnOrAfter` for this SP. */
-  sessionNotOnOrAfter?: SessionLimit;
+  sessionNotOnOrAfter?: SessionLimit | undefined;
   /**
    * With `tenants.enabled` (D-052): the organization id of the tenant this SP belongs to. The SP
    * then sees the tenant's IdP identity (entity ID, SSO and SLO URLs), is found only through the
    * tenant's URLs, and only members of that organization may sign in to it. `organization` may
    * only narrow that with `roles` (`{ id: <this tenant>, roles }`). Omit for the root IdP.
    */
-  tenant?: string;
+  tenant?: string | undefined;
 }
 
 export interface ServiceProviderEncryptionConfig {
   /** The SP's PEM X.509 encryption certificate (RSA ≥ 2048 bits). */
   certificate: string;
   /** Content encryption. Default `aes256-gcm`. `aes256-cbc` also needs `allowInsecureCbc: true`. */
-  dataAlgorithm?: "aes256-gcm" | "aes128-gcm" | "aes256-cbc";
+  dataAlgorithm?: "aes256-gcm" | "aes128-gcm" | "aes256-cbc" | undefined;
   /**
    * Key transport. Default `rsa-oaep` (`xmlenc#rsa-oaep-mgf1p`, SHA-1/MGF1-SHA1, the most widely
    * supported). `rsa-oaep-sha256` is `xmlenc11#rsa-oaep` with SHA-256 and MGF1-SHA256.
    * RSA PKCS#1 v1.5 is not available.
    */
-  keyAlgorithm?: "rsa-oaep" | "rsa-oaep-sha256";
+  keyAlgorithm?: "rsa-oaep" | "rsa-oaep-sha256" | undefined;
   /** Explicit opt-in to AES-CBC for SPs without GCM (padding-oracle history). Logs a warning. */
-  allowInsecureCbc?: boolean;
+  allowInsecureCbc?: boolean | undefined;
 }
 
 export interface SigningConfig {
@@ -281,15 +281,15 @@ export interface SigningConfig {
   /** PEM X.509 certificate matching `privateKey`. */
   certificate: string;
   /** Extra certificates published in metadata, e.g. the next key during rotation. */
-  additionalCertificates?: string[];
+  additionalCertificates?: string[] | undefined;
   /** Default `rsa-sha256`. `rsa-sha1` also needs `allowInsecureSha1: true`. */
-  signatureAlgorithm?: SignatureAlgorithm;
+  signatureAlgorithm?: SignatureAlgorithm | undefined;
   /** Default `sha256`. `sha1` also needs `allowInsecureSha1: true`. */
-  digestAlgorithm?: DigestAlgorithm;
+  digestAlgorithm?: DigestAlgorithm | undefined;
   /** Explicit opt-in to SHA-1 for legacy SPs. Logs a warning at startup. */
-  allowInsecureSha1?: boolean;
+  allowInsecureSha1?: boolean | undefined;
   /** Which parts of the SAML Response to sign. Default `"both"`. */
-  sign?: SignedParts;
+  sign?: SignedParts | undefined;
 }
 
 /** See `SamlIdpOptions.authnContext`. */
@@ -331,28 +331,28 @@ export interface SamlIdpOptions {
    * (`https://auth.example.com`) gets `basePath` added; a URL with a path is used as it is.
    * Default: Better Auth's base URL. Pin this or Better Auth's, or URLs follow the Host header.
    */
-  baseURL?: string;
+  baseURL?: string | undefined;
   /** Where unauthenticated users are sent. Path on this origin, or an absolute URL. */
   loginPage: string;
   signing: SigningConfig;
   /** Assertion validity window. Default 300 s. */
-  assertionLifetimeSeconds?: number;
+  assertionLifetimeSeconds?: number | undefined;
   /** Tolerance applied to `NotBefore` and request `IssueInstant`. Default 60 s. */
-  clockSkewSeconds?: number;
+  clockSkewSeconds?: number | undefined;
   /** How long a stored AuthnRequest waits for the user to sign in. Default 600 s. */
-  pendingRequestTtlSeconds?: number;
+  pendingRequestTtlSeconds?: number | undefined;
   /**
    * Maximum RelayState size in bytes. Default (and hard cap) 1024. SAML Bindings §3.4.3 says
    * 80, but real SPs send more — Cloudflare Access does (DECISIONS.md D-016). Set 80 for
    * strict spec behaviour. RelayState is opaque to the IdP and always HTML-escaped.
    */
-  relayStateMaxBytes?: number;
+  relayStateMaxBytes?: number | undefined;
   /**
    * The `AuthnContextClassRef` asserted, and matched against an SP's
    * `RequestedAuthnContext`. Default `urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified`.
    * Set it to what your sign-in actually guarantees, e.g. `...:PasswordProtectedTransport`.
    */
-  authnContextClassRef?: string;
+  authnContextClassRef?: string | undefined;
   /**
    * Step-up authentication (D-047), instead of a fixed `authnContextClassRef`: the classes your
    * sign-in can deliver, weakest first, and which one the current session achieved. An SP's
@@ -363,17 +363,17 @@ export interface SamlIdpOptions {
    * - still not met after that, or not reachable at all: the SP gets `NoAuthnContext`
    *   (`NoPassive` for IsPassive requests).
    */
-  authnContext?: AuthnContextOptions;
+  authnContext?: AuthnContextOptions | undefined;
   /**
    * Who may receive assertions. Defaults are strict: an IdP vouches for identities.
    */
   accountPolicy?: {
     /** Refuse users whose email is not verified. Default true. */
-    requireEmailVerified?: boolean;
+    requireEmailVerified?: boolean | undefined;
     /** Allow sessions created by admin impersonation (`impersonatedBy`). Default false. */
-    allowImpersonatedSessions?: boolean;
+    allowImpersonatedSessions?: boolean | undefined;
     /** Allow anonymous-plugin users (`isAnonymous`). Default false. */
-    allowAnonymousUsers?: boolean;
+    allowAnonymousUsers?: boolean | undefined;
   };
   serviceProviders: ServiceProviderConfig[];
   /**
@@ -382,28 +382,28 @@ export interface SamlIdpOptions {
    */
   schema?: {
     samlIdpSeenRequest?: {
-      modelName?: string;
-      fields?: Partial<Record<"key" | "spId" | "requestId" | "expiresAt", string>>;
+      modelName?: string | undefined;
+      fields?: Partial<Record<"key" | "spId" | "requestId" | "expiresAt", string>> | undefined;
     };
     samlIdpSessionParticipant?: {
-      modelName?: string;
-      fields?: Partial<Record<"key" | "sessionKey" | "spId" | "nameId" | "nameIdFormat" | "sessionIndex" | "expiresAt", string>>;
+      modelName?: string | undefined;
+      fields?: Partial<Record<"key" | "sessionKey" | "spId" | "nameId" | "nameIdFormat" | "sessionIndex" | "expiresAt", string>> | undefined;
     };
     samlIdpServiceProvider?: {
-      modelName?: string;
-      fields?: Partial<Record<"spId" | "entityId" | "config" | "enabled" | "createdAt" | "updatedAt" | "updatedBy" | "tenantId" | "lookupKey", string>>;
+      modelName?: string | undefined;
+      fields?: Partial<Record<"spId" | "entityId" | "config" | "enabled" | "createdAt" | "updatedAt" | "updatedBy" | "tenantId" | "lookupKey", string>> | undefined;
     };
     samlIdpAuditEvent?: {
-      modelName?: string;
-      fields?: Partial<Record<"type" | "at" | "spId" | "userId" | "code" | "ipAddress" | "userAgent" | "details" | "expiresAt" | "tenantId", string>>;
+      modelName?: string | undefined;
+      fields?: Partial<Record<"type" | "at" | "spId" | "userId" | "code" | "ipAddress" | "userAgent" | "details" | "expiresAt" | "tenantId", string>> | undefined;
     };
     samlIdpTenant?: {
-      modelName?: string;
-      fields?: Partial<Record<"organizationId" | "tenantKey" | "organizationCreatedAt" | "enabled" | "createdAt" | "updatedAt" | "updatedBy", string>>;
+      modelName?: string | undefined;
+      fields?: Partial<Record<"organizationId" | "tenantKey" | "organizationCreatedAt" | "enabled" | "createdAt" | "updatedAt" | "updatedBy", string>> | undefined;
     };
     samlIdpRetiredTenantKey?: {
-      modelName?: string;
-      fields?: Partial<Record<"tenantKey" | "organizationId" | "retiredAt" | "retiredBy", string>>;
+      modelName?: string | undefined;
+      fields?: Partial<Record<"tenantKey" | "organizationId" | "retiredAt" | "retiredBy", string>> | undefined;
     };
   };
   /**
@@ -411,19 +411,19 @@ export interface SamlIdpOptions {
    * SP that received an assertion in the IdP session and has a `singleLogoutService`. Adds the
    * `samlIdpSessionParticipant` table and the `/saml2/idp/slo` and `/saml2/idp/logout` endpoints.
    */
-  singleLogout?: { enabled: boolean };
+  singleLogout?: { enabled: boolean } | undefined;
   /**
    * Observability (D-038): called after an assertion is issued, a request is refused, or an IdP
    * session is ended by Single Logout. Handlers run in the background and can't affect the flow;
    * a throw is logged. For audit trails, SIEM forwarding and metrics.
    */
-  events?: import("./events").SamlIdpEventHandlers;
+  events?: import("./events").SamlIdpEventHandlers | undefined;
   /**
    * Also record those events in the `samlIdpAuditEvent` table (D-038), kept `retentionDays`
    * (default 90) and then swept. Refusals without a signed-in user are not stored (anyone can
    * generate them); they still reach `events.onDenied`.
    */
-  auditLog?: import("./events").AuditLogOptions;
+  auditLog?: import("./events").AuditLogOptions | undefined;
   /**
    * Database-backed SP registry (D-027): SPs stored in the `samlIdpServiceProvider` table, in
    * addition to `serviceProviders`, managed at runtime without a redeploy. Stored SPs are plain
@@ -437,23 +437,23 @@ export interface SamlIdpOptions {
      * is only mounted when this is set; it requires a signed-in user and keeps Better Auth's
      * origin checks. E.g. `({ user }) => user.role === "admin"`.
      */
-    canManage?: (ctx: { user: SamlIdpUser; session: Session }) => boolean | Promise<boolean>;
+    canManage?: ((ctx: { user: SamlIdpUser; session: Session }) => boolean | Promise<boolean>) | undefined;
     /**
      * Use Better Auth's admin-plugin access control: each API action (list, read, create, update,
      * delete on `samlServiceProvider`) must be granted to one of the user's roles; see
      * `samlIdpStatements`. With `canManage` too, both must allow. Mounts the API.
      */
-    permissions?: boolean;
+    permissions?: boolean | undefined;
     /** How long an isolate caches a stored SP, and a miss. Default 60 s; 0 to 3600. */
-    cacheSeconds?: number;
+    cacheSeconds?: number | undefined;
     /** `authorize` for stored SPs (functions can't be stored). Default: allow. */
-    authorize?: (ctx: AuthorizeContext) => AuthorizeResult | Promise<AuthorizeResult>;
+    authorize?: ((ctx: AuthorizeContext) => AuthorizeResult | Promise<AuthorizeResult>) | undefined;
   };
   /**
    * Sign the IdP metadata document (enveloped XML signature with the active signing key).
    * Default false. Useful for SPs and federations that verify metadata signatures.
    */
-  signMetadata?: boolean;
+  signMetadata?: boolean | undefined;
   /**
    * Tell SPs when to end their own session: `SessionNotOnOrAfter` on the AuthnStatement (Core
    * §2.7.2), a bound for when the IdP session ends without the SP being told (D-043). `false`
@@ -461,9 +461,9 @@ export interface SamlIdpOptions {
    * after issuance, but never past the IdP session's expiry. SPs that honour it (Shibboleth,
    * SimpleSAMLphp) sign the user out then; many SaaS SPs ignore it. Each SP can override it.
    */
-  sessionNotOnOrAfter?: SessionLimit;
+  sessionNotOnOrAfter?: SessionLimit | undefined;
   /** Validator run on every inbound SAML message. Default: `libxml2Validator()`. */
-  schemaValidator?: SchemaValidator;
+  schemaValidator?: SchemaValidator | undefined;
   /**
    * Multi-tenant IdP (D-052), off by default: an IdP identity per Better Auth organization, next
    * to the root one. A tenant has its own entity ID, metadata, and SSO and SLO URLs
@@ -474,10 +474,13 @@ export interface SamlIdpOptions {
    * table and columns to `samlIdpServiceProvider` (and `samlIdpAuditEvent`); see the
    * multi-tenant guide.
    */
-  tenants?: TenantOptions;
+  tenants?: TenantOptions | undefined;
 }
 
 /** A service provider after option validation, with defaults applied. */
+/** `Required<T>` that also removes the `undefined` an optional field may be given explicitly. */
+type Defined<T> = { [K in keyof T]-?: Exclude<T[K], undefined> };
+
 export interface ResolvedServiceProvider {
   id: string;
   entityId: string;
@@ -488,7 +491,7 @@ export interface ResolvedServiceProvider {
   /** With `nameId: { field }`: the field, re-checked at issuance (it must not be user-writable). */
   nameIdField: string | undefined;
   attributes: (user: SamlIdpUser, context: AttributeContext, onMissingField?: (field: string) => void) => Record<string, SamlAttributeValue>;
-  organization: { slug?: string; id?: string; roles?: string[] } | undefined;
+  organization: { slug?: string | undefined; id?: string | undefined; roles?: string[] | undefined } | undefined;
   singleLogoutService: { url: string; binding: "redirect" | "post"; responseUrl?: string } | undefined;
   /** Metadata refresh (D-026); certificates are normalised to a list. */
   metadata: { url: string; refreshSeconds: number; signingCertificates: string[] } | undefined;
@@ -504,7 +507,7 @@ export interface ResolvedServiceProvider {
   /** Effective signing for this SP (per-SP override, else the global setting). */
   sign: SignedParts;
   /** Present when assertions to this SP are encrypted; the certificate is parsed at startup. */
-  encryption?: import("./saml/encrypt").AssertionEncryption;
+  encryption?: import("./saml/encrypt").AssertionEncryption | undefined;
   /** Effective `sessionNotOnOrAfter` (per-SP override, else the global setting). */
   sessionNotOnOrAfter: SessionLimit;
   /** The tenant's organization id (D-052); undefined for an SP of the root IdP. */
@@ -515,7 +518,7 @@ export interface ResolvedSamlIdpOptions {
   entityId: string;
   baseURL: string | undefined;
   loginPage: string;
-  signing: Required<Omit<SigningConfig, "allowInsecureSha1">> & {
+  signing: Defined<Omit<SigningConfig, "allowInsecureSha1">> & {
     allowInsecureSha1: boolean;
     /** Parsed once at startup. */
     keyObject: import("node:crypto").KeyObject;
@@ -526,7 +529,7 @@ export interface ResolvedSamlIdpOptions {
   relayStateMaxBytes: number;
   authnContextClassRef: string;
   authnContext: AuthnContextOptions | undefined;
-  accountPolicy: Required<NonNullable<SamlIdpOptions["accountPolicy"]>>;
+  accountPolicy: Defined<NonNullable<SamlIdpOptions["accountPolicy"]>>;
   serviceProviders: ResolvedServiceProvider[];
   schemaValidator: SchemaValidator;
   schema: SamlIdpOptions["schema"];

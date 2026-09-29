@@ -107,7 +107,7 @@ export function verifyEnvelopedSignature(
   // every certificate is tried in full as before; either way the full check decides.
   let candidates = [...certs.entries()];
   try {
-    const probe = new SignedXml({ publicCert: certs[0], getCertFromKeyInfo: () => null });
+    const probe = new SignedXml({ ...(certs[0] === undefined ? {} : { publicCert: certs[0] }), getCertFromKeyInfo: () => null });
     probe.loadSignature(sigEl);
     const canon = (probe as unknown as { getCanonSignedInfoXml(doc: unknown): string }).getCanonSignedInfoXml(doc);
     const value = Buffer.from(String((probe as unknown as { signatureValue?: string }).signatureValue ?? "").replace(/\s+/g, ""), "base64");

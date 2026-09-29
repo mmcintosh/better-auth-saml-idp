@@ -13,8 +13,8 @@ import { buildLogoutResponse, redirectBindingUrl } from "../../src/saml/logout";
 import { decodeAuthnRequest, parseRedirectQuery, verifyMessageSignature } from "../../src/saml/request";
 import { libxml2Validator } from "../../src/saml/validator";
 import { base64url } from "../../src/storage/pending";
-import type { SamlIdpOptions, ServiceProviderConfig } from "../../src/types";
-import { baseOptions, IDP_ENTITY_ID, SP_ACS, SP_ENTITY_ID } from "../support/config";
+import type { ServiceProviderConfig } from "../../src/types";
+import { baseOptions, IDP_ENTITY_ID, SP_ACS, SP_ENTITY_ID, type TestSamlOptions } from "../support/config";
 import { AUTH_BASE, BASE_URL, createHost, createHostDatabase, isWorkerd } from "../support/host";
 import { authnRequestXml, Browser, newRequestId, readAutoPost, redirectUrl, SSO_URL } from "../support/sp";
 
@@ -46,10 +46,10 @@ type Orgs = { a: string; b: string; t: string };
  * A host with tenants on and three organizations: A and B are tenants (created through the API
  * by an admin), C is a plain organization. `code` gives the SPs in code, which may name A and B.
  */
-async function world(o: { code?: (orgs: Orgs) => ServiceProviderConfig[]; saml?: Partial<SamlIdpOptions>; logs?: string[] } = {}) {
+async function world(o: { code?: (orgs: Orgs) => ServiceProviderConfig[]; saml?: TestSamlOptions; logs?: string[] } = {}) {
   const t = `${Date.now().toString(36)}${n++}`;
   const database = await createHostDatabase();
-  const saml = (sps: ServiceProviderConfig[]): Partial<SamlIdpOptions> => ({
+  const saml = (sps: ServiceProviderConfig[]): TestSamlOptions => ({
     registry: { enabled: true, canManage, cacheSeconds: 0 },
     tenants: { enabled: true, cacheSeconds: 0 },
     singleLogout: { enabled: true },
@@ -127,7 +127,7 @@ async function spAccepts(auth: { handler(r: Request): Promise<Response> }, metad
 }
 
 describe("tenants: configuration (D-052)", () => {
-  const tenantOpts = (over: Partial<SamlIdpOptions> = {}) => baseOptions({ registry: { enabled: true }, tenants: { enabled: true }, ...over });
+  const tenantOpts = (over: TestSamlOptions = {}) => baseOptions({ registry: { enabled: true }, tenants: { enabled: true }, ...over });
 
   it("off by default, and an SP can't name a tenant without it", () => {
     expect(() => resolveOptions(baseOptions({ serviceProviders: [{ id: "s", entityId: "e", acsUrls: [SP_ACS], tenant: "org" }] }))).toThrow(/tenant: requires tenants.enabled/);
