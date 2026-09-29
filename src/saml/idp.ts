@@ -1,6 +1,7 @@
 import * as samlify from "samlify";
 import type { ResolvedSamlIdpOptions, ResolvedServiceProvider, SignatureAlgorithm } from "../types";
 import { type IdpIdentity, rootIdentity } from "./identity";
+import { trimSlashes } from "../url";
 
 export const BINDING_REDIRECT = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect";
 export const BINDING_POST = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
@@ -74,15 +75,15 @@ export function createIdp(options: ResolvedSamlIdpOptions, identity: IdpIdentity
  * `samlIdp({ baseURL })` takes the same value as `betterAuth({ baseURL })`.
  */
 export function withBasePath(url: string, basePath: string | undefined = "/api/auth"): string {
-  const trimmed = url.replace(/\/+$/, "");
-  if (new URL(url).pathname.replace(/\/+$/, "") !== "") return trimmed;
+  const trimmed = trimSlashes(url);
+  if (trimSlashes(new URL(url).pathname) !== "") return trimmed;
   if (!basePath || basePath === "/") return trimmed;
-  return `${trimmed}${basePath.startsWith("/") ? basePath : `/${basePath}`}`.replace(/\/+$/, "");
+  return trimSlashes(`${trimmed}${basePath.startsWith("/") ? basePath : `/${basePath}`}`);
 }
 
 /** The Better Auth base URL the IdP's own URLs use: the pinned option, else the request's. */
 export function idpBaseURL(options: ResolvedSamlIdpOptions, requestBaseURL: string): string {
-  return (options.baseURL ?? requestBaseURL).replace(/\/+$/, "");
+  return trimSlashes(options.baseURL ?? requestBaseURL);
 }
 
 const MAX_CACHED_BASE_URLS = 32;

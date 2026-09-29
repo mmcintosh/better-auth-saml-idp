@@ -5,6 +5,7 @@ import { precheckXml } from "../saml/validator";
 import { parseXmlStrict } from "../saml/xml";
 import { type EnvelopedSignatureResult, verifyEnvelopedSignature } from "../saml/xmldsig";
 import { certFromBase64, UsageError } from "./util";
+import { trimSlashes } from "../url";
 
 export const NS = {
   md: "urn:oasis:names:tc:SAML:2.0:metadata",
@@ -54,8 +55,8 @@ export interface IdpMetadata {
 export function metadataUrl(input: string, basePath: string): string {
   const u = new URL(input);
   if (/\/metadata\/?$/.test(u.pathname) || /\/saml2\/idp\/metadata\/[^/]+\/?$/.test(u.pathname)) return u.href;
-  const base = `${u.origin}${u.pathname.replace(/\/+$/, "")}`;
-  const path = u.pathname.replace(/\/+$/, "").endsWith(basePath.replace(/\/+$/, "")) ? "" : basePath.replace(/\/+$/, "");
+  const base = `${u.origin}${trimSlashes(u.pathname)}`;
+  const path = trimSlashes(u.pathname).endsWith(trimSlashes(basePath)) ? "" : trimSlashes(basePath);
   return `${base}${path}/saml2/idp/metadata`;
 }
 

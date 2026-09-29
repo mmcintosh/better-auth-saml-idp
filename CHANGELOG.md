@@ -29,6 +29,11 @@ All notable changes to this project. The format follows [Keep a Changelog](https
   - **R7-6:** a delegated create or update naming another organization gets the same 403 whether or not it is a tenant.
 - **Tenant changes in the audit log** (review 6 I-2): a `tenant.changed` event (`events.onTenantChanged`, and the audit log) when an administrator creates, enables, disables or deletes a tenant, or rotates, activates or retires one of its keys, with who did it.
 
+### Changed
+
+- **Trailing slashes are trimmed with a loop everywhere** (base URLs, the CLI's metadata URL): the last `/\/+$/` uses, which CodeQL flags as quadratic on many slashes, now share the loop `samlIdpClient()` already used (D-037). The inputs are configuration, not requests, so this is tidiness rather than a fix.
+- **Development only:** undici is pinned to 7.29.1 under the Workers test pool (GHSA-3wwx-pv8p-q78v); nothing in the published package uses it.
+
 ## [1.0.2] - 2026-09-29
 
 ### Fixed

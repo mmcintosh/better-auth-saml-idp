@@ -13,6 +13,7 @@ import type {
   SignedParts,
   SessionLimit,
 } from "./types";
+import { trimSlashes } from "./url";
 
 export const NAMEID_EMAIL = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress";
 export const AUTHN_CONTEXT_UNSPECIFIED = "urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified";
@@ -667,7 +668,7 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
 
   return {
     entityId: o.entityId,
-    baseURL: o.baseURL?.replace(/\/+$/, ""),
+    baseURL: o.baseURL === undefined ? undefined : trimSlashes(o.baseURL),
     loginPage: o.loginPage,
     signing: {
       privateKey: o.signing.privateKey,

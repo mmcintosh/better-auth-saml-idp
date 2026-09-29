@@ -8,6 +8,7 @@ import { idpBaseURL, METADATA_PATH, SSO_PATH } from "./idp";
 import { SLO_PATH } from "./logout";
 import type { Tenant, TenantDirectory } from "./tenant-directory";
 import type { KeySecret, TenantKeyStore } from "./tenant-keys";
+import { trimSlashes } from "../url";
 
 export interface IdpIdentity {
   /** The tenant's organization id; null for the root IdP. */
@@ -25,11 +26,10 @@ export interface IdpIdentity {
   metadataUrl: string;
 }
 
-const trim = (url: string) => url.replace(/\/+$/, "");
 
 /** The root IdP: `options.entityId`, and the URLs it has always had. */
 export function rootIdentity(options: ResolvedSamlIdpOptions, baseURL: string): IdpIdentity {
-  const base = trim(baseURL);
+  const base = trimSlashes(baseURL);
   return {
     tenantId: null,
     tenantKey: null,
@@ -47,7 +47,7 @@ export function rootIdentity(options: ResolvedSamlIdpOptions, baseURL: string): 
  * `baseURL` is pinned whenever tenants are on, so these never follow a Host header.
  */
 export function tenantIdentity(options: ResolvedSamlIdpOptions, baseURL: string, tenant: Tenant, signing: ResolvedSamlIdpOptions["signing"] = options.signing): IdpIdentity {
-  const base = trim(baseURL);
+  const base = trimSlashes(baseURL);
   const metadataUrl = `${base}${METADATA_PATH}/${tenant.tenantKey}`;
   return {
     tenantId: tenant.organizationId,

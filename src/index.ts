@@ -25,6 +25,7 @@ import { consumeEndingBySlo, endParticipants, extendParticipants, forgetUserPart
 import { emitWithoutRequest } from "./events";
 import { listSessionParticipantsEndpoint } from "./endpoints/participants";
 import type { SamlIdpOptions } from "./types";
+import { trimSlashes } from "./url";
 
 export { SAML_IDP_ERROR_CODES } from "./errors";
 export { NAMEID_FORMAT } from "./types";
@@ -97,7 +98,7 @@ export const samlIdp = (options: SamlIdpOptions) => {
       if (resolved.baseURL) {
         // Same rule as Better Auth's own baseURL, so the same value can go in both (decision 6).
         resolved.baseURL = withBasePath(resolved.baseURL, ctx.options.basePath);
-        if (typeof ctx.baseURL === "string" && ctx.baseURL && ctx.baseURL.replace(/\/+$/, "") !== resolved.baseURL)
+        if (typeof ctx.baseURL === "string" && ctx.baseURL && trimSlashes(ctx.baseURL) !== resolved.baseURL)
           ctx.logger.warn(
             `[saml-idp] samlIdp baseURL resolves to ${resolved.baseURL} but Better Auth's is ${ctx.baseURL}: the IdP's metadata and Destination check use ${resolved.baseURL}. Usually both should be the same; or leave samlIdp's unset.`,
           );
@@ -105,7 +106,7 @@ export const samlIdp = (options: SamlIdpOptions) => {
       if (resolved.tenants) {
         // A tenant's entity ID names a customer and is pinned by its SPs: it must never follow a
         // Host header (D-052). Better Auth's own baseURL (option or BETTER_AUTH_URL) pins it too.
-        if (!resolved.baseURL && typeof ctx.baseURL === "string" && ctx.baseURL) resolved.baseURL = ctx.baseURL.replace(/\/+$/, "");
+        if (!resolved.baseURL && typeof ctx.baseURL === "string" && ctx.baseURL) resolved.baseURL = trimSlashes(ctx.baseURL);
         const tenantIssues = [
           ...(resolved.baseURL ? [] : ["tenants.enabled: requires a pinned baseURL (samlIdp({ baseURL }) or Better Auth's baseURL): tenant entity IDs must not follow the request's Host header"]),
           // Membership of the tenant's organization is what a tenant is (maintainer decision 2).

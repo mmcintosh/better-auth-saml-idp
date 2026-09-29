@@ -1,5 +1,6 @@
 import type { BetterAuthClientPlugin } from "better-auth/client";
 import type { samlIdp } from "./index";
+import { trimSlashes } from "./url";
 
 type ClientOptions = { baseURL?: string | undefined; basePath?: string | undefined } | undefined;
 /**
@@ -7,13 +8,6 @@ type ClientOptions = { baseURL?: string | undefined; basePath?: string | undefin
  * `better-auth/client`'s BetterFetch as the core one the plugin type uses (D-057).
  */
 type ActionArgs = Parameters<NonNullable<BetterAuthClientPlugin["getActions"]>>;
-
-/** `s` without trailing slashes (a loop: `/\/+$/` is quadratic on many slashes). */
-function trimSlashes(s: string): string {
-  let end = s.length;
-  while (end > 0 && s[end - 1] === "/") end--;
-  return s.slice(0, end);
-}
 
 /** The Better Auth endpoint URL for `path`, from the client's baseURL/basePath. */
 function authUrl(options: ClientOptions, path: string): string {
