@@ -51,7 +51,8 @@ export function selfSignedCertificate(key: KeyObject, o: { commonName: string; d
   const now = o.now ?? new Date();
   const serial = randomBytes(16);
   serial[0] = ((serial[0] ?? 0) & 0x7f) | 0x40; // positive, 16 significant bytes
-  const name = seq(set(seq(oid("2.5.4.3"), utf8(o.commonName))));
+  // RFC 5280 ub-common-name: at most 64 characters, which strict parsers enforce.
+  const name = seq(set(seq(oid("2.5.4.3"), utf8(Array.from(o.commonName).slice(0, 64).join("")))));
   const spki = createPublicKey(key).export({ type: "spki", format: "der" });
   const extensions = explicit(
     3,

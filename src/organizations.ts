@@ -1,6 +1,7 @@
 // Better Auth organization plugin integration (D-031): memberships for per-SP access rules,
 // attribute maps ({ organization: "slugs" | … }) and authorize(). Read through the adapter with
 // the plugin's model keys ("member", "organization"), so renamed tables work.
+import { findManyIn } from "./storage/find-in";
 import type { OrganizationMembership } from "./types";
 
 type Adapter = {
@@ -66,7 +67,7 @@ export async function loadMemberships(adapter: Adapter, userId: string): Promise
   }[];
   if (members.length === 0) return [];
   const ids = [...new Set(members.map((m) => m.organizationId))];
-  const orgs = (await adapter.findMany({ model: "organization", where: [{ field: "id", value: ids, operator: "in" }], limit: MAX_MEMBERSHIPS })) as {
+  const orgs = (await findManyIn(adapter, "organization", "id", ids, 1)) as {
     id: string;
     slug: string;
     name: string;

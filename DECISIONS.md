@@ -65,6 +65,7 @@ A running log of the non-obvious choices, with the options considered and the ev
 - [D-058](#d-058-multi-tenant-idp-phase-2-a-signing-key-per-tenant-2026-09-29): Multi-tenant IdP, phase 2: a signing key per tenant (2026-09-29)
 - [D-059](#d-059-multi-tenant-idp-phase-3-delegated-administration-2026-09-29): Multi-tenant IdP, phase 3: delegated administration (2026-09-29)
 - [D-060](#d-060-review-7-phases-2-and-3-before-release-2026-09-29): Review 7, phases 2 and 3 before release (2026-09-29)
+- [D-061](#d-061-review-8-a-fresh-look-before-110-2026-09-29): Review 8, a fresh look before 1.1.0 (2026-09-29)
 
 ---
 
@@ -1878,3 +1879,32 @@ The design (§8) asks for a review of phases 2 and 3 before they ship. Done in t
   - switching the host back to `keys: "shared"` makes every tenant sign with the shared key again. That's a deliberate host configuration, and delegation is then a startup error;
   - a host can upload the same key pair for two tenants, or the root's. That's host-only, and its own choice.
 - The full suite (1,415 tests) and the adapter matrix on Postgres, MySQL, MongoDB 8.2, Drizzle on Postgres and MySQL, and Prisma on Postgres passed.
+
+## D-061: Review 8, a fresh look before 1.1.0 (2026-09-29)
+
+Before tagging 1.1.0: first a check for new advisories and alerts, then a fresh read of the diff since 1.0.2 (phases 2 and 3 and the review 7 fixes).
+
+**Advisories and alerts:**
+- No new Better Auth advisory since July; 1.7.6 (2026-09-24) isn't a security release. The shipped XML dependencies are on the patched `@xmldom/xmldom` (0.9.12 and 0.8.15; GHSA-c7q8-3ch8-vqpv and its two siblings, 2026-09-08). No open Dependabot alerts.
+- OSV-Scanner: undici 7.29.0 (GHSA-3wwx-pv8p-q78v, moderate), development only, under `@cloudflare/vitest-pool-workers` through miniflare, which pins it exactly even in its newest release. Fix: a pnpm override to 7.29.1.
+- CodeQL: four polynomial-regex alerts on `/\/+$/` in `src/index.ts` and `src/saml/idp.ts`, the pattern D-037 replaced in the client. The inputs are configuration and Better Auth's own base URL (a Host header has no `/`), so this is tidiness: one loop helper, `src/url.ts`, now trims trailing slashes everywhere.
+
+**Findings:**
+- **R8-1 (Medium): `IN (…)` lookups over D1's 100 bound parameters.** D1 refuses a statement with more than 100 bound parameters ("too many SQL variables"; miniflare enforces the same). Two lookups put every id in one `IN`:
+  - the tenant list's key rows (R7-3's fix): `GET /saml-idp/tenants` failed with per-tenant keys and 100 or more tenants;
+  - a user's organizations (`loadMemberships`, since D-031): sign-in to an SP with organization attributes, and every delegated registry request, failed for a user in 100 or more organizations.
+  - Fix: `findManyIn` reads in batches of 50, with the exact-match filter (R4-L8).
+  - Test: 120 tenants, and a user in 120 organizations, on Node and workerd (D1); both failed on workerd first.
+- **R8-2 (Low): a tenant certificate's CN could exceed 64 characters.** It is `saml-idp tenant <tenantKey>`, and a tenant key may be 64 characters: up to 80, past RFC 5280's ub-common-name, which strict X.509 parsers enforce.
+  - Fix: the CN is cut to 64 characters (`selfSignedCertificate`, so the CLI's `keygen` too).
+  - Test: a 64-character tenant key's certificate.
+- **R8-3 (Low): `rotate` generated an RSA 3072 key before checking for an existing next key,** so a refused rotation still spent the CPU (hundreds of milliseconds, more on Workers).
+  - Fix: the check comes first.
+- **Checked and fine:**
+  - `hostManager` with neither `canManage` nor `permissions` (delegation alone) is false, not true;
+  - every caller of a tenant's identity handles an unusable key (SSO, SLO, metadata, issuance);
+  - `activate` and `rotate` racing each other: the UNIQUE state slots decide, and no intermediate state falls back to the shared key;
+  - the tenant delete removes its key rows after retiring its tenant key;
+  - uploaded keys: RSA of at least 2048 bits, matching the certificate, encrypted PEM refused.
+- **Info, not changed:** a tenant's audit view shows `denied` rows for users outside its organization who were sent to its SSO URL (their user id, IP address and user agent). The request came to the tenant's own IdP, and the rows hold opaque ids, no email.
+- The full suite (1,421 tests) passed.

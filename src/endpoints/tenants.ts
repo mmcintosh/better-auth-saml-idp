@@ -25,6 +25,7 @@ import {
   type TenantKeyState,
 } from "../saml/tenant-keys";
 import { emit } from "../events";
+import { findManyIn } from "../storage/find-in";
 import type { TenantRecord, TenantSigningKeyInfo } from "../types";
 import { keySecret, type PluginState } from "./issue";
 import { access, adapterOf, fail, inScope, manager } from "./registry";
@@ -152,9 +153,9 @@ export function tenantEndpoints(state: PluginState) {
   const keysOf = async (ctx: GenericEndpointContext, tenantIds: string[]) => {
     const by = new Map<string, TenantKeyRow[]>();
     if (!state.tenantKeys || tenantIds.length === 0) return by;
-    // The listed tenants' rows only, in the query (R7-3); a tenant has at most nine (R7-1).
-    const rows = (await adapterOf(ctx).findMany({ model: TENANT_KEY_MODEL, where: [{ field: "tenantId", value: tenantIds, operator: "in" }], limit: tenantIds.length * 10 + 10 })) as TenantKeyRow[];
-    for (const r of rows) if (tenantIds.includes(r.tenantId)) by.set(r.tenantId, [...(by.get(r.tenantId) ?? []), r]);
+    // The listed tenants' rows only, in the query (R7-3), in batches for D1; a tenant has at most nine (R7-1).
+    const rows = (await findManyIn(adapterOf(ctx), TENANT_KEY_MODEL, "tenantId", tenantIds, 10)) as TenantKeyRow[];
+    for (const r of rows) by.set(r.tenantId, [...(by.get(r.tenantId) ?? []), r]);
     return by;
   };
 
@@ -322,8 +323,9 @@ export function tenantEndpoints(state: PluginState) {
               const { privateKey, certificate } = ctx.body;
               if ((privateKey === undefined) !== (certificate === undefined))
                 throw fail("BAD_REQUEST", "INVALID_TENANT_SIGNING_KEY", { issues: ["privateKey and certificate: give both, or neither to generate a key"] });
-              const pair = privateKey !== undefined && certificate !== undefined ? { privateKeyPem: privateKey, certificate } : generateTenantKey(row.tenantKey);
+              // Before generating: an RSA 3072 key costs real CPU, which a refused request shouldn't spend.
               if ((await keyRows(ctx, row.organizationId)).some((k) => k.state === "next")) throw fail("CONFLICT", "TENANT_SIGNING_KEY_EXISTS");
+              const pair = privateKey !== undefined && certificate !== undefined ? { privateKeyPem: privateKey, certificate } : generateTenantKey(row.tenantKey);
               let created: TenantKeyRow;
               try {
                 created = await writeKey(ctx, row.organizationId, "next", newKid(), pair.privateKeyPem, pair.certificate, user.id);

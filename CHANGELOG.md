@@ -29,6 +29,12 @@ All notable changes to this project. The format follows [Keep a Changelog](https
   - **R7-6:** a delegated create or update naming another organization gets the same 403 whether or not it is a tenant.
 - **Tenant changes in the audit log** (review 6 I-2): a `tenant.changed` event (`events.onTenantChanged`, and the audit log) when an administrator creates, enables, disables or deletes a tenant, or rotates, activates or retires one of its keys, with who did it.
 
+### Fixed
+
+- **More than 100 values in one lookup on D1** (review 8 R8-1, D-061). D1 allows 100 bound parameters per statement. With per-tenant keys, the tenant list failed with 100 or more tenants. For a user in 100 or more organizations, sign-in to an SP with organization attributes, and delegated registry requests, failed too; that one was in 1.0 already. Both now read in batches.
+- **Tenant certificates' common name is at most 64 characters** (R8-2), as RFC 5280 requires; with a long tenant key it could reach 80. The CLI's `keygen` applies the same cap.
+- **A refused key rotation no longer generates a key first** (R8-3).
+
 ### Changed
 
 - **Trailing slashes are trimmed with a loop everywhere** (base URLs, the CLI's metadata URL): the last `/\/+$/` uses, which CodeQL flags as quadratic on many slashes, now share the loop `samlIdpClient()` already used (D-037). The inputs are configuration, not requests, so this is tidiness rather than a fix.
