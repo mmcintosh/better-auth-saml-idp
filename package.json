@@ -36,6 +36,7 @@
     "prisma": "6.19.3",
     "publint": "^0.3.24",
     "typescript": "^7.0.2",
+    "typescript-5": "npm:typescript@5.9.3",
     "vitest": "^4.1.11",
     "wrangler": "^4.143.0"
   },
@@ -51,7 +52,7 @@
     "build": "node scripts/build.mjs",
     "prepare": "node scripts/build.mjs",
     "docs:check": "node scripts/check-links.mjs",
-    "pack:check": "pnpm build && tsc -p tsconfig.strict-host.json && publint --strict && attw --pack . --profile esm-only",
+    "pack:check": "pnpm build && tsc -p tsconfig.strict-host.json && node node_modules/typescript-5/bin/tsc -p tsconfig.strict-host.json && publint --strict && attw --pack . --profile esm-only",
     "lint": "biome lint --error-on-warnings"
   },
   "peerDependencies": {

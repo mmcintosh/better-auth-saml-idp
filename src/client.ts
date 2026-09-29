@@ -2,6 +2,11 @@ import type { BetterAuthClientPlugin } from "better-auth/client";
 import type { samlIdp } from "./index";
 
 type ClientOptions = { baseURL?: string | undefined; basePath?: string | undefined } | undefined;
+/**
+ * getActions' parameters, taken from BetterAuthClientPlugin itself: TypeScript 5 doesn't treat
+ * `better-auth/client`'s BetterFetch as the core one the plugin type uses (D-057).
+ */
+type ActionArgs = Parameters<NonNullable<BetterAuthClientPlugin["getActions"]>>;
 
 /** `s` without trailing slashes (a loop: `/\/+$/` is quadratic on many slashes). */
 function trimSlashes(s: string): string {
@@ -37,7 +42,7 @@ export const samlIdpClient = () =>
   ({
     id: "saml-idp",
     $InferServerPlugin: {} as ReturnType<typeof samlIdp>,
-    getActions: (_$fetch, _$store, options) => ({
+    getActions: (_$fetch: ActionArgs[0], _$store: ActionArgs[1], options: ActionArgs[2]) => ({
       samlIdp: {
         /** URL of IdP-initiated logout (`singleLogout.enabled`): every SP, then `returnTo`. */
         logoutUrl: (o: { returnTo?: string } = {}) =>
