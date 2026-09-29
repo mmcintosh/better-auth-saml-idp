@@ -108,7 +108,8 @@ const MAX_CACHED_TENANTS = 256;
 export function tenantIdpCache(options: ResolvedSamlIdpOptions) {
   const cache = lru(MAX_CACHED_TENANTS);
   return (identity: IdpIdentity) =>
-    cache(`${identity.entityId}\u0000${identity.tenantId}`, () =>
+    // The certificates are in the key: a rotated tenant key gets a new IdP (D-058).
+    cache(`${identity.entityId}\u0000${identity.tenantId}\u0000${identity.signing.certificate}\u0000${identity.signing.additionalCertificates.join("\u0000")}`, () =>
       createIdp(options, identity, options.serviceProviders.filter((sp) => sp.tenantId === identity.tenantId)),
     );
 }

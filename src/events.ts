@@ -104,7 +104,23 @@ export interface SessionEndedEvent extends EventBase {
   truncated: boolean;
 }
 
-export type SamlIdpEvent = AssertionIssuedEvent | DeniedEvent | LogoutEvent | SessionEndedEvent;
+/**
+ * A host administrator changed a tenant or its keys (D-052, D-058). Stored in the audit log
+ * with the acting user; `kid` names the key for key actions. `forced` marks an activation that
+ * skipped `minPublishedSeconds` (a leaked key).
+ */
+export interface TenantChangedEvent extends EventBase {
+  type: "tenant.changed";
+  action: "created" | "enabled" | "disabled" | "deleted" | "key.rotated" | "key.activated" | "key.retired";
+  /** The acting administrator. */
+  userId: string;
+  tenantId: string;
+  tenantKey: string;
+  kid?: string | undefined;
+  forced?: boolean | undefined;
+}
+
+export type SamlIdpEvent = AssertionIssuedEvent | DeniedEvent | LogoutEvent | SessionEndedEvent | TenantChangedEvent;
 
 export interface SamlIdpEventHandlers {
   onAssertionIssued?: ((event: AssertionIssuedEvent) => void | Promise<void>) | undefined;
@@ -115,6 +131,8 @@ export interface SamlIdpEventHandlers {
    * tracking it needs (the `samlIdpSessionParticipant` table), even without `singleLogout`.
    */
   onSessionEnded?: ((event: SessionEndedEvent) => void | Promise<void>) | undefined;
+  /** A host administrator changed a tenant or its keys (D-058). */
+  onTenantChanged?: ((event: TenantChangedEvent) => void | Promise<void>) | undefined;
 }
 
 export interface AuditLogOptions {
@@ -144,13 +162,15 @@ type EventInput =
   | Omit<AssertionIssuedEvent, keyof EventBase>
   | Omit<DeniedEvent, keyof EventBase>
   | Omit<LogoutEvent, keyof EventBase>
-  | Omit<SessionEndedEvent, keyof EventBase>;
+  | Omit<SessionEndedEvent, keyof EventBase>
+  | Omit<TenantChangedEvent, keyof EventBase>;
 
 const HANDLER = {
   "assertion.issued": "onAssertionIssued",
   denied: "onDenied",
   logout: "onLogout",
   "session.ended": "onSessionEnded",
+  "tenant.changed": "onTenantChanged",
 } as const satisfies Record<SamlIdpEvent["type"], keyof SamlIdpEventHandlers>;
 
 /** What delivery needs: the pieces of Better Auth's context, with or without a request. */

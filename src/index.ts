@@ -12,6 +12,7 @@ import { nameIdFieldProblem } from "./nameid";
 import { resolveOptions, SamlIdpConfigError } from "./options";
 import { idpCache, SSO_PATH, tenantIdpCache, withBasePath } from "./saml/idp";
 import { TenantDirectory } from "./saml/tenant-directory";
+import { TenantKeyStore } from "./saml/tenant-keys";
 import { backfillEndpoint, organizationDeletedHook, tenantEndpoints } from "./endpoints/tenants";
 import { tenantOf } from "./endpoints/issue";
 import { samlIdpSchema } from "./schema";
@@ -59,20 +60,22 @@ export type {
   ServiceProviderRecord,
   TenantOptions,
   TenantRecord,
+  TenantSigningKeyInfo,
   SignatureAlgorithm,
   SignedParts,
   SigningConfig,
 } from "./types";
 export type { SamlIdpErrorCode } from "./errors";
 export type { StoredServiceProviderConfig } from "./options";
-export type { AssertionIssuedEvent, AuditLogOptions, DeniedEvent, LogoutEvent, SamlIdpEvent, SamlIdpEventHandlers, SessionEndedEvent } from "./events";
+export type { AssertionIssuedEvent, AuditLogOptions, DeniedEvent, LogoutEvent, SamlIdpEvent, SamlIdpEventHandlers, SessionEndedEvent, TenantChangedEvent } from "./events";
 
 export const samlIdp = (options: SamlIdpOptions) => {
   const resolved = resolveOptions(options);
   const directory = new SpDirectory(resolved.serviceProviders, resolved);
   const getIdp = idpCache(resolved);
   const tenants = resolved.tenants ? new TenantDirectory(resolved.tenants.cacheMs) : undefined;
-  const state = { options: resolved, directory, metadata: new SpMetadataCache(resolved.schemaValidator), tenants };
+  const tenantKeys = resolved.tenants?.perTenantKeys ? new TenantKeyStore(resolved.tenants.cacheMs) : undefined;
+  const state = { options: resolved, directory, metadata: new SpMetadataCache(resolved.schemaValidator), tenants, tenantKeys };
 
   return {
     id: "saml-idp",
@@ -211,7 +214,7 @@ export const samlIdp = (options: SamlIdpOptions) => {
     // A fresh schema object per plugin: mergeSchema mutates its first argument, so a shared
     // module-level object would leak one instance's renames into every other (finding #10).
     schema: mergeSchema(
-      samlIdpSchema({ registry: resolved.registry !== undefined, sessionTracking: resolved.sessionTracking, auditLog: resolved.auditLog !== undefined, tenants: resolved.tenants !== undefined }),
+      samlIdpSchema({ registry: resolved.registry !== undefined, sessionTracking: resolved.sessionTracking, auditLog: resolved.auditLog !== undefined, tenants: resolved.tenants !== undefined, tenantKeys: resolved.tenants?.perTenantKeys === true }),
       resolved.schema,
     ),
     $ERROR_CODES: SAML_IDP_ERROR_CODES,

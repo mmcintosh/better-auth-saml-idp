@@ -29,6 +29,7 @@ export type Adapter = {
   findMany(a: { model: string; where?: { field: string; value: unknown }[]; limit?: number; offset?: number; sortBy?: { field: string; direction: "asc" | "desc" } }): Promise<unknown[]>;
   update(a: { model: string; where: { field: string; value: unknown }[]; update: Record<string, unknown> }): Promise<unknown>;
   delete(a: { model: string; where: { field: string; value: unknown }[] }): Promise<void>;
+  deleteMany(a: { model: string; where: { field: string; value: unknown }[] }): Promise<number>;
 };
 
 export const adapterOf = (ctx: GenericEndpointContext) => ctx.context.adapter as unknown as Adapter;

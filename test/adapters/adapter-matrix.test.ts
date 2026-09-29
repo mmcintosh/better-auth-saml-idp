@@ -117,7 +117,8 @@ const optionsFor = (database: unknown, tenants = false) => ({
           registry: { enabled: true, canManage: ({ user }) => user.role === "admin", cacheSeconds: 0 },
           singleLogout: { enabled: true },
           auditLog: { enabled: true },
-          ...(tenants ? { tenants: { enabled: true, cacheSeconds: 0 } } : {}),
+          // Per-tenant keys (D-058): their table and its UNIQUE state key are in the schema too.
+          ...(tenants ? { tenants: { enabled: true, keys: "per-tenant" as const, cacheSeconds: 0, minPublishedSeconds: 0 } } : {}),
         }),
       ),
     ],
@@ -379,6 +380,39 @@ describe.skipIf(!KIND)(`adapter matrix: ${KIND}, tenants`, { timeout: 60_000 }, 
     const again = await post("/tenants/create", { organizationId: td.id, tenantKey: "retired-key" });
     expect(again.status).toBe(409);
     expect(((await again.json()) as { code?: string }).code).toBe("TENANT_KEY_RETIRED");
+  });
+
+  it("per-tenant keys (D-058): the database's UNIQUE state key lets exactly one of concurrent rotations win; the activated key signs, sealed in the row", async () => {
+    const c = (await tauth.$context) as any;
+    const admin = new Browser(tauth);
+    const adminUser = await admin.signUp();
+    await c.adapter.update({ model: "user", where: [{ field: "id", value: adminUser.id }], update: { role: "admin" } });
+    const post = (path: string, body: unknown) =>
+      admin.fetch(`${AUTH_BASE}/saml-idp${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const user = new Browser(tauth);
+    const u = await user.signUp();
+    const o = await c.adapter.create({ model: "organization", data: { name: "tk", slug: `tk-${Date.now()}`, createdAt: new Date() } });
+    const org = String(o.id);
+    await c.adapter.create({ model: "member", data: { organizationId: org, userId: u.id, role: "member", createdAt: new Date() } });
+    const created = (await (await post("/tenants/create", { organizationId: org })).json()) as any;
+    expect(created.tenant.signing).toBe("own");
+    const sp = { entityId: `https://keys-${Date.now()}.test/sp`, acsUrls: ["https://keys.test/acs"] };
+    expect((await post("/service-providers/create", { serviceProvider: { id: `keys-sp-${Date.now()}`, ...sp, tenant: org } })).status).toBe(200);
+
+    const racing = await Promise.all(Array.from({ length: 5 }, () => post("/tenants/keys/rotate", { organizationId: org })));
+    expect(racing.filter((r) => r.status === 200)).toHaveLength(1);
+    expect(racing.filter((r) => r.status === 409)).toHaveLength(4);
+    const rows = (await c.adapter.findMany({ model: "samlIdpTenantKey", where: [{ field: "tenantId", value: org }] })) as any[];
+    expect(rows.map((r) => r.state).sort()).toEqual(["active", "next"]);
+    for (const r of rows) expect(r.encryptedPrivateKey).not.toContain("PRIVATE KEY");
+
+    const activated = (await (await post("/tenants/keys/activate", { organizationId: org })).json()) as any;
+    const active = activated.tenant.keys.find((k: any) => k.state === "active");
+    const sso = `${AUTH_BASE}/saml2/idp/sso/${org}`;
+    const url = (await redirectUrl(authnRequestXml({ issuer: sp.entityId, acsUrl: sp.acsUrls[0], destination: sso }).xml)).replace(`${AUTH_BASE}/saml2/idp/sso`, sso);
+    const { xml } = await readAutoPost(await user.fetch(url));
+    const certInXml = /<(?:ds:)?X509Certificate>([^<]+)</.exec(xml)?.[1]?.replace(/\s+/g, "");
+    expect(certInXml).toBe(active.certificate.replace(/-----[^-]+-----|\s+/g, ""));
   });
 });
 

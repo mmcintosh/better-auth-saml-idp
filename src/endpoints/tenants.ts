@@ -3,21 +3,53 @@
 // manager check (`samlTenant` in `samlIdpStatements` with `registry.permissions`). Nothing makes
 // a tenant automatically (maintainer decision 1), and an organization's own administrators can't
 // manage one while tenants share the signing key (multi-tenant design §5.1).
+import { X509Certificate } from "node:crypto";
 import type { GenericEndpointContext } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware, sensitiveSessionMiddleware } from "better-auth/api";
 import * as z from "zod";
-import { tenantIdentity } from "../saml/identity";
+import { rootIdentity, tenantIdentity } from "../saml/identity";
 import { idpBaseURL } from "../saml/idp";
 import { lookupKeyOf, SP_MODEL, type StoredSpRow, isEnabled } from "../saml/sp-directory";
 import { instant, RETIRED_KEY_MODEL, TENANT_KEY, TENANT_MODEL, type TenantRow } from "../saml/tenant-directory";
-import type { TenantRecord } from "../types";
-import type { PluginState } from "./issue";
+import {
+  checkKeyPair,
+  encryptTenantKey,
+  generateTenantKey,
+  SHARED_KID,
+  stateKeyOf,
+  TENANT_KEY_MODEL,
+  TenantKeyError,
+  type TenantKeyRow,
+  type TenantKeyState,
+} from "../saml/tenant-keys";
+import { emit } from "../events";
+import type { TenantRecord, TenantSigningKeyInfo } from "../types";
+import { keySecret, type PluginState } from "./issue";
 import { adapterOf, fail, manager } from "./registry";
 
 const MAX_LIST = 1000;
 const orgIdSchema = z.string().min(1).max(256);
 
-function record(ctx: GenericEndpointContext, state: PluginState, row: TenantRow): TenantRecord {
+const date = (v: unknown) => new Date(v as string | number | Date);
+const ORDER: Record<TenantKeyState, number> = { next: 0, active: 1, previous: 2, retired: 3 };
+
+/** A tenant's key rows as the API shows them: no private material, next first. */
+function keyInfo(state: PluginState, rows: TenantKeyRow[]): TenantSigningKeyInfo[] {
+  const minMs = state.options.tenants?.minPublishedMs ?? 0;
+  return [...rows]
+    .sort((a, b) => ORDER[a.state] - ORDER[b.state] || date(b.createdAt).getTime() - date(a.createdAt).getTime())
+    .map((r) => ({
+      kid: r.kid,
+      state: r.state,
+      certificate: r.certificate,
+      notAfter: date(r.notAfter),
+      createdAt: date(r.createdAt),
+      activatedAt: r.activatedAt ? date(r.activatedAt) : null,
+      ...(r.state === "next" ? { activatableAt: new Date(date(r.createdAt).getTime() + minMs) } : {}),
+    }));
+}
+
+function record(ctx: GenericEndpointContext, state: PluginState, row: TenantRow, keys?: TenantKeyRow[]): TenantRecord {
   const identity = tenantIdentity(state.options, idpBaseURL(state.options, ctx.context.baseURL), row);
   return {
     organizationId: row.organizationId,
@@ -30,8 +62,20 @@ function record(ctx: GenericEndpointContext, state: PluginState, row: TenantRow)
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     updatedBy: row.updatedBy ?? null,
+    ...(state.tenantKeys && keys
+      ? { signing: keys.some((k) => k.state === "active") ? ("own" as const) : ("shared" as const), keys: keyInfo(state, keys) }
+      : {}),
   };
 }
+
+/** A tenant's key rows, read now (not the per-isolate cache): exactly its own, whatever the collation. */
+async function keyRows(ctx: GenericEndpointContext, tenantId: string): Promise<TenantKeyRow[]> {
+  const rows = (await adapterOf(ctx).findMany({ model: TENANT_KEY_MODEL, where: [{ field: "tenantId", value: tenantId }], limit: 100 })) as TenantKeyRow[];
+  return rows.filter((r) => r.tenantId === tenantId);
+}
+
+/** A new key row's id in URLs and logs: short, random, never reused. */
+const newKid = () => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(9)))).replace(/\+/g, "-").replace(/\//g, "_");
 
 /** The tenant row of exactly this organization (a case-insensitive collation must not widen it, R4-L8). */
 async function findTenant(ctx: GenericEndpointContext, organizationId: string): Promise<TenantRow | null> {
@@ -47,9 +91,58 @@ async function retired(ctx: GenericEndpointContext, tenantKey: string): Promise<
 
 export function tenantEndpoints(state: PluginState) {
   const audit = (ctx: GenericEndpointContext, what: string) => ctx.context.logger.info(`[saml-idp] tenants: ${what}`);
+  /** Logged, and a `tenant.changed` event (its handler and the audit log, review 6 I-2). */
+  const changedBy = (
+    ctx: GenericEndpointContext,
+    userId: string,
+    row: Pick<TenantRow, "organizationId" | "tenantKey">,
+    action: "created" | "enabled" | "disabled" | "deleted" | "key.rotated" | "key.activated" | "key.retired",
+    what: string,
+    extra: { kid?: string; forced?: boolean } = {},
+  ) => {
+    audit(ctx, `user ${userId} ${what}`);
+    emit(ctx, state.options, { type: "tenant.changed", action, userId, tenantId: row.organizationId, tenantKey: row.tenantKey, ...extra });
+  };
   const changed = () => {
     state.tenants?.invalidate();
+    state.tenantKeys?.invalidate();
     state.directory.invalidate();
+  };
+  /** A key row, its private key sealed to this tenant and kid (D-058). The pair is checked first. */
+  const writeKey = async (ctx: GenericEndpointContext, tenantId: string, keyState: TenantKeyState, kid: string, privateKeyPem: string, certificate: string, userId: string, now = new Date()) => {
+    const { notAfter } = checkKeyPair(privateKeyPem, certificate);
+    const data = {
+      tenantId,
+      kid,
+      state: keyState,
+      stateKey: stateKeyOf(tenantId, keyState),
+      encryptedPrivateKey: await encryptTenantKey(keySecret(ctx, state), tenantId, kid, privateKeyPem),
+      certificate,
+      notAfter,
+      createdAt: now,
+      activatedAt: keyState === "active" ? now : null,
+      updatedBy: userId,
+    };
+    const created = (await adapterOf(ctx).create({ model: TENANT_KEY_MODEL, data })) as { id?: unknown } | null;
+    return { id: String(created?.id), ...data } as TenantKeyRow;
+  };
+  /** Move a row to another state; `next`/`active` take the tenant's UNIQUE slot, others free it. */
+  const moveKey = (ctx: GenericEndpointContext, row: TenantKeyRow, to: TenantKeyState, update: Record<string, unknown> = {}) =>
+    adapterOf(ctx).update({ model: TENANT_KEY_MODEL, where: [{ field: "id", value: row.id }], update: { state: to, stateKey: stateKeyOf(row.tenantId, to), ...update } });
+  /** The tenant of a key request, as the manager reads it. */
+  const tenantFor = async (ctx: GenericEndpointContext, organizationId: string) => {
+    const row = await findTenant(ctx, organizationId);
+    if (!row) throw fail("NOT_FOUND", "TENANT_NOT_FOUND");
+    return row;
+  };
+
+  /** Every key row of the listed tenants in one read, grouped by tenant. */
+  const keysOf = async (ctx: GenericEndpointContext, tenantIds: string[]) => {
+    const by = new Map<string, TenantKeyRow[]>();
+    if (!state.tenantKeys || tenantIds.length === 0) return by;
+    const rows = (await adapterOf(ctx).findMany({ model: TENANT_KEY_MODEL, limit: tenantIds.length * 20 + 100 })) as TenantKeyRow[];
+    for (const r of rows) if (tenantIds.includes(r.tenantId)) by.set(r.tenantId, [...(by.get(r.tenantId) ?? []), r]);
+    return by;
   };
 
   return {
@@ -59,7 +152,8 @@ export function tenantEndpoints(state: PluginState) {
       async (ctx) => {
         await manager(ctx, state, "list", "samlTenant");
         const rows = (await adapterOf(ctx).findMany({ model: TENANT_MODEL, limit: MAX_LIST, sortBy: { field: "organizationId", direction: "asc" } })) as TenantRow[];
-        return ctx.json({ tenants: rows.map((r) => record(ctx, state, r)) });
+        const keys = await keysOf(ctx, rows.map((r) => r.organizationId));
+        return ctx.json({ tenants: rows.map((r) => record(ctx, state, r, keys.get(r.organizationId) ?? [])) });
       },
     ),
 
@@ -70,7 +164,7 @@ export function tenantEndpoints(state: PluginState) {
         await manager(ctx, state, "read", "samlTenant");
         const row = await findTenant(ctx, ctx.query.organizationId);
         if (!row) throw fail("NOT_FOUND", "TENANT_NOT_FOUND");
-        return ctx.json({ tenant: record(ctx, state, row) });
+        return ctx.json({ tenant: record(ctx, state, row, state.tenantKeys ? await keyRows(ctx, row.organizationId) : undefined) });
       },
     ),
 
@@ -108,6 +202,10 @@ export function tenantEndpoints(state: PluginState) {
         }
         // A deleted tenant's key is never used again: its SPs still trust its entity ID (R6-2).
         if (await retired(ctx, tenantKey)) throw fail("CONFLICT", "TENANT_KEY_RETIRED");
+        // With per-tenant keys a new tenant signs with its own key from the start (D-058): made
+        // before the tenant, so a failure leaves nothing behind. No SP trusts it yet, so it is
+        // active at once.
+        const generated = state.tenantKeys ? generateTenantKey(tenantKey) : undefined;
         const now = new Date();
         const data = { organizationId, tenantKey, organizationCreatedAt: new Date(organizationCreatedAt), enabled: ctx.body.enabled ?? true, createdAt: now, updatedAt: now, updatedBy: user.id };
         let created: { id?: unknown } | null;
@@ -125,9 +223,18 @@ export function tenantEndpoints(state: PluginState) {
           await adapterOf(ctx).delete({ model: TENANT_MODEL, where: [{ field: "id", value: String(created?.id) }] });
           throw fail("CONFLICT", "TENANT_KEY_RETIRED");
         }
+        let keys: TenantKeyRow[] | undefined;
+        if (generated) {
+          try {
+            keys = [await writeKey(ctx, organizationId, "active", newKid(), generated.privateKeyPem, generated.certificate, user.id, now)];
+          } catch (e) {
+            await adapterOf(ctx).delete({ model: TENANT_MODEL, where: [{ field: "id", value: String(created?.id) }] });
+            throw e;
+          }
+        }
         changed();
-        audit(ctx, `user ${user.id} created tenant ${tenantKey} for organization ${organizationId}${data.enabled ? "" : ", disabled"}`);
-        return ctx.json({ tenant: record(ctx, state, { id: "", ...data }) });
+        changedBy(ctx, user.id, data, "created", `created tenant ${tenantKey} for organization ${organizationId}${data.enabled ? "" : ", disabled"}${keys ? `, with key ${keys[0]?.kid}` : ""}`);
+        return ctx.json({ tenant: record(ctx, state, { id: "", ...data }, keys) });
       },
     ),
 
@@ -142,8 +249,8 @@ export function tenantEndpoints(state: PluginState) {
         const update = { enabled: ctx.body.enabled, updatedAt: new Date(), updatedBy: user.id };
         await adapterOf(ctx).update({ model: TENANT_MODEL, where: [{ field: "id", value: row.id }], update });
         changed();
-        audit(ctx, `user ${user.id} ${update.enabled ? "enabled" : "disabled"} tenant ${row.tenantKey}`);
-        return ctx.json({ tenant: record(ctx, state, { ...row, ...update }) });
+        changedBy(ctx, user.id, row, update.enabled ? "enabled" : "disabled", `${update.enabled ? "enabled" : "disabled"} tenant ${row.tenantKey}`);
+        return ctx.json({ tenant: record(ctx, state, { ...row, ...update }, state.tenantKeys ? await keyRows(ctx, row.organizationId) : undefined) });
       },
     ),
 
@@ -163,11 +270,128 @@ export function tenantEndpoints(state: PluginState) {
         if (!(await retired(ctx, row.tenantKey)))
           await adapterOf(ctx).create({ model: RETIRED_KEY_MODEL, data: { tenantKey: row.tenantKey, organizationId: row.organizationId, retiredAt: new Date(), retiredBy: user.id } });
         await adapterOf(ctx).delete({ model: TENANT_MODEL, where: [{ field: "id", value: row.id }] });
+        // Its signing keys go with it (D-058): nothing can sign as a deleted tenant.
+        if (state.tenantKeys) await adapterOf(ctx).deleteMany({ model: TENANT_KEY_MODEL, where: [{ field: "tenantId", value: row.organizationId }] });
         changed();
-        audit(ctx, `user ${user.id} deleted tenant ${row.tenantKey} (organization ${row.organizationId}); the key is retired`);
+        changedBy(ctx, user.id, row, "deleted", `deleted tenant ${row.tenantKey} (organization ${row.organizationId}); the key is retired`);
         return ctx.json({ deleted: row.organizationId });
       },
     ),
+
+    // Per-tenant signing keys (D-058): the three-step rotation of D-019, per tenant. `rotate`
+    // publishes a next key; `activate` makes it sign once it has been published for
+    // `minPublishedSeconds` (or with `force`, for a leaked key); `retire` stops publishing the old one.
+    ...(state.tenantKeys
+      ? {
+          samlIdpListTenantKeys: createAuthEndpoint(
+            "/saml-idp/tenants/keys",
+            { method: "GET", use: [sensitiveSessionMiddleware], query: z.object({ organizationId: orgIdSchema }) },
+            async (ctx) => {
+              await manager(ctx, state, "read", "samlTenant");
+              const row = await tenantFor(ctx, ctx.query.organizationId);
+              return ctx.json({ tenant: record(ctx, state, row, await keyRows(ctx, row.organizationId)) });
+            },
+          ),
+
+          /** A next key, generated (RSA 3072) or uploaded, published next to the active one. */
+          samlIdpRotateTenantKey: createAuthEndpoint(
+            "/saml-idp/tenants/keys/rotate",
+            {
+              method: "POST",
+              use: [sensitiveSessionMiddleware],
+              body: z.object({ organizationId: orgIdSchema, privateKey: z.string().max(20_000).optional(), certificate: z.string().max(20_000).optional() }).strict(),
+            },
+            async (ctx) => {
+              const user = await manager(ctx, state, "update", "samlTenant");
+              const row = await tenantFor(ctx, ctx.body.organizationId);
+              const { privateKey, certificate } = ctx.body;
+              if ((privateKey === undefined) !== (certificate === undefined))
+                throw fail("BAD_REQUEST", "INVALID_TENANT_SIGNING_KEY", { issues: ["privateKey and certificate: give both, or neither to generate a key"] });
+              const pair = privateKey !== undefined && certificate !== undefined ? { privateKeyPem: privateKey, certificate } : generateTenantKey(row.tenantKey);
+              if ((await keyRows(ctx, row.organizationId)).some((k) => k.state === "next")) throw fail("CONFLICT", "TENANT_SIGNING_KEY_EXISTS");
+              let created: TenantKeyRow;
+              try {
+                created = await writeKey(ctx, row.organizationId, "next", newKid(), pair.privateKeyPem, pair.certificate, user.id);
+              } catch (e) {
+                if (e instanceof TenantKeyError) throw fail("BAD_REQUEST", "INVALID_TENANT_SIGNING_KEY", { issues: [e.message] });
+                // The UNIQUE state key decides between two concurrent rotations.
+                if ((await keyRows(ctx, row.organizationId)).some((k) => k.state === "next")) throw fail("CONFLICT", "TENANT_SIGNING_KEY_EXISTS");
+                throw e;
+              }
+              changed();
+              changedBy(ctx, user.id, row, "key.rotated", `published next key ${created.kid} for tenant ${row.tenantKey}`, { kid: created.kid });
+              return ctx.json({ tenant: record(ctx, state, row, await keyRows(ctx, row.organizationId)) });
+            },
+          ),
+
+          /**
+           * The next key signs; the active one (or, for a tenant's first key, the shared one) stays
+           * published as previous, and an older previous is retired.
+           */
+          samlIdpActivateTenantKey: createAuthEndpoint(
+            "/saml-idp/tenants/keys/activate",
+            { method: "POST", use: [sensitiveSessionMiddleware], body: z.object({ organizationId: orgIdSchema, force: z.boolean().optional() }).strict() },
+            async (ctx) => {
+              const user = await manager(ctx, state, "update", "samlTenant");
+              const row = await tenantFor(ctx, ctx.body.organizationId);
+              const keys = await keyRows(ctx, row.organizationId);
+              const next = keys.find((k) => k.state === "next");
+              if (!next) throw fail("CONFLICT", "TENANT_SIGNING_KEY_NOT_FOUND", { state: "next" });
+              const now = new Date();
+              const activatableAt = new Date(date(next.createdAt).getTime() + (state.options.tenants?.minPublishedMs ?? 0));
+              const forced = ctx.body.force === true && activatableAt > now;
+              if (activatableAt > now && !forced) throw fail("CONFLICT", "TENANT_SIGNING_KEY_TOO_NEW", { activatableAt });
+              for (const old of keys.filter((k) => k.state === "previous")) await moveKey(ctx, old, "retired", { encryptedPrivateKey: "" });
+              const active = keys.find((k) => k.state === "active");
+              if (active) await moveKey(ctx, active, "previous");
+              else {
+                // The tenant's first own key: the shared certificate stays published as its previous,
+                // so SPs that haven't fetched the new one yet still verify (a normal rotation, D-058).
+                const shared = rootIdentity(state.options, idpBaseURL(state.options, ctx.context.baseURL)).signing.certificate;
+                await adapterOf(ctx).create({
+                  model: TENANT_KEY_MODEL,
+                  data: {
+                    tenantId: row.organizationId,
+                    kid: SHARED_KID,
+                    state: "previous",
+                    stateKey: stateKeyOf(row.organizationId, "previous"),
+                    encryptedPrivateKey: "",
+                    certificate: shared,
+                    notAfter: new Date(new X509Certificate(shared).validTo),
+                    createdAt: now,
+                    activatedAt: null,
+                    updatedBy: user.id,
+                  },
+                });
+              }
+              await moveKey(ctx, next, "active", { activatedAt: now, updatedBy: user.id });
+              changed();
+              changedBy(ctx, user.id, row, "key.activated", `activated key ${next.kid} for tenant ${row.tenantKey}${forced ? " (forced, before minPublishedSeconds)" : ""}`, {
+                kid: next.kid,
+                ...(forced ? { forced: true } : {}),
+              });
+              return ctx.json({ tenant: record(ctx, state, row, await keyRows(ctx, row.organizationId)) });
+            },
+          ),
+
+          /** Stop publishing the previous key, and erase its private key. */
+          samlIdpRetireTenantKey: createAuthEndpoint(
+            "/saml-idp/tenants/keys/retire",
+            { method: "POST", use: [sensitiveSessionMiddleware], body: z.object({ organizationId: orgIdSchema }).strict() },
+            async (ctx) => {
+              const user = await manager(ctx, state, "update", "samlTenant");
+              const row = await tenantFor(ctx, ctx.body.organizationId);
+              const previous = (await keyRows(ctx, row.organizationId)).filter((k) => k.state === "previous");
+              if (previous.length === 0) throw fail("CONFLICT", "TENANT_SIGNING_KEY_NOT_FOUND", { state: "previous" });
+              for (const k of previous) await moveKey(ctx, k, "retired", { encryptedPrivateKey: "", updatedBy: user.id });
+              changed();
+              const kids = previous.map((k) => k.kid).join(", ");
+              changedBy(ctx, user.id, row, "key.retired", `retired key ${kids} of tenant ${row.tenantKey}`, { kid: kids });
+              return ctx.json({ tenant: record(ctx, state, row, await keyRows(ctx, row.organizationId)) });
+            },
+          ),
+        }
+      : {}),
   };
 }
 

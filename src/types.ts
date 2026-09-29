@@ -92,16 +92,52 @@ export interface TenantRecord {
   updatedAt: Date;
   /** The user who last saved it. */
   updatedBy: string | null;
+  /**
+   * With `tenants.keys: "per-tenant"` (D-058): `"own"` once the tenant signs with its own key,
+   * `"shared"` before (a tenant made before per-tenant keys, until its first key is activated).
+   */
+  signing?: "shared" | "own" | undefined;
+  /** With `tenants.keys: "per-tenant"`: its keys, without private material, newest first. */
+  keys?: TenantSigningKeyInfo[] | undefined;
+}
+
+/** A tenant's signing key as the API shows it (D-058). */
+export interface TenantSigningKeyInfo {
+  kid: string;
+  /** `next`: published, not signing yet. `active`: signs. `previous`: replaced, still published. `retired`: neither. */
+  state: "next" | "active" | "previous" | "retired";
+  /** PEM. The shared key's certificate for the `previous` row a tenant's first own key leaves (kid "shared"). */
+  certificate: string;
+  notAfter: Date;
+  createdAt: Date;
+  activatedAt: Date | null;
+  /** When `activate` accepts a `next` key without `force`. */
+  activatableAt?: Date | undefined;
 }
 
 /** See `SamlIdpOptions.tenants`. */
 export interface TenantOptions {
   enabled: boolean;
   /**
-   * What tenants sign with. Only `"shared"` in this version: every tenant signs with `signing`,
-   * so only the host's administrators may manage tenant SPs (D-052). Per-tenant keys are planned.
+   * What tenants sign with (D-058). `"shared"` (default): every tenant signs with `signing`.
+   * `"per-tenant"`: each tenant gets its own key, stored encrypted in `samlIdpTenantKey`. A new
+   * tenant gets one at creation; a tenant made before signs with `signing` until its first key
+   * is rotated in (`/saml-idp/tenants/keys/rotate`, then `/activate`). Once a tenant has its own
+   * key, nothing else signs for it.
    */
-  keys?: "shared" | undefined;
+  keys?: "shared" | "per-tenant" | undefined;
+  /**
+   * With `keys: "per-tenant"`: the secret that encrypts tenants' private keys. Default: Better
+   * Auth's (`secrets`, else `secret`), whose versions also rotate it. Keep every version that
+   * encrypted a stored key until those keys are rotated.
+   */
+  keyEncryptionSecret?: string | undefined;
+  /**
+   * With `keys: "per-tenant"`: how long a tenant's next key must have been published in its
+   * metadata before `activate` accepts it, so SPs can fetch the new certificate. Default 86400
+   * (24 hours); 0 to 31536000. `activate` with `force: true` skips it (audited; for a leaked key).
+   */
+  minPublishedSeconds?: number | undefined;
   /** How long an isolate caches a tenant, and a miss. Default `registry.cacheSeconds` (60 s); 0 to 3600. */
   cacheSeconds?: number | undefined;
 }
@@ -405,6 +441,12 @@ export interface SamlIdpOptions {
       modelName?: string | undefined;
       fields?: Partial<Record<"tenantKey" | "organizationId" | "retiredAt" | "retiredBy", string>> | undefined;
     };
+    samlIdpTenantKey?: {
+      modelName?: string | undefined;
+      fields?:
+        | Partial<Record<"tenantId" | "kid" | "state" | "stateKey" | "encryptedPrivateKey" | "certificate" | "notAfter" | "createdAt" | "activatedAt" | "updatedBy", string>>
+        | undefined;
+    };
   };
   /**
    * SAML Single Logout (D-028): SP- and IdP-initiated logout, front-channel, propagated to every
@@ -542,7 +584,7 @@ export interface ResolvedSamlIdpOptions {
   auditLog: { retentionDays: number } | undefined;
   registry: { canManage: NonNullable<SamlIdpOptions["registry"]>["canManage"]; permissions: boolean; cacheMs: number; authorize: ResolvedServiceProvider["authorize"] | undefined } | undefined;
   /** Multi-tenant IdP (D-052); undefined when off. */
-  tenants: { cacheMs: number } | undefined;
+  tenants: { cacheMs: number; perTenantKeys: boolean; keyEncryptionSecret: string | undefined; minPublishedMs: number } | undefined;
   /** Non-fatal configuration warnings, logged once at startup. */
   warnings: string[];
 }

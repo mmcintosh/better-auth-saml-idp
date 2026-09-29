@@ -138,6 +138,22 @@ export const samlIdpRetiredTenantKeys = sqliteTable("saml_idp_retired_tenant_key
   retiredBy: text("retired_by"),
 });
 
+/** Per-tenant signing keys (only needed with `tenants.keys: "per-tenant"`; D-058). */
+export const samlIdpTenantKeys = sqliteTable("saml_idp_tenant_keys", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull(),
+  kid: text("kid").notNull(),
+  state: text("state").notNull(),
+  stateKey: text("state_key").notNull().unique(),
+  encryptedPrivateKey: text("encrypted_private_key").notNull(),
+  certificate: text("certificate").notNull(),
+  notAfter: integer("not_after", { mode: "timestamp_ms" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  activatedAt: integer("activated_at", { mode: "timestamp_ms" }),
+  updatedBy: text("updated_by"),
+});
+
+
 /** Which SPs got assertions in which session: for Single Logout (D-028) and `events.onSessionEnded` (D-043). */
 export const samlIdpSessionParticipants = sqliteTable(
   "saml_idp_session_participants",
@@ -185,4 +201,4 @@ export const samlIdpAuditEvents = sqliteTable(
   ],
 );
 
-export const schema = { users, sessions, accounts, verifications, rateLimits, samlIdpSeenRequests, samlIdpServiceProviders, samlIdpSessionParticipants, samlIdpAuditEvents, samlIdpTenants, samlIdpRetiredTenantKeys };
+export const schema = { users, sessions, accounts, verifications, rateLimits, samlIdpSeenRequests, samlIdpServiceProviders, samlIdpSessionParticipants, samlIdpAuditEvents, samlIdpTenants, samlIdpRetiredTenantKeys, samlIdpTenantKeys };

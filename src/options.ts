@@ -310,6 +310,21 @@ const optionsSchema = z
           })
           .strict()
           .optional(),
+        samlIdpTenantKey: z
+          .object({
+            modelName: z.string().min(1).optional(),
+            fields: z
+              .object(
+                Object.fromEntries(
+                  ["tenantId", "kid", "state", "stateKey", "encryptedPrivateKey", "certificate", "notAfter", "createdAt", "activatedAt", "updatedBy"].map((f) => [f, z.string().min(1)]),
+                ),
+              )
+              .partial()
+              .strict()
+              .optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),
@@ -322,6 +337,7 @@ const optionsSchema = z
         onDenied: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onDenied"]>>().optional(),
         onLogout: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onLogout"]>>().optional(),
         onSessionEnded: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onSessionEnded"]>>().optional(),
+        onTenantChanged: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onTenantChanged"]>>().optional(),
       })
       .strict()
       .optional(),
@@ -339,8 +355,10 @@ const optionsSchema = z
     tenants: z
       .object({
         enabled: z.boolean(),
-        // "per-tenant" and `delegation` are recognised only to refuse them with a reason (below).
         keys: z.enum(["shared", "per-tenant"]).optional(),
+        keyEncryptionSecret: z.string().min(32).optional(),
+        minPublishedSeconds: z.number().int().min(0).max(31_536_000).optional(),
+        // `delegation` is recognised only to refuse it with a reason (below).
         delegation: z.unknown().optional(),
         cacheSeconds: z.number().int().min(0).max(3600).optional(),
       })
@@ -614,11 +632,14 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
 
   const tenants = o.tenants?.enabled ? o.tenants : undefined;
   if (tenants) {
-    if (tenants.keys === "per-tenant") issues.push('tenants.keys: "per-tenant" is not available in this version; tenants sign with `signing` ("shared")');
     // Multi-tenant design §5.1: under one shared key, only the Issuer string tells tenants apart,
     // so an organization's own administrators must not manage its SPs until each tenant has its key.
     if (tenants.delegation !== undefined)
-      issues.push('tenants.delegation: requires tenants.keys: "per-tenant"; with a shared signing key only the host\'s administrators may manage tenant SPs');
+      issues.push(
+        tenants.keys === "per-tenant"
+          ? "tenants.delegation: not available in this version (organization administrators managing their own SPs comes next, D-058)"
+          : 'tenants.delegation: requires tenants.keys: "per-tenant"; with a shared signing key only the host\'s administrators may manage tenant SPs',
+      );
     if (!o.registry?.enabled) issues.push("tenants.enabled: requires registry.enabled (tenants and their SPs are stored in the database)");
   }
 
@@ -679,7 +700,14 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
     registry: o.registry?.enabled
       ? { canManage: o.registry.canManage, permissions: o.registry.permissions ?? false, cacheMs: (o.registry.cacheSeconds ?? 60) * 1000, authorize: o.registry.authorize }
       : undefined,
-    tenants: tenants ? { cacheMs: (tenants.cacheSeconds ?? o.registry?.cacheSeconds ?? 60) * 1000 } : undefined,
+    tenants: tenants
+      ? {
+          cacheMs: (tenants.cacheSeconds ?? o.registry?.cacheSeconds ?? 60) * 1000,
+          perTenantKeys: tenants.keys === "per-tenant",
+          keyEncryptionSecret: tenants.keyEncryptionSecret,
+          minPublishedMs: (tenants.minPublishedSeconds ?? 86_400) * 1000,
+        }
+      : undefined,
     warnings,
   };
 }

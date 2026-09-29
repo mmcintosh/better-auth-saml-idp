@@ -19,7 +19,8 @@ import { recordRequestId } from "../storage/seen";
 import { sweepExpired } from "../storage/sweep";
 import type { ResolvedServiceProvider } from "../types";
 import { isDriveByCrossSite } from "./init";
-import { fail, lookupLog, type PluginState, prepareSp, routeIdentity, spById, spIdentity, tenantOf } from "./issue";
+import { fail, lookupLog, type PluginState, prepareSp, reachableIdentity, routeIdentity, spById, tenantOf } from "./issue";
+import { TenantKeyError } from "../saml/tenant-keys";
 
 export const LOGOUT_PATH = "/saml2/idp/logout";
 const STATE_PREFIX = "saml-idp-logout:";
@@ -117,7 +118,7 @@ async function nextHop(ctx: GenericEndpointContext, state: PluginState, ls: Logo
   while (ls.remaining.length) {
     const p = ls.remaining.shift() as Participant;
     const sp = await spById(ctx, state, p.spId);
-    const identity = sp && (await spIdentity(ctx, state, sp));
+    const identity = sp && (await reachableIdentity(ctx, state, sp));
     if (!sp?.singleLogoutService || !identity) {
       ls.partial = true; // can't reach it: the originator is told it was partial
       continue;
@@ -146,8 +147,8 @@ async function finish(ctx: GenericEndpointContext, state: PluginState, ls: Logou
   if (ls.origin.kind === "idp") throw ctx.redirect(ls.origin.returnTo);
   const sp = await spById(ctx, state, ls.origin.spId);
   if (!sp?.singleLogoutService) return fail(ctx, state, "LOGOUT_NOT_SUPPORTED", `originating SP ${ls.origin.spId} has no SLO endpoint any more`, { spId: ls.origin.spId, ...tenantOf(sp ?? {}) });
-  const identity = await spIdentity(ctx, state, sp);
-  if (!identity) return fail(ctx, state, "LOGOUT_NOT_SUPPORTED", `originating SP ${sp.id}'s tenant doesn't exist or is disabled`, { spId: sp.id, ...tenantOf(sp) });
+  const identity = await reachableIdentity(ctx, state, sp);
+  if (!identity) return fail(ctx, state, "LOGOUT_NOT_SUPPORTED", `originating SP ${sp.id}'s tenant doesn't exist, is disabled or can't sign`, { spId: sp.id, ...tenantOf(sp) });
   // Metadata's ResponseLocation, when the SP has one, is where responses go (Metadata §2.2.2).
   const responseUrl = sp.singleLogoutService.responseUrl ?? sp.singleLogoutService.url;
   const xml = buildLogoutResponse({
@@ -217,7 +218,14 @@ async function handleSlo(ctx: SloContext, state: PluginState, tenantKey?: string
   await sweepExpired(ctx.context.adapter as any, (what, e) => ctx.context.logger.warn(`[saml-idp] cleanup of expired ${what} failed`, e), Date.now(), { participants: true, auditLog: state.options.auditLog !== undefined });
   const isPost = ctx.request?.method === "POST";
   const input = ((isPost ? ctx.body : ctx.query) ?? {}) as z.infer<typeof params>;
-  const route = await routeIdentity(ctx, state, tenantKey);
+  let route: Awaited<ReturnType<typeof routeIdentity>>;
+  try {
+    route = await routeIdentity(ctx, state, tenantKey);
+  } catch (e) {
+    // This tenant's own key can't be used (D-058): it can neither check nor answer here.
+    if (!(e instanceof TenantKeyError)) throw e;
+    return fail(ctx, state, "INTERNAL_ERROR", e.message);
+  }
   const now = new Date();
   const sigOpts = { allowInsecureSha1: options.signing.allowInsecureSha1 };
 
@@ -232,7 +240,7 @@ async function handleSlo(ctx: SloContext, state: PluginState, tenantKey?: string
       if (!ls?.current) return fail(ctx, state, "LOGOUT_STATE_NOT_FOUND", "unknown or used logout state");
       const sp = await spById(ctx, state, ls.current.spId);
       try {
-        const sent = sp && (await spIdentity(ctx, state, sp));
+        const sent = sp && (await reachableIdentity(ctx, state, sp));
         if (!sp || !sent) throw new Error("its SP or tenant is gone");
         const xml = await decodeAuthnRequest(raw);
         const info = await parseLogoutResponse(xml, options.schemaValidator, { now, clockSkewSeconds: options.clockSkewSeconds, sloUrl: sent.sloUrl });

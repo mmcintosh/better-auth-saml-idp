@@ -29,6 +29,7 @@ import { recordRequestId } from "../storage/seen";
 import { sweepExpired } from "../storage/sweep";
 import type { ResolvedServiceProvider } from "../types";
 import { fail, issueResponse, lookupLog, type PluginState, prepareSp, routeIdentity, samlError, spById, tenantOf } from "./issue";
+import { TenantKeyError } from "../saml/tenant-keys";
 
 export const RESUME_PATH = "/saml2/idp/resume";
 export const BINDING_COOKIE = "saml_idp_binding";
@@ -132,7 +133,13 @@ async function handleSso(ctx: SsoContext, state: PluginState, tenantKey?: string
   await sweepExpired(ctx.context.adapter as any, (what, e) => ctx.context.logger.warn(`[saml-idp] cleanup of expired ${what} failed`, e), Date.now(), { participants: state.options.sessionTracking, auditLog: state.options.auditLog !== undefined });
   const isPost = ctx.request?.method === "POST";
   // An unknown or disabled tenant looks like an unknown SP: the URL doesn't say which it was.
-  const route = await routeIdentity(ctx, state, tenantKey);
+  let route: Awaited<ReturnType<typeof routeIdentity>>;
+  try {
+    route = await routeIdentity(ctx, state, tenantKey);
+  } catch (e) {
+    if (!(e instanceof TenantKeyError)) throw e;
+    return fail(ctx, state, "INTERNAL_ERROR", e.message);
+  }
   if (!route) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", "unknown tenant");
   const routeTenant = route.tenantId ?? "";
 

@@ -133,9 +133,13 @@ describe("tenants: configuration (D-052)", () => {
     expect(() => resolveOptions(baseOptions({ serviceProviders: [{ id: "s", entityId: "e", acsUrls: [SP_ACS], tenant: "org" }] }))).toThrow(/tenant: requires tenants.enabled/);
   });
 
-  it("needs registry.enabled; per-tenant keys aren't available; delegation needs per-tenant keys", () => {
+  it("needs registry.enabled; per-tenant keys are accepted (D-058); delegation needs per-tenant keys and isn't available yet", () => {
     expect(() => resolveOptions(baseOptions({ tenants: { enabled: true } }))).toThrow(/tenants.enabled: requires registry.enabled/);
-    expect(() => resolveOptions(tenantOpts({ tenants: { enabled: true, keys: "per-tenant" as any } }))).toThrow(/"per-tenant" is not available/);
+    const perTenant = resolveOptions(tenantOpts({ tenants: { enabled: true, keys: "per-tenant" } }));
+    expect(perTenant.tenants).toMatchObject({ perTenantKeys: true, minPublishedMs: 86_400_000, keyEncryptionSecret: undefined });
+    expect(resolveOptions(tenantOpts({ tenants: { enabled: true, keys: "per-tenant", minPublishedSeconds: 0 } })).tenants?.minPublishedMs).toBe(0);
+    expect(() => resolveOptions(tenantOpts({ tenants: { enabled: true, keys: "per-tenant", keyEncryptionSecret: "too-short" } }))).toThrow(/keyEncryptionSecret/);
+    expect(() => resolveOptions(tenantOpts({ tenants: { enabled: true, keys: "per-tenant", delegation: { roles: ["owner"] } } as any }))).toThrow(/tenants.delegation: not available in this version/);
     // Multi-tenant design §5.1 (b): under a shared key, delegated SP management is a startup error.
     expect(() => resolveOptions(tenantOpts({ tenants: { enabled: true, delegation: { roles: ["owner"] } } as any }))).toThrow(/tenants.delegation: requires tenants.keys: "per-tenant"/);
     expect(() => resolveOptions(tenantOpts({ tenants: { enabled: true, keys: "shared", delegation: { roles: ["owner"] } } as any }))).toThrow(/tenants.delegation/);

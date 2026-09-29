@@ -8,10 +8,11 @@ import type { BetterAuthPluginDBSchema } from "better-auth/db";
  * "serial" or "uuid", which ignore forced ids), so replay protection never depends on it.
  * Hosts' hand-written schemas should also add UNIQUE(spId, requestId) (see README).
  */
-export function samlIdpSchema(opts: { registry?: boolean; sessionTracking?: boolean; auditLog?: boolean; tenants?: boolean } = {}) {
+export function samlIdpSchema(opts: { registry?: boolean; sessionTracking?: boolean; auditLog?: boolean; tenants?: boolean; tenantKeys?: boolean } = {}) {
   return {
     ...(opts.registry ? (opts.tenants ? tenantRegistrySchema() : registrySchema()) : {}),
     ...(opts.tenants ? tenantSchema() : {}),
+    ...(opts.tenants && opts.tenantKeys ? tenantKeySchema() : {}),
     ...(opts.auditLog ? auditSchema(opts.tenants === true) : {}),
     ...(opts.sessionTracking ? logoutSchema() : {}),
     samlIdpSeenRequest: {
@@ -121,6 +122,32 @@ function tenantSchema() {
         retiredBy: { type: "string", required: false, input: false },
       },
       indexes: [{ fields: ["tenantKey"], unique: true, name: "saml_idp_retired_tenant_key_unique" }],
+    },
+  } satisfies BetterAuthPluginDBSchema;
+}
+
+/**
+ * Per-tenant signing keys (`tenants.keys: "per-tenant"`, D-058): one row per key. `state` is
+ * next | active | previous | retired; `stateKey` is UNIQUE, a hash of (tenantId, state) for next
+ * and active, so a tenant never has two of either. `encryptedPrivateKey` is sealed with Better
+ * Auth's secret and bound to its tenant and kid; it is emptied when the key is retired.
+ */
+function tenantKeySchema() {
+  return {
+    samlIdpTenantKey: {
+      fields: {
+        tenantId: { type: "string", required: true, input: false, index: true },
+        kid: { type: "string", required: true, input: false },
+        state: { type: "string", required: true, input: false },
+        stateKey: { type: "string", required: true, unique: true, input: false },
+        encryptedPrivateKey: { type: "string", required: true, input: false },
+        certificate: { type: "string", required: true, input: false },
+        notAfter: { type: "date", required: true, input: false },
+        createdAt: { type: "date", required: true, input: false },
+        activatedAt: { type: "date", required: false, input: false },
+        updatedBy: { type: "string", required: false, input: false },
+      },
+      indexes: [{ fields: ["stateKey"], unique: true, name: "saml_idp_tenant_key_state_key_unique" }],
     },
   } satisfies BetterAuthPluginDBSchema;
 }

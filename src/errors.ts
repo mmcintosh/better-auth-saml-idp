@@ -30,6 +30,11 @@ export const SAML_IDP_ERROR_CODES = defineErrorCodes({
   TENANT_NOT_FOUND: "Tenant not found",
   TENANT_HAS_SERVICE_PROVIDERS: "This tenant still has service providers; remove them first",
   TENANT_KEY_RETIRED: "This tenant key belonged to a deleted tenant and can't be used again",
+  // Tenant signing keys (D-058)
+  INVALID_TENANT_SIGNING_KEY: "Invalid signing key",
+  TENANT_SIGNING_KEY_EXISTS: "This tenant already has a next signing key; activate it first",
+  TENANT_SIGNING_KEY_NOT_FOUND: "This tenant has no signing key in that state",
+  TENANT_SIGNING_KEY_TOO_NEW: "The next signing key hasn't been published long enough to activate",
 });
 
 export type SamlIdpErrorCode = keyof typeof SAML_IDP_ERROR_CODES;
@@ -62,4 +67,8 @@ export const ERROR_STATUS: Record<SamlIdpErrorCode, number> = {
   TENANT_NOT_FOUND: 404,
   TENANT_HAS_SERVICE_PROVIDERS: 409,
   TENANT_KEY_RETIRED: 409,
+  INVALID_TENANT_SIGNING_KEY: 400,
+  TENANT_SIGNING_KEY_EXISTS: 409,
+  TENANT_SIGNING_KEY_NOT_FOUND: 409,
+  TENANT_SIGNING_KEY_TOO_NEW: 409,
 };

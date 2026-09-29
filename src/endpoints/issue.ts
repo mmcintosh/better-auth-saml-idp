@@ -9,9 +9,10 @@ import { logSafe, type SamlStatus, satisfiesAuthnContext, stepUpTarget } from ".
 import { buildSignedErrorResponse, buildSignedResponse, hasNonXmlChars, newSamlId } from "../saml/response";
 import type { SpMetadataCache } from "../saml/sp-metadata-refresh";
 import type { SpDirectory } from "../saml/sp-directory";
-import { type IdpIdentity, identityFor, rootIdentity, tenantIdentity } from "../saml/identity";
+import { type IdpIdentity, identityFor, resolveTenantIdentity, rootIdentity } from "../saml/identity";
 import { idpBaseURL } from "../saml/idp";
 import type { TenantDirectory } from "../saml/tenant-directory";
+import { type KeySecret, TenantKeyError, type TenantKeyStore } from "../saml/tenant-keys";
 import { hasOrganizationPlugin, loadMemberships, matchOrganization, warnClaimableOrganizations } from "../organizations";
 import { recordParticipant, sessionIndexOf } from "../storage/participants";
 import { base64url, type ValidatedRequest } from "../storage/pending";
@@ -35,6 +36,13 @@ export interface PluginState {
   metadata: SpMetadataCache;
   /** With `tenants.enabled` (D-052). */
   tenants: TenantDirectory | undefined;
+  /** With `tenants.keys: "per-tenant"` (D-058). */
+  tenantKeys: TenantKeyStore | undefined;
+}
+
+/** What encrypts tenant keys (D-058): `tenants.keyEncryptionSecret`, else Better Auth's own. */
+export function keySecret(ctx: GenericEndpointContext, state: PluginState): KeySecret {
+  return state.options.tenants?.keyEncryptionSecret ?? (ctx.context as unknown as { secretConfig: KeySecret }).secretConfig;
 }
 
 /** Log sink for SP lookups (a stored SP that no longer validates is logged, not thrown). */
@@ -42,7 +50,21 @@ export const lookupLog = (ctx: GenericEndpointContext) => ({ error: (m: string) 
 
 /** The IdP identity this SP deals with (D-052); undefined when its tenant is gone or disabled. */
 export function spIdentity(ctx: GenericEndpointContext, state: PluginState, sp: Pick<ResolvedServiceProvider, "tenantId">): Promise<IdpIdentity | undefined> {
-  return identityFor(state, ctx.context.adapter as any, ctx.context.baseURL, sp);
+  return identityFor(state, ctx.context.adapter as any, keySecret(ctx, state), ctx.context.baseURL, sp);
+}
+
+/**
+ * `spIdentity` for Single Logout, where an SP that can't be reached is skipped: a tenant whose own
+ * key can't be used (D-058) is logged and treated like a gone one, never signed for with another key.
+ */
+export async function reachableIdentity(ctx: GenericEndpointContext, state: PluginState, sp: Pick<ResolvedServiceProvider, "tenantId">): Promise<IdpIdentity | undefined> {
+  try {
+    return await spIdentity(ctx, state, sp);
+  } catch (e) {
+    if (!(e instanceof TenantKeyError)) throw e;
+    ctx.context.logger.error(`[saml-idp] ${e.message}`);
+    return undefined;
+  }
 }
 
 /**
@@ -53,7 +75,7 @@ export async function routeIdentity(ctx: GenericEndpointContext, state: PluginSt
   const base = idpBaseURL(state.options, ctx.context.baseURL);
   if (tenantKey === undefined) return rootIdentity(state.options, base);
   const tenant = state.tenants && (await state.tenants.byKey(ctx.context.adapter as any, tenantKey));
-  return tenant ? tenantIdentity(state.options, base, tenant) : undefined;
+  return tenant ? resolveTenantIdentity(state, ctx.context.adapter as any, keySecret(ctx, state), base, tenant) : undefined;
 }
 
 /** The tenant field of events and requests: present only for a tenant's SP (D-052). */
@@ -235,7 +257,14 @@ export async function issueResponse(
   // Which IdP answers (D-052): the SP's tenant's identity, and it must be the one the request was
   // made to. A tenant disabled or removed since, or an SP moved to another tenant (only possible
   // by editing the database), gets nothing: never the root identity instead.
-  const identity = await spIdentity(ctx, state, sp);
+  let identity: IdpIdentity | undefined;
+  try {
+    identity = await spIdentity(ctx, state, sp);
+  } catch (e) {
+    // The tenant's own key can't be used (D-058): refuse, never sign with another key.
+    if (!(e instanceof TenantKeyError)) throw e;
+    return fail(ctx, state, "INTERNAL_ERROR", e.message, { spId: sp.id, ...tenantOf(sp) });
+  }
   if (!identity) return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", `SP ${sp.id}: its tenant doesn't exist or is disabled`, { spId: sp.id, ...tenantOf(sp) });
   if ((request.tenantId ?? null) !== identity.tenantId)
     return fail(ctx, state, "UNKNOWN_SERVICE_PROVIDER", `SP ${sp.id} isn't in the tenant the request was made to any more`, { spId: sp.id, ...tenantOf(sp) });

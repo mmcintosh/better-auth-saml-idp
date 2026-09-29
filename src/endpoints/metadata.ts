@@ -1,8 +1,9 @@
 import { createAuthEndpoint } from "better-auth/api";
-import { type IdpIdentity, rootIdentity, tenantIdentity } from "../saml/identity";
+import { type IdpIdentity, rootIdentity } from "../saml/identity";
 import { type Idp, idpBaseURL, METADATA_PATH } from "../saml/idp";
 import { newSamlId, signElement } from "../saml/response";
-import type { TenantDirectory } from "../saml/tenant-directory";
+import { TenantKeyError } from "../saml/tenant-keys";
+import { type PluginState, routeIdentity } from "./issue";
 import { parseXmlStrict } from "../saml/xml";
 import type { ResolvedSamlIdpOptions } from "../types";
 import { XMLSerializer } from "@xmldom/xmldom";
@@ -72,10 +73,7 @@ function metadataResponse(idp: Idp, options: ResolvedSamlIdpOptions, identity: I
  */
 const notFound = () => new Response("Not Found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
 
-export const tenantMetadataEndpoint = (
-  state: { options: ResolvedSamlIdpOptions; tenants: TenantDirectory | undefined },
-  getIdp: (identity: IdpIdentity) => Idp,
-) =>
+export const tenantMetadataEndpoint = (state: PluginState, getIdp: (identity: IdpIdentity) => Idp) =>
   createAuthEndpoint(
     `${METADATA_PATH}/:tenant`,
     {
@@ -91,9 +89,16 @@ export const tenantMetadataEndpoint = (
       },
     },
     async (ctx) => {
-      const tenant = state.tenants && (await state.tenants.byKey(ctx.context.adapter as any, String(ctx.params?.tenant ?? "")));
-      if (!tenant) return notFound();
-      const identity = tenantIdentity(state.options, idpBaseURL(state.options, ctx.context.baseURL), tenant);
+      let identity: IdpIdentity | undefined;
+      try {
+        identity = await routeIdentity(ctx, state, String(ctx.params?.tenant ?? ""));
+      } catch (e) {
+        // Its own key can't be used (D-058): publish nothing rather than another key's certificate.
+        if (!(e instanceof TenantKeyError)) throw e;
+        ctx.context.logger.error(`[saml-idp] tenant metadata: ${e.message}`);
+        return new Response("Internal Server Error", { status: 500, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
+      }
+      if (!identity) return notFound();
       return metadataResponse(getIdp(identity), state.options, identity);
     },
   );
