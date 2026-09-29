@@ -6,4 +6,5 @@ useDefault = true
 [allowlist]
 description = "Test-only placeholders"
 # Test-only Better Auth secrets are spelled "<name>-secret-that-is-at-least-32-characters-long".
-regexes = ['''[a-z]+-secret-that-is-at-least-32-characters-long''']
+# CharDB's generated .env.example (examples/chardb) uses "replace-with-...-secret" placeholders.
+regexes = ['''[a-z]+-secret-that-is-at-least-32-characters-long''', '''replace-with-[a-z0-9-]*-secret''']
