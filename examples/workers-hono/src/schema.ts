@@ -1,5 +1,5 @@
 // Drizzle schema for the example: better-auth core + better-auth-cloudflare geolocation + admin
-// plugin + saml-idp. Field maps use Drizzle property keys (usePlural, snake_case columns).
+// and organization plugins + saml-idp. Field maps use Drizzle property keys (usePlural, snake_case columns).
 import { sql } from "drizzle-orm";
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -42,6 +42,8 @@ export const sessions = sqliteTable(
     longitude: text("longitude"),
     // admin plugin
     impersonatedBy: text("impersonated_by"),
+    // organization plugin (migration 0010)
+    activeOrganizationId: text("active_organization_id"),
   },
   (t) => [index("sessions_userId_idx").on(t.userId)],
 );
@@ -154,6 +156,39 @@ export const samlIdpTenantKeys = sqliteTable("saml_idp_tenant_keys", {
 });
 
 
+// organization plugin (migration 0010): tenants are organizations.
+export const organizations = sqliteTable("organizations", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  logo: text("logo"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  metadata: text("metadata"),
+});
+
+export const members = sqliteTable(
+  "members",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [index("members_organization_idx").on(t.organizationId), index("members_user_idx").on(t.userId)],
+);
+
+export const invitations = sqliteTable("invitations", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  role: text("role"),
+  status: text("status").notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  inviterId: text("inviter_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+});
+
 /** Which SPs got assertions in which session: for Single Logout (D-028) and `events.onSessionEnded` (D-043). */
 export const samlIdpSessionParticipants = sqliteTable(
   "saml_idp_session_participants",
@@ -201,4 +236,4 @@ export const samlIdpAuditEvents = sqliteTable(
   ],
 );
 
-export const schema = { users, sessions, accounts, verifications, rateLimits, samlIdpSeenRequests, samlIdpServiceProviders, samlIdpSessionParticipants, samlIdpAuditEvents, samlIdpTenants, samlIdpRetiredTenantKeys, samlIdpTenantKeys };
+export const schema = { users, sessions, accounts, verifications, rateLimits, organizations, members, invitations, samlIdpSeenRequests, samlIdpServiceProviders, samlIdpSessionParticipants, samlIdpAuditEvents, samlIdpTenants, samlIdpRetiredTenantKeys, samlIdpTenantKeys };

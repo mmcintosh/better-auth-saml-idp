@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Documentation
+
+- **The Workers example is a multi-tenant IdP:** Better Auth's organization plugin (migration `0010_organizations.sql`) and `tenants: { enabled: true, keys: "per-tenant", delegation: {} }`. `/admin` gains a Tenants section (create an organization and its tenant, enable or disable it, rotate, activate and retire its key) and a button for the one-time SP backfill after upgrading; the home page lists tenants with their metadata. Only registry admins create organizations there.
+
 ## [1.1.0] - 2026-09-29
 
 Multi-tenancy phases 2 and 3: a signing key per tenant, and delegated administration of a tenant's SPs by its organization's owners and admins. Both are opt-in; with neither set, nothing changes. Reviewed twice before release (D-060, D-061).

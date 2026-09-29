@@ -1,7 +1,6 @@
 -- Multi-tenant IdP (tenants.enabled; DECISIONS.md D-052, docs/guide/multi-tenant.md). Additive:
--- with tenants off (this example's default) the plugin ignores these, and nothing changes.
--- Turning tenants on also needs Better Auth's organization plugin and its tables, which this
--- example doesn't use.
+-- with tenants off the plugin ignores these, and nothing changes. Tenants also need Better Auth's
+-- organization plugin and its tables (0010; the example turns tenants on since then).
 
 -- Tenants: organizations with their own IdP identity.
 CREATE TABLE IF NOT EXISTS saml_idp_tenants (

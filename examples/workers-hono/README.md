@@ -54,6 +54,7 @@ Optional per-SP keys passed through: `nameIdFormat`, `requestSignatures`, `spCer
 - the SPs from code and from the database registry, with their status, issues and warnings;
 - adding an SP by pasting its metadata XML, then reviewing the JSON before saving;
 - editing, enabling or disabling, and deleting stored SPs, plus a test sign-in button for SPs that allow IdP-initiated SSO;
+- tenants: creating one (an organization and its tenant), enabling or disabling it, and rotating its signing key (see [Tenants](#tenants));
 - recent audit events (sign-ins, denials, logouts, sessions ended).
 
 Only emails listed in `SAML_REGISTRY_ADMINS` (comma-separated, a variable) with a verified address can open it or use the registry API:
@@ -61,6 +62,22 @@ Only emails listed in `SAML_REGISTRY_ADMINS` (comma-separated, a variable) with 
 ```jsonc
 "vars": { "SAML_REGISTRY_ADMINS": "you@example.com" }
 ```
+
+## Tenants
+
+The example is a multi-tenant IdP ([guide](../../docs/guide/multi-tenant.md)): an organization can be made a **tenant**, which is its own IdP with its own entity ID, metadata, SSO and SLO URLs, and signing key. The root IdP above is unchanged. In `src/auth.ts`:
+
+```ts
+organization({ allowUserToCreateOrganization: (user) => isRegistryAdmin(env, user) }),
+samlIdp({ /* … */ tenants: { enabled: true, keys: "per-tenant", delegation: {} } }),
+```
+
+- **Making one:** on `/admin`, **New tenant** creates an organization (you become its owner) and its tenant. The slug is the tenant key, in its URLs: `/api/auth/saml2/idp/metadata/<key>`, `/sso/<key>`, `/slo/<key>`. It never changes, because SPs pin it. Enabled tenants are listed on the home page.
+- **Its SPs:** stored SPs with `"tenant": "<organization id>"` in their JSON. They sign in through the tenant's URLs and get assertions from the tenant's entity ID.
+- **Its key:** each tenant gets its own RSA 3072 key when it's made, stored in D1 encrypted with `BETTER_AUTH_SECRET`. Rotate it on `/admin` in three steps, as for the root key: rotate (publish a next key), activate (24 hours later, once SPs have fetched it; or forced, for a leaked key), retire.
+- **Delegation:** the organization's owners and admins may manage the tenant's SPs through the registry API. In this example only registry admins can create organizations, so a public deployment doesn't collect strangers' organizations.
+- **CPU:** generating a key (creating a tenant, or rotating without uploading a key) takes a few hundred milliseconds of CPU or more: fine on Workers Paid, over the Free plan's limit.
+- **Upgrading a deployment that already had stored SPs:** apply the migrations (0008 to 0010), deploy, then press **Backfill SP lookup keys** on `/admin` once. Until then those SPs aren't found.
 
 ## Deploy
 

@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { betterAuth } from "better-auth";
-import { admin } from "better-auth/plugins";
+import { admin, organization } from "better-auth/plugins";
 import { withCloudflare } from "better-auth-cloudflare";
 import { samlIdp, type ServiceProviderConfig } from "better-auth-saml-idp";
 import { drizzle } from "drizzle-orm/d1";
@@ -84,6 +84,12 @@ function samlPlugin(env: Env, origin: string) {
     },
     // Audit log (migration 0005): sign-ins, denials, logouts and ended sessions, shown on /admin.
     auditLog: { enabled: true, retentionDays: 30 },
+    // Tenants (migrations 0008-0010): an organization can get its own IdP identity (entity ID,
+    // metadata, SSO/SLO URLs), signing with its own key, sealed in D1 with BETTER_AUTH_SECRET.
+    // Admins make tenants on /admin; the organization's owners and admins may then manage its SPs
+    // through the registry API (delegation). The entity IDs are pinned by Better Auth's baseURL,
+    // this Worker's own origin, never a Host header.
+    tenants: { enabled: true, keys: "per-tenant", delegation: {} },
   });
   plugin = { key, value };
   return value;
@@ -142,7 +148,13 @@ function buildAuth(env: Env, origin: string) {
         },
         // Plugins go INSIDE withCloudflare's second argument (a `plugins` key next to the
         // spread would replace the Cloudflare plugin and silently drop its storage checks).
-        plugins: [admin(), samlPlugin(env, origin)],
+        plugins: [
+          admin(),
+          // Tenants are organizations. Only the registry admins create them in this example, so a
+          // public deployment doesn't collect strangers' organizations (tenants are host-made anyway).
+          organization({ allowUserToCreateOrganization: (user) => isRegistryAdmin(env, user) }),
+          samlPlugin(env, origin),
+        ],
       },
     ),
   });

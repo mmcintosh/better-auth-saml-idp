@@ -1,5 +1,6 @@
 // A reference admin page for the SAML IdP, built only on the plugin's public API: the registry
-// API (list/create/update/delete stored SPs), serviceProviderFromMetadata, and the audit table.
+// API (list/create/update/delete stored SPs), the tenant API (tenants and their signing keys),
+// serviceProviderFromMetadata, and the audit table.
 // The plugin itself ships no UI (like @better-auth/sso); copy and adapt this for your own app.
 //
 // Access: signed-in users listed in SAML_REGISTRY_ADMINS with a verified email, the same rule
@@ -95,6 +96,33 @@ export function registerAdmin(app: Hono<{ Bindings: Env }>, authFor: (c: C) => A
     }),
   );
 
+  // One-time step after upgrading a registry that already had stored SPs to tenants (migration
+  // 0008): gives those rows their lookup key, or they aren't found. Safe to run again.
+  app.post("/admin/api/backfill", (c: C) =>
+    withCf(c, async () => {
+      const auth = authFor(c);
+      const admin = await requireAdmin(c, auth);
+      if (admin instanceof Response) return c.json({ error: "not allowed" }, 403);
+      if (!sameOrigin(c)) return c.json({ error: "cross-origin" }, 403);
+      // Mounted only with tenants on (they are, in this example).
+      const backfill = auth.api.samlIdpBackfillServiceProviderKeys;
+      if (!backfill) return c.json({ error: "tenants aren't enabled" }, 404);
+      return c.json(await backfill());
+    }),
+  );
+
+  // Organization names for the tenant list (tenant records carry the organization id only).
+  app.get("/admin/api/organizations", (c: C) =>
+    withCf(c, async () => {
+      const auth = authFor(c);
+      const admin = await requireAdmin(c, auth);
+      if (admin instanceof Response) return c.json({ error: "not allowed" }, 403);
+      const ctx = await auth.$context;
+      const rows = (await ctx.adapter.findMany({ model: "organization", sortBy: { field: "name", direction: "asc" }, limit: 500 })) as { id: string; name: string; slug: string }[];
+      return c.json({ organizations: rows.map(({ id, name, slug }) => ({ id, name, slug })) });
+    }),
+  );
+
   // Recent audit events (auditLog is on in this example).
   app.get("/admin/api/audit", (c: C) =>
     withCf(c, async () => {
@@ -103,7 +131,7 @@ export function registerAdmin(app: Hono<{ Bindings: Env }>, authFor: (c: C) => A
       if (admin instanceof Response) return c.json({ error: "not allowed" }, 403);
       const ctx = await auth.$context;
       const rows = (await ctx.adapter.findMany({ model: "samlIdpAuditEvent", sortBy: { field: "at", direction: "desc" }, limit: 50 })) as Record<string, unknown>[];
-      return c.json({ events: rows.map(({ type, at, spId, userId, code, details }) => ({ type, at, spId, userId, code, details })) });
+      return c.json({ events: rows.map(({ type, at, spId, userId, code, details, tenantId }) => ({ type, at, spId, userId, code, details, tenantId })) });
     }),
   );
 
@@ -151,9 +179,19 @@ ul.issues{margin:.2rem 0;padding-left:1.1rem}input.check{width:auto}.pill{font-s
 <p><a class="btn" href="/admin/idp-metadata.xml">Download metadata (.xml)</a> <a class="btn" href="/admin/idp.crt">Download certificate (.crt)</a> <a class="btn" href="/api/auth/saml2/idp/metadata" target="_blank" rel="noopener">View metadata</a></p>
 <p class="muted">SPs that fetch metadata by URL use the Metadata address above; the download is for SP forms that want a file.</p></section>
 
+<section><h2>Tenants</h2>
+<p class="muted">An organization made a tenant gets its own IdP: its own entity ID, metadata, SSO and SLO URLs, and its own signing key. Its SPs are stored SPs with <code>"tenant": "&lt;organization id&gt;"</code> in their configuration. Keys rotate in three steps: <b>Rotate</b> publishes a next key, <b>Activate</b> makes it sign (after 24 hours, so SPs have fetched it; <i>force</i> for a leaked key), <b>Retire</b> stops publishing the old one.</p>
+<table><thead><tr><th>Organization</th><th>Entity ID</th><th>Signing keys</th><th>Status</th><th></th></tr></thead><tbody id="tenants"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody></table>
+<h3>New tenant</h3>
+<p class="muted">Creates an organization (you become its owner) and makes it a tenant with a new key. The tenant key is in its URLs and entity ID, which SPs pin: it never changes.</p>
+<label for="orgName">Organization name</label><input id="orgName" placeholder="Acme Corp">
+<label for="orgSlug">Slug (also the tenant key)</label><input id="orgSlug" placeholder="acme">
+<p><button id="createTenant" class="primary">Create tenant</button></p>
+<p class="muted">Upgrading a deployment whose registry already had stored SPs? Run this once, or those SPs aren't found: <button id="backfill">Backfill SP lookup keys</button></p></section>
+
 <section><h2>Service providers</h2>
 <p class="muted">From code (<code>SAML_SERVICE_PROVIDERS</code>, read-only here) and from the database registry (editable).</p>
-<table><thead><tr><th>ID</th><th>Entity ID</th><th>Source</th><th>Status</th><th></th></tr></thead><tbody id="sps"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody></table></section>
+<table><thead><tr><th>ID</th><th>Entity ID</th><th>Tenant</th><th>Source</th><th>Status</th><th></th></tr></thead><tbody id="sps"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody></table></section>
 
 <section id="editor" hidden><h2 id="editorTitle">Edit</h2>
 <label for="cfg">Configuration (JSON, the same shape as a <code>serviceProviders</code> entry, without functions)</label>
@@ -191,8 +229,8 @@ async function loadSps() {
   try {
     const { serviceProviders } = await call(API);
     tbody.replaceChildren(...serviceProviders.map(row));
-    if (!serviceProviders.length) tbody.replaceChildren(el("tr", {}, el("td", { colSpan: 5, className: "muted", textContent: "None yet." })));
-  } catch (e) { tbody.replaceChildren(el("tr", {}, el("td", { colSpan: 5, className: "bad", textContent: e.message }))); }
+    if (!serviceProviders.length) tbody.replaceChildren(el("tr", {}, el("td", { colSpan: 6, className: "muted", textContent: "None yet." })));
+  } catch (e) { tbody.replaceChildren(el("tr", {}, el("td", { colSpan: 6, className: "bad", textContent: e.message }))); }
 }
 
 function row(sp) {
@@ -210,7 +248,8 @@ function row(sp) {
     actions.append(el("button", { className: "danger", textContent: "Delete", onclick: () => remove(sp.id) }));
   } else actions.append(el("span", { className: "muted", textContent: "defined in code" }));
   const meta = sp.updatedAt ? el("div", { className: "muted", textContent: "updated " + new Date(sp.updatedAt).toLocaleString() }) : "";
-  return el("tr", {}, el("td", {}, el("code", { textContent: sp.id }), meta), el("td", {}, el("code", { textContent: sp.entityId })), el("td", { textContent: sp.source }), status, actions);
+  const tenant = sp.tenantId ? (tenantNames.get(sp.tenantId) || sp.tenantId) : "root";
+  return el("tr", {}, el("td", {}, el("code", { textContent: sp.id }), meta), el("td", {}, el("code", { textContent: sp.entityId })), el("td", { className: sp.tenantId ? "" : "muted", textContent: tenant }), el("td", { textContent: sp.source }), status, actions);
 }
 
 function openEditor(mode, id, config, enabled) {
@@ -266,6 +305,71 @@ $("convert").onclick = async () => {
   } catch (e) { say(e.message, "err"); }
 };
 
+// Tenants: the tenant API (host managers only), with organization names from /admin/api/organizations.
+const TENANTS = "/api/auth/saml-idp/tenants";
+let tenantNames = new Map(); // organization id -> name, also used by the SP table
+
+async function loadTenants() {
+  const tbody = $("tenants");
+  try {
+    const [{ tenants }, { organizations }] = await Promise.all([call(TENANTS), call("/admin/api/organizations")]);
+    tenantNames = new Map(organizations.map((o) => [o.id, o.name]));
+    if (!tenants.length) return tbody.replaceChildren(el("tr", {}, el("td", { colSpan: 5, className: "muted", textContent: "No tenants yet." })));
+    tbody.replaceChildren(...tenants.map(tenantRow));
+  } catch (e) { tbody.replaceChildren(el("tr", {}, el("td", { colSpan: 5, className: "bad", textContent: e.message }))); }
+}
+
+function tenantRow(t) {
+  const name = el("td", {}, el("div", { textContent: tenantNames.get(t.organizationId) || t.organizationId }), el("div", { className: "muted" }, el("code", { textContent: t.tenantKey })));
+  const idp = el("td", {}, el("code", { textContent: t.entityId }), el("div", {}, el("a", { href: t.metadataUrl, target: "_blank", rel: "noopener", textContent: "metadata" })));
+  const keys = el("td");
+  keys.append(el("div", { className: "muted", textContent: t.signing === "own" ? "signs with its own key" : "signs with the shared key" }));
+  keys.append(el("ul", { className: "issues" }, ...(t.keys || []).filter((k) => k.state !== "retired").map((k) => {
+    const when = k.state === "next" ? " · activatable " + new Date(k.activatableAt).toLocaleString() : " · expires " + String(k.notAfter).slice(0, 10);
+    return el("li", {}, el("span", { className: "pill " + (k.state === "active" ? "ok" : "muted"), textContent: k.state }), " ", el("code", { textContent: k.kid }), el("span", { className: "muted", textContent: when }));
+  })));
+  if (t.warnings && t.warnings.length) keys.append(el("ul", { className: "issues warn" }, ...t.warnings.map((w) => el("li", { textContent: w }))));
+  const status = el("td", {}, el("span", { className: "pill " + (t.enabled ? "ok" : "muted"), textContent: t.enabled ? "enabled" : "disabled" }));
+  const actions = el("td");
+  const id = t.organizationId;
+  const has = (s) => (t.keys || []).some((k) => k.state === s);
+  const act = (label, fn, cls = "") => actions.append(el("button", { className: cls, textContent: label, onclick: fn }));
+  if (!has("next")) act("Rotate key", () => tenantCall("/keys/rotate", { organizationId: id }, "Published a next key. SPs pick it up from the metadata; activate it once they have."));
+  else {
+    act("Activate next key", () => tenantCall("/keys/activate", { organizationId: id }, "The next key signs now."));
+    act("Activate now (force)", () => confirm("Activate before SPs have had 24 hours to fetch the new certificate? SPs that haven't will reject sign-ins until they do. Meant for a leaked key.") && tenantCall("/keys/activate", { organizationId: id, force: true }, "The next key signs now (forced)."), "danger");
+  }
+  if (has("previous")) act("Retire previous key", () => tenantCall("/keys/retire", { organizationId: id }, "The previous key is no longer published, and its private key is erased."));
+  act(t.enabled ? "Disable" : "Enable", () => tenantCall("/update", { organizationId: id, enabled: !t.enabled }, (t.enabled ? "Disabled " : "Enabled ") + t.tenantKey + "."));
+  act("Delete", () => confirm("Delete tenant " + t.tenantKey + "? Its key is retired for good: no tenant can have its URLs again. Its SPs must be deleted first.") && tenantCall("/delete", { organizationId: id }, "Deleted " + t.tenantKey + "."), "danger");
+  return el("tr", {}, name, idp, keys, status, actions);
+}
+
+async function tenantCall(path, body, done) {
+  try { await call(TENANTS + path, body); say(done); await loadTenants(); await loadSps(); } catch (e) { say(e.message, "err"); }
+}
+
+$("createTenant").onclick = async () => {
+  const name = $("orgName").value.trim(), slug = $("orgSlug").value.trim();
+  if (!name) return say("Enter the organization's name.", "err");
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(slug)) return say("The slug: 1-64 letters, digits, - and _ (it's also the tenant key in URLs).", "err");
+  try {
+    const org = await call("/api/auth/organization/create", { name, slug, keepCurrentActiveOrganization: true });
+    await call(TENANTS + "/create", { organizationId: org.id, tenantKey: slug });
+    $("orgName").value = ""; $("orgSlug").value = "";
+    say("Created tenant " + slug + " with its own signing key.");
+    await loadTenants(); await loadSps();
+  } catch (e) { say(e.message, "err"); }
+};
+
+$("backfill").onclick = async () => {
+  try {
+    const r = await call("/admin/api/backfill", {});
+    say("Backfill: " + r.updated + " SP(s) updated" + (r.skipped.length ? "; skipped: " + r.skipped.join(", ") : "") + (r.failed.length ? "; failed: " + r.failed.join(", ") : "") + ".", r.failed.length ? "err" : "info");
+    await loadSps();
+  } catch (e) { say(e.message, "err"); }
+};
+
 async function loadAudit() {
   const tbody = $("audit");
   try {
@@ -279,6 +383,6 @@ async function loadAudit() {
   } catch (e) { tbody.replaceChildren(el("tr", {}, el("td", { colSpan: 5, className: "bad", textContent: e.message }))); }
 }
 
-loadSps();
+loadTenants().then(loadSps);
 loadAudit();
 </script></body></html>`;

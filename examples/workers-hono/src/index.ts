@@ -34,6 +34,14 @@ app.get("/", async (c) => {
   const origin = new URL(c.req.url).origin;
   const session = await withCf(c, () => authFor(c).api.getSession({ headers: c.req.raw.headers }));
   const who = session ? `Signed in as ${escapeHtml(session.user.email)}` : "Not signed in";
+  // Tenants (made on /admin): each is its own IdP, with its own entity ID and signing key.
+  const ctx = await authFor(c).$context;
+  const tenants = (await ctx.adapter.findMany({ model: "samlIdpTenant", where: [{ field: "enabled", value: true }], sortBy: { field: "tenantKey", direction: "asc" }, limit: 100 })) as { tenantKey: string }[];
+  const tenantList = tenants.length
+    ? `<h2>Tenants</h2><p>Each has its own entity ID, metadata and signing key:</p><ul>${tenants
+        .map((t) => `<li>${escapeHtml(t.tenantKey)}: <a href="/api/auth/saml2/idp/metadata/${encodeURIComponent(t.tenantKey)}">metadata</a></li>`)
+        .join("")}</ul>`
+    : "";
   // IdP-initiated SSO launcher: SPs with "allowIdpInitiated": true in SAML_SERVICE_PROVIDERS.
   const apps = idpInitiatedApps(c.env);
   const appList = apps.length
@@ -45,6 +53,7 @@ app.get("/", async (c) => {
     `<!doctype html><meta charset="utf-8"><title>SAML IdP example</title>` +
       `<body style="font:16px system-ui;margin:2rem"><h1>better-auth-saml-idp example</h1><p>${who}</p>` +
       appList +
+      tenantList +
       `<p>IdP metadata: <a href="/api/auth/saml2/idp/metadata">${origin}/api/auth/saml2/idp/metadata</a></p>` +
       `<p><a href="/sign-in">Sign in / sign up</a> · <a href="/admin">Admin</a></p></body>`,
   );
