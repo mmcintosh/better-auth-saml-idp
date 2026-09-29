@@ -9,7 +9,9 @@ case "$want" in
   *) v="$want" ;;
 esac
 echo "better-auth $want -> $v"
-pnpm add -D "better-auth@$v" "@better-auth/core@$v" "@better-auth/drizzle-adapter@$v" "@better-auth/sso@$v"
+# -w: the workspace root is where the tests' dependencies live (pnpm asks for it explicitly once
+# pnpm-workspace.yaml excludes a folder, as it does examples/chardb).
+pnpm add -w -D "better-auth@$v" "@better-auth/core@$v" "@better-auth/drizzle-adapter@$v" "@better-auth/sso@$v"
 # The example apps must use the same version, or two copies of Better Auth's types collide.
 pnpm -C examples/workers-hono add "better-auth@$v"
 pnpm -C examples/nextjs add "better-auth@$v"
