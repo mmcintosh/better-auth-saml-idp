@@ -20,6 +20,13 @@ All notable changes to this project. The format follows [Keep a Changelog](https
   - With delegation alone (no `canManage`, no `permissions`), the registry API is mounted for tenants' administrators only.
 - **Audit log API:** `GET /saml-idp/audit` (with `auditLog.enabled`): newest first, paged with `before`, filtered by tenant in the query; a tenant's administrator sees only its own.
 - **Registry changes in the audit log:** a `service-provider.changed` event (`events.onServiceProviderChanged`) for each create, update, enable, disable and delete, with the acting user and `delegated`.
+- **Review 7 of phases 2 and 3, before release** (D-060):
+  - **R7-5 (High):** delegation now applies only to tenants that sign with their own key. A tenant still on the shared key would have let its administrator get assertions for another identity's SPs signed with that key (design §5.1).
+  - **R7-4 (High):** a delegated SP can't use `only` in organization attributes, which would have told a tenant's administrator its members' memberships in other organizations.
+  - **R7-1:** retired tenant keys beyond the five newest are deleted, and key reads are newest first, so many rotations can't push the active key out of a bounded read (which would have refused every sign-in).
+  - **R7-2:** tenant records carry `warnings` for certificates that expire within 30 days, or have, and loading such a key logs it.
+  - **R7-3:** listing tenants reads only their key rows (filtered in the query).
+  - **R7-6:** a delegated create or update naming another organization gets the same 403 whether or not it is a tenant.
 - **Tenant changes in the audit log** (review 6 I-2): a `tenant.changed` event (`events.onTenantChanged`, and the audit log) when an administrator creates, enables, disables or deletes a tenant, or rotates, activates or retires one of its keys, with who did it.
 
 ## [1.0.2] - 2026-09-29

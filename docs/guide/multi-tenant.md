@@ -190,7 +190,9 @@ The three steps of [key rotation](../key-rotation.md), per tenant, through the r
 2. **Activate.** SPs that verify with either published certificate keep working.
 3. **Retire** once no SP needs the old certificate any more.
 
-`activate` with `force: true` skips the wait: for a key that has leaked. It's recorded as forced. Deleting a tenant deletes its keys.
+`activate` with `force: true` skips the wait: for a key that has leaked. It's recorded as forced. Deleting a tenant deletes its keys. A tenant keeps its five most recently retired keys (certificates only); older ones are deleted, and the audit log has their history.
+
+**Expiry.** A tenant's own certificate that expires within 30 days, or has expired, is listed in its record's `warnings`, and logged once per isolate when the key is loaded. Rotate it before then: SPs that check validity reject an expired certificate.
 
 Every change to a tenant or its keys is a `tenant.changed` event (`events.onTenantChanged`, and a row in the audit log with `auditLog.enabled`): `action` is `created`, `enabled`, `disabled`, `deleted`, `key.rotated`, `key.activated` (with `forced`) or `key.retired`, with the acting `userId` and, for keys, the `kid`.
 
@@ -221,7 +223,7 @@ tenants: {
 | `userFields` | `["email", "name", "id"]` | The only user fields a delegated SP may send, as attributes or as its NameID. Constants and organization attributes are fine. |
 | `allowMetadataUrl` | `false` | Whether delegated SPs may use `metadata.url`: it makes your server fetch that URL. |
 
-**Who counts.** A user who holds one of `roles` in an **enabled tenant's** organization. It's decided on every request from the database: the membership table (not the session's active organization), the user row (a ban counts) and the session (an impersonated one is refused). A demoted administrator loses access at the next request. Your own managers (`canManage`, `permissions`) are unaffected and still manage everything. With delegation alone (no `canManage`, no `permissions`) the registry API is mounted for tenants' administrators only.
+**Who counts.** A user who holds one of `roles` in the organization of an **enabled tenant that signs with its own key**. A tenant still on the shared key (made before per-tenant keys, not rotated yet) isn't delegated: its administrator could otherwise have assertions for another identity's SPs signed with the shared key. Rotate its first own key in to delegate it. It's decided on every request from the database: the membership table (not the session's active organization), the user row (a ban counts) and the session (an impersonated one is refused). A demoted administrator loses access at the next request. Your own managers (`canManage`, `permissions`) are unaffected and still manage everything. With delegation alone (no `canManage`, no `permissions`) the registry API is mounted for tenants' administrators only.
 
 **What a tenant's administrator can do**, through the [registry API](service-providers.md#registry-api):
 
@@ -229,13 +231,14 @@ tenants: {
 |---|---|
 | `GET /saml-idp/service-providers` | Its tenant's SPs, filtered in the query. With several tenants, `?tenantId=` is required. Another tenant's, or the root's: 403. |
 | `…/get`, `…/update`, `…/delete` | Its tenant's SPs only. Another tenant's SP, or the root's, is **404**, as if it didn't exist (`id` is global, so this is what stops one tenant reaching another's). |
-| `…/create` | Only with `serviceProvider.tenant` one of its tenants (403 otherwise), and only allowed user fields and, unless allowed, no `metadata.url` (400 `INVALID_SERVICE_PROVIDER`, `issues` says which). An SP's tenant can't change afterwards, for anyone. |
+| `…/create` | Only with `serviceProvider.tenant` one of its tenants (403 otherwise, the same answer whether or not the organization named is a tenant), and only allowed user fields and, unless allowed, no `metadata.url` (400 `INVALID_SERVICE_PROVIDER`, `issues` says which). An SP's tenant can't change afterwards, for anyone. |
 | `GET /saml-idp/tenants/get`, `GET /saml-idp/tenants/keys` | Its own tenant only: URLs and certificates, never private keys. |
 | `GET /saml-idp/audit` | Its tenant's events ([below](#events-and-the-audit-log)). |
 | Everything else under `/saml-idp/tenants` | 403: creating, disabling and deleting tenants and managing their keys stay with you. |
 
 **Why those limits.**
 - **User fields:** without them, a tenant's administrator could map any column of your user table (your `role`, a ban reason, an internal flag) into an SP of theirs and read it for their members.
+- **Organization attributes** (`{ organization: … }`) are allowed, but not `only`: a tenant SP's scope is the tenant's own organization. `only` naming other organizations would tell them their members' other memberships.
 - **`metadata.url`:** your server fetches it (the certificate refresh), so it would let them make your server request URLs of their choosing.
 - **Warnings:** a record shown to a tenant's administrator carries no warning about another tenant's SP. Your managers still see the [overlap warning](#signing-keys-shared-or-per-tenant).
 - **An SP's `id` is global:** creating one with an `id` another tenant uses answers `SERVICE_PROVIDER_EXISTS`. That tells them the `id` is taken, and nothing about the SP.

@@ -64,6 +64,7 @@ A running log of the non-obvious choices, with the options considered and the ev
 - [D-057](#d-057-102-the-client-plugin-under-typescript-5-2026-09-29): 1.0.2, the client plugin under TypeScript 5 (2026-09-29)
 - [D-058](#d-058-multi-tenant-idp-phase-2-a-signing-key-per-tenant-2026-09-29): Multi-tenant IdP, phase 2: a signing key per tenant (2026-09-29)
 - [D-059](#d-059-multi-tenant-idp-phase-3-delegated-administration-2026-09-29): Multi-tenant IdP, phase 3: delegated administration (2026-09-29)
+- [D-060](#d-060-review-7-phases-2-and-3-before-release-2026-09-29): Review 7, phases 2 and 3 before release (2026-09-29)
 
 ---
 
@@ -1842,4 +1843,38 @@ Phase 3 of `docs/design/multi-tenant.md` (§5.4), opt-in with `tenants.delegatio
   - the delegated config check, the field allow-list and the metadata-URL refusal;
   - the role check, and the enabled-tenant check;
   - the warning suppression.
-- **Still to do before release:** the design recommends an external review of phases 2 and 3 before they ship.
+- **Before release:** reviewed in D-060 (review 7).
+
+## D-060: Review 7, phases 2 and 3 before release (2026-09-29)
+
+The design (§8) asks for a review of phases 2 and 3 before they ship. Done in the open, reading the diff since 1.0.2 adversarially: key handling first, then the delegation boundary. Six findings, each fixed with a test that failed first (the failure matching the finding), on Node and workerd.
+- **R7-5 (High): delegation of a tenant still on the shared key.** Per-tenant keys leave tenants made before them on the shared key until rotated (D-058). `access()` counted any enabled tenant, so such a tenant's administrator could register an SP with a root SP's entity ID and ACS URL and get assertions signed with the root key: the §5.1 attack that delegation was meant to wait for.
+  - Fix: a tenant counts only when it has an active key of its own.
+  - Test: an owner of a keyless tenant gets 403, then 200 once the host rotates and activates its first key.
+- **R7-4 (High): cross-organization disclosure through `only`.** Organization attributes get all of the user's memberships, and `only` selects among them by id or slug, so a delegated SP with `{ organization: "slugs", only: [otherOrg] }` told its administrator which members also belong to another organization.
+  - Fix: delegated SPs can't use `only`. Without it, a tenant SP's scope is the tenant (phase 1).
+  - Host managers keep it.
+- **R7-1 (Medium): unbounded key rows, bounded reads.** Every rotation left a retired row, while the store read at most 50 rows unsorted, the admin routes 100, and the list a global cap. After enough rotations the active row could fall outside the read, and the never-fall-back rule would then refuse every sign-in.
+  - Fix: `activate` and `retire` keep only the five newest retired rows (the audit log keeps the history), and reads are newest first, so a tenant has at most nine rows.
+  - Tested with 8 rotations, and in the adapter matrix with 7 rotations and a retire on every database.
+- **R7-2 (Low): no expiry warning for tenant certificates** (the design's phase 2 list had one).
+  - Fix: tenant records carry `warnings` for their own certificates that expire within 30 days or have expired, and loading such a key logs it once per isolate.
+- **R7-3 (Low): the tenant list read every key row with a global cap.** Tenants past the cap could show no keys and `signing: "shared"`.
+  - Fix: filtered with `tenantId in (…)` in the query.
+  - Test: 160 unrelated rows written first.
+- **R7-6 (Low): a tenant-existence oracle.** A delegated create naming an organization got 400 "no tenant" before the scope check, and 403 for a tenant.
+  - Fix: the scope check runs first, and every organization outside the actor's tenants gets the same 403.
+- **Checked and fine:**
+  - the never-fall-back rule across `activate`'s intermediate states;
+  - key-cache keying by row;
+  - the ciphertext binding and its purpose label;
+  - the IdP cache keyed by certificates;
+  - SLO skipping an SP whose key can't load;
+  - tenant metadata refusing rather than publishing another key;
+  - the audit route's session middleware and tenant filter;
+  - host-only tenant routes;
+  - ACS and SLO URLs set by tenant administrators, which are browser-navigated, not fetched.
+- **Accepted:**
+  - switching the host back to `keys: "shared"` makes every tenant sign with the shared key again. That's a deliberate host configuration, and delegation is then a startup error;
+  - a host can upload the same key pair for two tenants, or the root's. That's host-only, and its own choice.
+- The full suite (1,415 tests) and the adapter matrix on Postgres, MySQL, MongoDB 8.2, Drizzle on Postgres and MySQL, and Prisma on Postgres passed.
