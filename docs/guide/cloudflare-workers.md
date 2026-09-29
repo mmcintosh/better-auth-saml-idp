@@ -84,6 +84,7 @@ Check a JSON configuration with `npx better-auth-saml-idp check-config`. Key rot
 | `0006_api_decision_4_option_names.sql` | Rewrites stored SPs saved with the option names from before 1.0 (D-040) |
 | `0007_participants_user_ended.sql` | `user_id` and `ended_at` on the Single Logout table (`events.onSessionEnded`) |
 | `0008_tenants.sql` | The tenant table and tenant columns (`tenants.enabled`; see [Multi-tenant IdP](multi-tenant.md#database)) |
+| `0009_tenant_keys.sql` | The tenant signing-key table (`tenants.keys: "per-tenant"`; see [Per-tenant signing keys](multi-tenant.md#per-tenant-signing-keys)) |
 
 ```bash
 npx wrangler d1 migrations apply <db> --remote

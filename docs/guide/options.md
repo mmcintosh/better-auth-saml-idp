@@ -91,10 +91,12 @@ An IdP identity per Better Auth organization: its own entity ID, metadata and SS
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `enabled` | `boolean` | **required** | Adds the [`samlIdpTenant`](schema.md#samlidptenant-with-tenantsenabled) and [`samlIdpRetiredTenantKey`](schema.md#samlidpretiredtenantkey-with-tenantsenabled) tables and tenant columns, the `/saml2/idp/{metadata,sso,slo}/<tenantKey>` routes, and the tenant API (with the registry API). Needs the organization plugin, `registry.enabled` and a pinned `baseURL`; each missing is a startup error. |
-| `keys` | `"shared"` | `"shared"` | What tenants sign with: `signing`, in this version. `"per-tenant"` is a startup error until it exists. |
-| `cacheSeconds` | `number` | `registry.cacheSeconds` | How long each isolate caches a tenant, and a miss. 0 to 3600. |
+| `keys` | `"shared" \| "per-tenant"` | `"shared"` | What tenants sign with: `signing`, or each tenant its own key in the [`samlIdpTenantKey`](schema.md#samlidptenantkey-with-tenantskeys-per-tenant) table ([Per-tenant signing keys](multi-tenant.md#per-tenant-signing-keys)). |
+| `cacheSeconds` | `number` | `registry.cacheSeconds` | How long each isolate caches a tenant, a miss, and a tenant's keys. 0 to 3600. |
+| `keyEncryptionSecret` | `string` | Better Auth's | With per-tenant keys: what seals tenants' private keys (at least 32 characters). By default Better Auth's `secrets` (versioned) or `secret`. |
+| `minPublishedSeconds` | `number` | `86400` | With per-tenant keys: how long a next key must have been published before `activate` accepts it without `force`. 0 to 31536000. |
 
-`delegation` (organization administrators managing their own SPs) is a startup error: it needs per-tenant keys ([why](multi-tenant.md#the-shared-signing-key)).
+`delegation` (organization administrators managing their own SPs) is a startup error: it comes in phase 3, on per-tenant keys ([why](multi-tenant.md#signing-keys-shared-or-per-tenant)).
 
 ## `auditLog`
 

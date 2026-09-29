@@ -231,6 +231,24 @@ The key of every deleted tenant, so it is never used again: SPs set up for a del
 | `retiredAt` | date | | When the tenant was deleted. |
 | `retiredBy` | string | | The user id who deleted it (optional). |
 
+## `samlIdpTenantKey` (with `tenants.keys: "per-tenant"`)
+
+A tenant's signing keys, one row per key ([Per-tenant signing keys](multi-tenant.md#per-tenant-signing-keys), D-058).
+
+| Field | Type | Key | Description |
+|---|---|---|---|
+| `id` | string | primary | Row id. |
+| `tenantId` | string | index | The tenant's organization id. |
+| `kid` | string | | The key's id in the API and logs. `"shared"` for the row that keeps the shared certificate published after a tenant's first own key. |
+| `state` | string | | `next` (published, not signing yet), `active` (signs), `previous` (replaced, still published) or `retired` (neither). |
+| `stateKey` | string | **unique** | A hash of (tenant, state) for `next` and `active`, so a tenant has at most one of each; a random value otherwise. |
+| `encryptedPrivateKey` | string | | The private key, sealed with Better Auth's secret and bound to this tenant and kid. Empty once retired, and for the `"shared"` row. |
+| `certificate` | string | | PEM. |
+| `notAfter` | date | | The certificate's expiry. |
+| `createdAt` | date | | When it was made (a next key's publication time, for `minPublishedSeconds`). |
+| `activatedAt` | date | | When it started signing (optional). |
+| `updatedBy` | string | | The user id who last changed it (optional). |
+
 ## Other storage
 
 - **`verification`** (Better Auth's table): pending sign-in requests (`resume` links), POST-binding continuations, and logout state. All are single-use (consumed atomically) and short-lived. With secondary storage such as KV configured, set `verification: { storeInDatabase: true }` so single-use consumption stays atomic.

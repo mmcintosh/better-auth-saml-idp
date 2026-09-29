@@ -1,7 +1,7 @@
 # Multi-tenant IdP: design
 
 > [!NOTE]
-> **Status:** phase 1 is built ([guide](../guide/multi-tenant.md), DECISIONS D-052 and D-053). Phases 2 (per-tenant keys) and 3 (delegation) are not. This is the design as written before phase 1, so its file and line references are to the code at that time.
+> **Status:** phases 1 and 2 are built ([guide](../guide/multi-tenant.md), DECISIONS D-052, D-053 and D-058): per-organization identities, and per-tenant signing keys. Phase 3 (delegation) is not. This is the design as written before phase 1, so its file and line references are to the code at that time.
 
 Reviewer's design for the roadmap item "One IdP identity per organization" (README.md:87), against `main` at d7ceb12. No repo files were changed.
 

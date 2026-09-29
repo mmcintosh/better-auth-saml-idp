@@ -4,6 +4,16 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- **Multi-tenant IdP, phase 2: a signing key per tenant** (`tenants: { enabled: true, keys: "per-tenant" }`; [guide](docs/guide/multi-tenant.md#per-tenant-signing-keys), D-058). Opt-in: with `keys: "shared"` (the default) nothing changes.
+  - Each tenant signs its assertions, logout messages and metadata with its own key, and its metadata publishes that certificate. A new tenant gets one at creation (RSA 3072, a two-year self-signed certificate).
+  - A tenant made before keeps the shared key until its first own key is rotated in, so its SPs see an ordinary rotation. Once a tenant has had its own key, nothing else ever signs for it: a key that can't be loaded refuses (`INTERNAL_ERROR`, metadata 500) and never falls back.
+  - Rotation per tenant through the registry API: `/saml-idp/tenants/keys` (list), `/keys/rotate` (a next key, generated or uploaded), `/keys/activate` (after `minPublishedSeconds`, default 24 hours; `force` for a leaked key) and `/keys/retire` (erases the old private key).
+  - Keys are stored in the new `samlIdpTenantKey` table, sealed with Better Auth's (versioned) secret or `tenants.keyEncryptionSecret`, and bound to their tenant and key id, so a key copied into another row is refused. D1: the example's migration `0009_tenant_keys.sql`.
+  - New error codes: `INVALID_TENANT_SIGNING_KEY`, `TENANT_SIGNING_KEY_EXISTS`, `TENANT_SIGNING_KEY_NOT_FOUND`, `TENANT_SIGNING_KEY_TOO_NEW`. Tenant records gain `signing` and `keys` with per-tenant keys.
+- **Tenant changes in the audit log** (review 6 I-2): a `tenant.changed` event (`events.onTenantChanged`, and the audit log) when an administrator creates, enables, disables or deletes a tenant, or rotates, activates or retires one of its keys, with who did it.
+
 ## [1.0.2] - 2026-09-29
 
 ### Fixed

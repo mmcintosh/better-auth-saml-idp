@@ -62,6 +62,7 @@ A running log of the non-obvious choices, with the options considered and the ev
 - [D-055](#d-055-repository-clean-up-before-100-2026-09-28): Repository clean-up before 1.0.0 (2026-09-28)
 - [D-056](#d-056-101-from-running-on-chardb-2026-09-29): 1.0.1, from running on CharDB (2026-09-29)
 - [D-057](#d-057-102-the-client-plugin-under-typescript-5-2026-09-29): 1.0.2, the client plugin under TypeScript 5 (2026-09-29)
+- [D-058](#d-058-multi-tenant-idp-phase-2-a-signing-key-per-tenant-2026-09-29): Multi-tenant IdP, phase 2: a signing key per tenant (2026-09-29)
 
 ---
 
@@ -1749,3 +1750,51 @@ Found while checking the published 1.0.1 in a clean app: the strict host (D-056)
   - Verified in a clean app: Better Auth 1.7.5 and 1.7.6, each with TypeScript 5.9.3 and 7.0.2, zero errors.
 - **Guard.** `pack:check` now runs the strict host with TypeScript 5.9 as well (the `typescript-5` dev dependency, `npm:typescript@5.9.3`). With 1.0.1's `dist/` it fails under 5.9 and passes under 7.
 - **Lesson.** Type tests of published declarations run on the oldest TypeScript hosts are likely to use, not only on ours.
+
+## D-058: Multi-tenant IdP, phase 2: a signing key per tenant (2026-09-29)
+
+Phase 2 of `docs/design/multi-tenant.md`, opt-in with `tenants.keys: "per-tenant"`.
+- **Maintainer decisions:**
+  - Keys are encrypted with Better Auth's secret, with an optional `tenants.keyEncryptionSecret`.
+  - Generated keys are RSA 3072.
+  - Tenants made before keep the shared key until an administrator rotates their first own key in; new tenants get their own key at creation.
+  - `minPublishedSeconds` defaults to 24 hours, with an audited `force`.
+- **Checked first.**
+  - Better Auth 1.7's `symmetricEncrypt` takes a versioned `SecretConfig`, and `ctx.context.secretConfig` gives it to the plugin, so rotating the key-encryption secret is Better Auth's own `secrets` rotation.
+  - RSA key generation runs on workerd: `generateKeyPairSync` took about 190 ms and WebCrypto about 120 ms for RSA-2048 in the local runtime.
+- **Storage.** A `samlIdpTenantKey` row per key: `next | active | previous | retired`, with a UNIQUE `stateKey` (a hash of tenant and state for next and active), so a tenant has at most one of each on every database.
+  - The cipher (XChaCha20-Poly1305) has no associated data. So the sealed plaintext is JSON naming its purpose, tenant and kid, and it must match the row. A ciphertext copied into another tenant's row, or anything else Better Auth encrypts with the same secret, is refused.
+  - The limit, documented: it protects backups, dumps and read-only leaks, not a compromised Worker.
+- **Signing.** Every signature and metadata document already comes from an `IdpIdentity` (D-052, §5.8). A tenant's identity now gets its signing configuration from `TenantKeyStore`, cached per isolate for `cacheSeconds`, with decrypted keys cached by row.
+  - The shared key is used only by a tenant that has never had a key of its own. Once it has had one, a missing or unusable active key throws `TenantKeyError`: sign-in and the tenant SLO URL answer `INTERNAL_ERROR`, metadata a 500, and Single Logout skips that SP (PartialLogout).
+  - That also covers the moment inside `activate` between moving the old key aside and promoting the next.
+  - The samlify IdP cache is keyed by the certificates too, so a rotated key gets a fresh IdP.
+- **Rotation**, the three steps of D-019 per tenant:
+  - `rotate` publishes a next key, generated or uploaded, with the pair checked;
+  - `activate` promotes it after `minPublishedSeconds`, or with `force`, which is recorded. For a tenant's first own key, the shared certificate is kept published in a `previous` row with kid `"shared"` and no private key. An older previous is retired;
+  - `retire` stops publishing the previous and erases its private key;
+  - deleting a tenant deletes its keys;
+  - the routes exist only with per-tenant keys, under the manager with `update` (`read` to list) on `samlTenant`.
+- **Review 6 I-2.** A new `tenant.changed` event (`events.onTenantChanged`) goes into the audit log for tenant create, enable, disable and delete, and key rotate, activate (with `forced`) and retire, with the acting user.
+- **Tests.** `test/integration/tenant-keys.test.ts` runs on Node and workerd, 15 tests each. It covers:
+  - the round trip, and a swapped or foreign ciphertext refused;
+  - RSA 3072;
+  - own keys verifying and the shared or another tenant's not;
+  - the full rotation;
+  - the wait and `force`, and uploads;
+  - access;
+  - a damaged key, a copied key and an activation cut short all refusing;
+  - moving from the shared key;
+  - secret rotation through `secrets`, and `keyEncryptionSecret`;
+  - deletion;
+  - the per-isolate cache.
+
+  The adapter matrix gains concurrent rotations: exactly one of five wins through the UNIQUE `stateKey`. It passed on Postgres, MySQL, MongoDB 8.2, Drizzle on Postgres and MySQL, and Prisma on Postgres.
+- **Mutation proof.** Each of these, removed in turn, fails at least one test:
+  - the tenant and kid binding;
+  - the never-fall-back rule;
+  - the `minPublishedSeconds` guard;
+  - the tenant identity using its own key;
+  - keeping the shared certificate published;
+  - erasing a retired key.
+- **Not in this phase:** delegation (phase 3), and keys outside the database (a KMS/HSM callback, deferred until a host needs it). Live CPU on a deployed Worker is still to measure.

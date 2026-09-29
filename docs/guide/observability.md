@@ -25,6 +25,7 @@ samlIdp({
 | `onDenied` | The IdP refused something, either with an error page (`code` is one of the [error codes](errors.md)), or with a SAML error Response to the SP (`code: "SAML_STATUS"` with `status`, e.g. `NoPassive`). |
 | `onLogout` | Single Logout ended an IdP session, started by an SP or by your app's sign-out-everywhere. |
 | `onSessionEnded` | A session ended *without* Single Logout (revoked, disabled, `/sign-out`, expired), with the SPs that weren't told. Fires outside requests too, so it has no IP or user agent. See [When the session ends without the browser](single-logout.md#when-the-session-ends-without-the-browser). |
+| `onTenantChanged` | With [tenants](multi-tenant.md): an administrator created, enabled, disabled or deleted a tenant, or rotated, activated or retired one of its keys. |
 
 Every event has `type`, `at` (a `Date`), and when available `ipAddress` and `userAgent`. The IP is read the way Better Auth reads it: from `advanced.ipAddress.ipAddressHeaders`, which `withCloudflare` sets to `cf-connecting-ip`. It's absent with `disableIpTracking`.
 
@@ -62,6 +63,16 @@ Every event has `type`, `at` (a `Date`), and when available `ipAddress` and `use
 | `spId` | The SP that started it (SP-initiated only). |
 | `userId`, `sessionId` | Whose session ended. |
 | `notifying` | The other SPs that will be sent a LogoutRequest, in order. |
+
+**`tenant.changed`**
+
+| Field | Description |
+|---|---|
+| `action` | `created`, `enabled`, `disabled`, `deleted`, `key.rotated`, `key.activated` or `key.retired`. |
+| `userId` | The administrator who did it. |
+| `tenantId`, `tenantKey` | The tenant (its organization id, and the key in its URLs). |
+| `kid` | For key actions: which key (for `key.retired`, a comma-separated list). |
+| `forced` | `true` for an activation that skipped `minPublishedSeconds`. |
 
 </details>
 

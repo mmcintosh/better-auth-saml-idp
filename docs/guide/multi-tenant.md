@@ -4,9 +4,9 @@
 
 Give each of your customers (a Better Auth organization) its own SAML identity: its own entity ID, metadata, and SSO and SLO URLs, next to the root IdP you already have. Their IT team configures their SPs (AWS, Google Workspace, Salesforce…) with *their* IdP, and only members of *their* organization can sign in through it.
 
-This is **phase 1** of the design in [the multi-tenant design](../design/multi-tenant.md) (DECISIONS.md D-052):
-- **In this version:** per-organization identities; **every tenant signs with your one `signing` key**; only **your** administrators create tenants and manage their SPs.
-- **Not yet:** a signing key per tenant (phase 2), and letting an organization's own administrators manage their SPs (phase 3, which needs per-tenant keys). [Why the order matters](#the-shared-signing-key).
+This covers phases 1 and 2 of [the multi-tenant design](../design/multi-tenant.md) (DECISIONS.md D-052, D-058):
+- **In this version:** per-organization identities; tenants sign with your one `signing` key (`keys: "shared"`, the default) or **each with its own key** (`keys: "per-tenant"`, [below](#per-tenant-signing-keys)); only **your** administrators create tenants and manage their SPs.
+- **Not yet:** letting an organization's own administrators manage their SPs (phase 3, which needs per-tenant keys). [Why the order matters](#signing-keys-shared-or-per-tenant).
 
 Tenancy is off unless you turn it on. With `tenants` unset, nothing changes: no tables, no columns, no routes, and every response is byte for byte what it was.
 
@@ -44,10 +44,12 @@ Then create the tables ([Database](#database)).
 | `tenants` option | Default | What it does |
 |---|---|---|
 | `enabled` | **required** | Turns tenancy on. |
-| `keys` | `"shared"` | What tenants sign with. Only `"shared"` exists in this version. `"per-tenant"` is a startup error until phase 2. |
-| `cacheSeconds` | `registry.cacheSeconds` (60) | How long each isolate caches a tenant, and a miss. 0 to 3600. A tenant disabled in one isolate is disabled everywhere within this time. |
+| `keys` | `"shared"` | What tenants sign with: `"shared"` (your `signing` key) or `"per-tenant"` (each tenant its own, [below](#per-tenant-signing-keys)). |
+| `cacheSeconds` | `registry.cacheSeconds` (60) | How long each isolate caches a tenant, a miss, and a tenant's keys. 0 to 3600. A tenant disabled, or a key rotated, in one isolate is seen everywhere within this time. |
+| `keyEncryptionSecret` | Better Auth's `secrets` / `secret` | With per-tenant keys: what seals tenants' private keys. At least 32 characters. |
+| `minPublishedSeconds` | `86400` | With per-tenant keys: how long a next key must have been published before `activate` accepts it. 0 to 31536000. |
 
-`tenants.delegation` (organization administrators managing their own SPs) is refused at startup: it needs per-tenant keys.
+`tenants.delegation` (organization administrators managing their own SPs) is refused at startup: it comes in phase 3, on per-tenant keys.
 
 ## Create a tenant
 
@@ -149,13 +151,56 @@ Organization [attributes](users-and-access.md#attributes) without `only` cover t
 - a request's `Destination` must be the URL it arrived at, so one signed for tenant A's URL can't be replayed to B's;
 - replay protection, SessionIndexes, logout participants and pending requests are keyed by the SP's id, which is unique across tenants.
 
-## The shared signing key
+## Signing keys: shared or per tenant
 
-In this version every tenant signs with your `signing` key. A tenant's SPs pin that certificate; what tells tenant A's assertions from tenant B's is only the `Issuer`.
+With `keys: "shared"` every tenant signs with your `signing` key. A tenant's SPs pin that certificate; what tells tenant A's assertions from tenant B's is only the `Issuer`.
 
-That's why only **your** administrators manage tenant SPs for now. Suppose tenant B's administrator could register, in B, an SP with tenant A's Salesforce entity ID and ACS URL, mapping a constant attribute to a victim's email. The IdP would then issue, under B's identity, an assertion addressed to A's Salesforce. Salesforce checks the Issuer and refuses it; not every SP does. With a key per tenant (phase 2), A's SP trusts only A's certificate, and B's assertion fails everywhere signatures are checked at all. So delegation waits for per-tenant keys, and `tenants.delegation` is a startup error until then.
+That's why only **your** administrators manage tenant SPs. Suppose tenant B's administrator could register, in B, an SP with tenant A's Salesforce entity ID and ACS URL, mapping a constant attribute to a victim's email. The IdP would then issue, under B's identity, an assertion addressed to A's Salesforce. Salesforce checks the Issuer and refuses it; not every SP does. With a key per tenant, A's SP trusts only A's certificate, and B's assertion fails everywhere signatures are checked at all. So delegation needs per-tenant keys.
 
 Your own administrators are warned when this situation arises by accident: an SP with the **same entity ID and an ACS URL** as an SP in another tenant (or the root) gets a warning in its registry record and the log, and code SPs one at startup. For SPs like AWS that's expected: check that the SP compares the assertion's Issuer with the IdP it was configured with, before relying on it.
+
+## Per-tenant signing keys
+
+```ts
+samlIdp({
+  // ...
+  tenants: { enabled: true, keys: "per-tenant" },
+});
+```
+
+Each tenant then signs its assertions, logout messages and (with `signMetadata`) its metadata with a key of its own, and its metadata publishes that key's certificate. The root IdP keeps your `signing` key.
+
+- **A new tenant gets a key when it's created**: RSA 3072, with a two-year self-signed certificate named `saml-idp tenant <tenantKey>`. No SP trusts the tenant yet, so the key is active at once. The tenant record says `signing: "own"` and lists its keys.
+- **A tenant made before** (with `keys: "shared"`) **keeps signing with the shared key** until you rotate its first own key in, as below. Its record says `signing: "shared"`. Its SPs keep working throughout: to them it's an ordinary certificate rotation.
+- **Once a tenant has had a key of its own, nothing else ever signs for it.** A key that can't be loaded (a missing secret version, a damaged row, an activation cut short) makes its sign-ins fail with `INTERNAL_ERROR` and its metadata answer 500, and it is logged. It never falls back to the shared key.
+
+### Rotating a tenant's key
+
+The three steps of [key rotation](../key-rotation.md), per tenant, through the registry API (the manager, with `update` on `samlTenant`):
+
+| Route | What it does |
+|---|---|
+| `GET /saml-idp/tenants/keys?organizationId=` | The tenant record with its keys: `kid`, `state`, `certificate`, `notAfter`, and for a next key `activatableAt`. Never private keys. |
+| `POST /saml-idp/tenants/keys/rotate` | `{ organizationId, privateKey?, certificate? }`: a **next** key, generated or uploaded (an RSA key of at least 2048 bits and its certificate, e.g. from `npx better-auth-saml-idp keygen`). The tenant's metadata publishes it next to the active one. 409 `TENANT_SIGNING_KEY_EXISTS` while it has a next key already. |
+| `POST /saml-idp/tenants/keys/activate` | `{ organizationId, force? }`: the next key signs from now on; the active one (for a tenant's first own key, the shared one) stays published as **previous**; an older previous is retired. 409 `TENANT_SIGNING_KEY_TOO_NEW` (with `activatableAt`) until the next key has been published for `minPublishedSeconds`. |
+| `POST /saml-idp/tenants/keys/retire` | `{ organizationId }`: the previous key's certificate leaves the metadata, and its private key is erased. |
+
+1. **Rotate.** Wait until the tenant's SPs have fetched the new metadata. SPs that refresh it (Cloudflare Access, Salesforce with a metadata URL) do it themselves; for the others the tenant's IT team uploads the new certificate. The wait defaults to 24 hours.
+2. **Activate.** SPs that verify with either published certificate keep working.
+3. **Retire** once no SP needs the old certificate any more.
+
+`activate` with `force: true` skips the wait: for a key that has leaked. It's recorded as forced. Deleting a tenant deletes its keys.
+
+Every change to a tenant or its keys is a `tenant.changed` event (`events.onTenantChanged`, and a row in the audit log with `auditLog.enabled`): `action` is `created`, `enabled`, `disabled`, `deleted`, `key.rotated`, `key.activated` (with `forced`) or `key.retired`, with the acting `userId` and, for keys, the `kid`.
+
+### How keys are stored
+
+In `samlIdpTenantKey`, one row per key, **encrypted** with Better Auth's secret (its versioned `secrets`, else `secret`) or `tenants.keyEncryptionSecret`, with XChaCha20-Poly1305 (Better Auth's `symmetricEncrypt`). The sealed text names its purpose, its tenant and its key id, and they must match the row: a key copied into another tenant's row, or anything else Better Auth encrypts with the same secret, is refused.
+
+- **What it protects:** backups, dumps, read replicas and read-only database leaks. **Not** a compromised Worker or server: the secret is there too. It isn't an HSM.
+- **Rotating the secret:** add a new version to Better Auth's `secrets` and keep the old ones. New keys are sealed with the current version; existing keys still open with theirs. Rotate each tenant's key to reseal it, then drop the old version. A tenant whose key's version is gone refuses to sign.
+- **Caching:** each isolate keeps a tenant's keys for `cacheSeconds`, and a decrypted key by row. A rotation in one isolate is seen in the others within that time.
+- **CPU:** generating a key (on `create` and `rotate` only, never on a sign-in) takes a few hundred milliseconds of CPU, more than the Workers Free plan allows a request; the [Workers guide](cloudflare-workers.md) already recommends Paid.
 
 ## The same SP in several tenants
 
@@ -224,11 +269,11 @@ A cached tenant answers slightly faster than a database miss; that timing differ
 ## Database
 
 With `tenants.enabled` ([schema](schema.md#samlidptenant-with-tenantsenabled)):
-- new tables, `samlIdpTenant` and `samlIdpRetiredTenantKey`;
+- new tables, `samlIdpTenant` and `samlIdpRetiredTenantKey`, and with `keys: "per-tenant"` `samlIdpTenantKey` (its `stateKey` UNIQUE: at most one next and one active key per tenant);
 - `samlIdpServiceProvider` gains `tenantId` (`""` for the root IdP, never NULL) and `lookupKey` (UNIQUE: a hash of tenant and entity ID), and its `entityId` is no longer UNIQUE on new installs;
 - `samlIdpAuditEvent` gains `tenantId`, with `auditLog.enabled`.
 
-**A new install**, or a registry with no rows yet: run your migration as usual (`npx auth migrate`, or your ORM's). On D1, see the example's migration `0008_tenants.sql`.
+**A new install**, or a registry with no rows yet: run your migration as usual (`npx auth migrate`, or your ORM's). On D1, see the example's migrations `0008_tenants.sql` and, for per-tenant keys, `0009_tenant_keys.sql`. Turning on per-tenant keys later only adds `samlIdpTenantKey`: run the migration again.
 
 **A registry that already has rows** needs four steps, because `lookupKey` is required (so its UNIQUE index exists on every database, MongoDB included) and existing rows have none yet:
 
@@ -265,9 +310,8 @@ It writes the same keys through the driver. Then turn tenants on: the index is b
 
 | | Why not yet |
 |---|---|
-| A signing key per tenant | Phase 2: encrypted keys in the database, rotated per tenant. SPs keep their URLs and entity IDs: moving to it is an ordinary key rotation for them. |
-| Organization administrators managing their SPs | Phase 3; needs per-tenant keys ([above](#the-shared-signing-key)). |
-| `--tenant` in the CLI (`inspect`, `smoke`, `sp-from-metadata`) | Not built yet. |
+| Organization administrators managing their SPs | Phase 3; needs per-tenant keys ([above](#signing-keys-shared-or-per-tenant)). |
+| Tenant keys held outside the database (a KMS, an HSM, Secrets Store) | Deferred until a host needs it: a callback that returns a tenant's signing configuration. |
 | A tenant entity ID of your choosing | Only useful to migrate a customer from another IdP; it would need its own uniqueness guarantees. |
 | Tenants by host name (`acme.idp.example.com`) | DNS, TLS and cookies per host. |
 | A separate IdP session per tenant | Better Auth sessions are per user. |

@@ -55,6 +55,10 @@ The codes are exported as `SAML_IDP_ERROR_CODES` (and appear on the plugin's `$E
 | `TENANT_NOT_FOUND` | 404 | `get`, `update` or `delete` of an organization that isn't a tenant. |
 | `TENANT_HAS_SERVICE_PROVIDERS` | 409 | Deleting a tenant that still has SPs, in code or stored. Remove them first. |
 | `TENANT_KEY_RETIRED` | 409 | Creating a tenant with a key that belonged to a deleted tenant. Keys are never reused ([why](multi-tenant.md#deleting-tenants-and-organizations)); choose another. |
+| `INVALID_TENANT_SIGNING_KEY` | 400 | [Rotating](multi-tenant.md#rotating-a-tenants-key) in an uploaded key that isn't a matching RSA pair of at least 2048 bits, or only one of `privateKey` and `certificate`; `issues` says which. |
+| `TENANT_SIGNING_KEY_EXISTS` | 409 | `rotate` while the tenant already has a next key: activate it first. |
+| `TENANT_SIGNING_KEY_NOT_FOUND` | 409 | `activate` without a next key, or `retire` without a previous one (`state` says which). |
+| `TENANT_SIGNING_KEY_TOO_NEW` | 409 | `activate` before the next key has been published for `minPublishedSeconds`; `activatableAt` says when. `force: true` skips the wait (for a leaked key). |
 
 With tenants, `INVALID_SERVICE_PROVIDER` also covers an SP naming a `tenant` that doesn't exist, a change of `tenant` on update, and an `organization` rule on a tenant SP other than `{ id: <its tenant>, roles? }`. A request at an unknown or disabled tenant's URL, or naming an SP of another tenant, is the sign-in error `UNKNOWN_SERVICE_PROVIDER`; a tenant's metadata URL answers a plain `404 Not Found`.
 
@@ -75,4 +79,6 @@ A LogoutResponse carries `Success`, or `Success` / `PartialLogout` when an SP in
 
 Invalid options throw `SamlIdpConfigError` when `samlIdp()` is called, listing every issue (`path: message`); `error.issues` has them as an array. Warnings (for example "no baseURL", "certificate expires in 12 days", "metadata signature isn't pinned") are logged once at startup. Run `npx better-auth-saml-idp check-config config.json` to see both without starting the app.
 
-With `tenants.enabled`, these are errors too, some when Better Auth starts rather than when `samlIdp()` is called: no organization plugin, no pinned base URL, no `registry.enabled`, `tenants.keys: "per-tenant"` (not available yet), and `tenants.delegation` (needs per-tenant keys). A `tenant` on an SP without `tenants.enabled` is an error; an SP whose entity ID and an ACS URL match an SP in another tenant is a warning ([why](multi-tenant.md#the-shared-signing-key)).
+With `tenants.enabled`, these are errors too, some when Better Auth starts rather than when `samlIdp()` is called: no organization plugin, no pinned base URL, no `registry.enabled`, and `tenants.delegation` (phase 3, not available yet). A `tenant` on an SP without `tenants.enabled` is an error; an SP whose entity ID and an ACS URL match an SP in another tenant is a warning ([why](multi-tenant.md#signing-keys-shared-or-per-tenant)).
+
+With per-tenant keys, a tenant whose own key can't be loaded (its secret version is gone, its row is damaged) refuses its sign-ins with `INTERNAL_ERROR` and its metadata with a 500, and logs why; it never signs with another key ([Per-tenant signing keys](multi-tenant.md#per-tenant-signing-keys)).
