@@ -1,12 +1,15 @@
+import { waitUntil } from "cloudflare:workers";
 import { client } from "@chardb/core";
 import { FileId } from "@chardb/core/files";
 import { chardb } from "@chardb/core/server";
 import { desc, eq } from "drizzle-orm";
 import * as api from "./api.ts";
 import { auth, devMailbox } from "./auth.ts";
+import { setWaitUntil } from "./background.ts";
 import { migrations } from "./migrations.ts";
 import * as queries from "./queries.ts";
 import * as domain from "./schema.ts";
+import { registerDemo } from "./demo.ts";
 import { signInPage } from "./sign-in.ts";
 
 // One factory call composes the runtime: merged Drizzle schema, lazy
@@ -27,14 +30,19 @@ app.get("/health", (c) => c.json({
   schemaVersion: migrations.version,
   schemaDigest: migrations.digest,
 }));
+// Better Auth's background work runs under this Worker's waitUntil (src/background.ts).
+setWaitUntil(waitUntil);
+// The demo UI's server routes (/api/demo/*) and the built-in demo SP (/demo-sp/*).
+registerDemo(app);
 // The IdP's login page (samlIdp loginPage): signs in by email, then returns to callbackURL.
 app.get("/sign-in", (c) => signInPage(c.req.url));
 // DEVELOPMENT ONLY (DEV_MAILBOX="true"): the verification link that would have been emailed.
 app.get("/dev/mailbox", (c) => {
   if (process.env.DEV_MAILBOX !== "true") return c.notFound();
   const email = c.req.query("email") ?? "";
-  const link = devMailbox.get(email);
-  return link ? c.json({ email, link }) : c.json({ email, link: null }, 404);
+  const messages = devMailbox.get(email) ?? [];
+  // `link`: the newest message's link; `messages`: all of them (a verification and an invitation, say).
+  return c.json({ email, link: messages.at(-1)?.link ?? null, messages }, messages.length ? 200 : 404);
 });
 app.get("/api/messages", async (c) => {
   const token = c.req.header("authorization")?.replace(/^Bearer\s+/i, "");
