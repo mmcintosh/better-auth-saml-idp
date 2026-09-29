@@ -12,7 +12,12 @@ export function Tenants({ me, notify }: { me: Me; notify: Notify }) {
   const [orgId, setOrgId] = useState("");
   const [key, setKey] = useState("");
   const tenants = t.data?.tenants ?? [];
-  const candidates = (t.data?.organizations ?? []).filter((o) => !tenants.some((x) => x.organizationId === o.id));
+  // Organizations with a real owner: an anonymous user's organization (CharDB's generated app allows
+  // them) has no one to manage it, and the IdP never signs anonymous users in.
+  const unused = (t.data?.organizations ?? []).filter((o) => !tenants.some((x) => x.organizationId === o.id));
+  const realOwner = (o: { owners?: string[] }) => (o.owners ?? []).some((e) => e.includes("@"));
+  const candidates = unused.filter(realOwner);
+  const ownerless = unused.filter((o) => !realOwner(o));
 
   async function create(e: FormEvent) {
     e.preventDefault();
@@ -47,7 +52,8 @@ export function Tenants({ me, notify }: { me: Me; notify: Notify }) {
             </Field>
             <button type="submit" disabled={busy || !orgId || !key}>{busy ? "Generating a key…" : "Create tenant"}</button>
           </form>
-          {candidates.length === 0 && !t.loading ? <p className="muted small">Every organization is already a tenant. Create one on the Organizations page.</p> : null}
+          {candidates.length === 0 && !t.loading ? <p className="muted small">No organization to offer: every one with a real owner is already a tenant. Create one on the Organizations page.</p> : null}
+          {ownerless.length ? <p className="muted small">Not offered, as no signed-up user owns them: {ownerless.map((o) => o.name).join(", ")}.</p> : null}
         </Card>
       ) : (
         <p className="notice">Tenants and their keys are managed by the host's admins. As an owner or admin of a tenant's organization you can see it here, and manage its service providers.</p>

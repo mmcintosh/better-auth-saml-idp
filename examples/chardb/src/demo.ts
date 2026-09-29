@@ -10,7 +10,7 @@ import { isSamlAdmin } from "./saml.ts";
 
 // biome-ignore lint/suspicious/noExplicitAny: CharDB's Hono env, with c.var.auth
 type C = Context<any>;
-type Auth = { api: { getSession(o: { headers: Headers }): Promise<{ user: { id: string; email: string; emailVerified: boolean; isAnonymous?: boolean | null } } | null> }; handler(r: Request): Promise<Response>; $context: Promise<{ adapter: { findMany(o: object): Promise<unknown[]> } }> };
+type Auth = { api: { getSession(o: { headers: Headers }): Promise<{ user: { id: string; email: string; emailVerified: boolean; isAnonymous?: boolean | null } } | null> }; handler(r: Request): Promise<Response>; $context: Promise<{ adapter: { findMany(o: { model: string; where?: { field: string; value: unknown; operator?: string }[]; limit?: number }): Promise<unknown[]> } }> };
 
 const auth = (c: C) => c.var.auth as Auth;
 /** The IdP's own origin: BETTER_AUTH_URL, which pins its entity IDs (a request may arrive through a proxy). */
@@ -43,8 +43,22 @@ export function registerDemo(app: Hono<any>) {
   app.get("/api/demo/organizations", async (c) => {
     const user = await signedIn(c);
     if (!user || !isSamlAdmin(user)) return c.json({ error: "not allowed" }, 403);
-    const rows = (await (await auth(c).$context).adapter.findMany({ model: "organization", limit: 500 })) as { id: string; name: string; slug: string }[];
-    return c.json({ organizations: rows.map(({ id, name, slug }) => ({ id, name, slug })).sort((a, b) => a.name.localeCompare(b.name)) });
+    const { adapter } = await auth(c).$context;
+    const rows = (await adapter.findMany({ model: "organization", limit: 500 })) as { id: string; name: string; slug: string }[];
+    // Owners and member counts, for organizations the admin isn't a member of (Better Auth shows
+    // those only to their members).
+    const members = (await adapter.findMany({ model: "member", limit: 5000 })) as { organizationId: string; userId: string; role: string }[];
+    const ownerIds = [...new Set(members.filter((m) => m.role.split(",").includes("owner")).map((m) => m.userId))];
+    const users = ownerIds.length ? ((await adapter.findMany({ model: "user", where: [{ field: "id", value: ownerIds, operator: "in" }], limit: ownerIds.length })) as { id: string; email: string; isAnonymous?: boolean | null }[]) : [];
+    const who = (id: string) => { const u = users.find((x) => x.id === id); return !u ? "(deleted user)" : u.isAnonymous ? "an anonymous user" : u.email; };
+    return c.json({
+      organizations: rows
+        .map(({ id, name, slug }) => {
+          const mine = members.filter((m) => m.organizationId === id);
+          return { id, name, slug, memberCount: mine.length, owners: mine.filter((m) => m.role.split(",").includes("owner")).map((m) => who(m.userId)) };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    });
   });
 
   // An SP's metadata XML, turned into a configuration to review before saving.

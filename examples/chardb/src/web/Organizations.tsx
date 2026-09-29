@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from "react";
 import type { Notify } from "./App.tsx";
 import type { Org } from "./data.ts";
-import { db, type Me, useAction, useLoad } from "./lib.ts";
+import { call, db, type Me, useAction, useLoad } from "./lib.ts";
 import { Card, Empty, Field, Pill } from "./ui.tsx";
 
 interface Member { id: string; role: string; userId: string; user: { email: string; name: string } }
@@ -19,6 +19,9 @@ export function Organizations({ me, notify }: { me: Me; notify: Notify }) {
   const [slug, setSlug] = useState("");
   const { busy, run } = useAction(notify);
   const current = selected ?? orgs.data?.[0]?.id ?? null;
+  // Host admins also see organizations they don't belong to (Better Auth lists only your own).
+  const everyOrg = useLoad(async () => (me.samlAdmin ? (await call<{ organizations: Org[] }>("/api/demo/organizations")).organizations : []), [me.samlAdmin, orgs.data?.length]);
+  const others = (everyOrg.data ?? []).filter((o) => !orgs.data?.some((m) => m.id === o.id));
 
   async function create(e: FormEvent) {
     e.preventDefault();
@@ -64,6 +67,23 @@ export function Organizations({ me, notify }: { me: Me; notify: Notify }) {
         </Card>
         {current ? <OrganizationDetail key={current} organizationId={current} me={me} notify={notify} onDeleted={() => { setSelected(null); orgs.reload(); }} /> : null}
       </div>
+      {others.length ? (
+        <Card title="Other organizations" subtitle="You're a host admin but not a member of these. Their members and invitations are managed by their own owners and admins; as a host admin you can make them tenants (Tenants page).">
+          <table className="table">
+            <thead><tr><th>Name</th><th>Slug</th><th>Owner</th><th>Members</th></tr></thead>
+            <tbody>
+              {others.map((o) => (
+                <tr key={o.id}>
+                  <td>{o.name}</td>
+                  <td><code>{o.slug}</code></td>
+                  <td>{o.owners?.length ? o.owners.join(", ") : <span className="muted">none</span>}</td>
+                  <td>{o.memberCount ?? 0}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      ) : null}
     </>
   );
 }
