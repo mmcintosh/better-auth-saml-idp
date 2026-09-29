@@ -30,7 +30,7 @@ A `plugins: [...]` written **next to** `...withCloudflare(...)` replaces the Clo
 
 ## Background tasks: wire `waitUntil`
 
-Work a Worker leaves running after the response can be cancelled. The plugin refreshes SP metadata in the background (and other Better Auth features use background tasks too), so give Better Auth the request's `waitUntil`:
+Work a Worker leaves running after the response can be cancelled. The plugin does three things in the background: it runs your [event handlers](observability.md), writes the [audit log](observability.md), and refreshes SP metadata (and other Better Auth features use background tasks too). Without `waitUntil`, the first two are **lost** whenever the response goes out first, which for a sign-in is almost always. So give Better Auth the request's `waitUntil`:
 
 ```ts
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -51,7 +51,9 @@ advanced: {
 app.all("/api/auth/*", (c) => requestWaitUntil.run((p) => c.executionCtx.waitUntil(p), () => auth.handler(c.req.raw)));
 ```
 
-If a refresh does get cancelled, the plugin notices after 30 seconds and starts a new one, so it recovers either way; `waitUntil` just makes it reliable.
+Or, where you can't wrap the request (a framework that builds Better Auth for you, such as [CharDB](../../examples/chardb/README.md)), use the `waitUntil` that `cloudflare:workers` exports: `handler: (p) => waitUntil(p)`. Import it only in code that runs in the Worker; the CharDB example passes it in from its Worker entry, because CLI tools load its auth file outside the Worker.
+
+A cancelled metadata refresh recovers by itself (the plugin starts a new one after 30 seconds). Events and audit rows don't: a dropped one is gone.
 
 ## Build Better Auth once per isolate
 

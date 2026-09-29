@@ -31,7 +31,7 @@ bucket_name = "chardb-saml-idp-files"
 [assets]
 directory = "public"
 binding = "CDB_DASHBOARD"
-run_worker_first = ["/_chardb/*", "/api/*", "/health", "/ws", "/sign-in", "/dev/*"]
+run_worker_first = ["/_chardb/*", "/api/*", "/health", "/ws", "/sign-in", "/dev/*", "/demo-sp/*"]
 
 [observability.logs]
 enabled = true

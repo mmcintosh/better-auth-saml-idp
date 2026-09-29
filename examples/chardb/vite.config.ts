@@ -13,6 +13,12 @@ function localOrigin(raw: string | undefined, fallback: string, name: string): s
   return url.origin;
 }
 
+// CharDB's Vite plugin loads src/auth.ts here (to generate clients), and the SAML plugin needs its
+// settings when it's built: read them from .dev.vars, as Wrangler does (`bun run keys` writes it).
+try {
+  process.loadEnvFile(".dev.vars");
+} catch {}
+
 const workerOrigin = localOrigin(process.env.CHARDB_DEV_URL, "http://127.0.0.1:8787", "CHARDB_DEV_URL");
 const workerSocket = workerOrigin.replace(/^http/, "ws");
 
@@ -43,6 +49,7 @@ export default defineConfig({
       "/health": workerOrigin,
       "/sign-in": workerOrigin,
       "/dev": workerOrigin,
+      "/demo-sp": workerOrigin,
     },
   },
 });

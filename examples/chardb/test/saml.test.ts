@@ -127,6 +127,15 @@ describe("better-auth-saml-idp on CharDB", () => {
     // The same AuthnRequest again: its ID is single-use (a UNIQUE key in CharDB).
     const replay = await request(url, { headers: { cookie: admin } });
     expect(await replay.text()).toContain("DUPLICATE_REQUEST_ID");
+
+    // The sign-in reaches the tenant's audit log. It's written in the background, which on Workers
+    // needs waitUntil (src/background.ts): without it the row is dropped after the response.
+    let events: { type: string; spId: string | null }[] = [];
+    for (let i = 0; i < 30 && !events.some((e) => e.type === "assertion.issued"); i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      events = (await api(`saml-idp/audit?tenantId=${organizationId}`, admin)).body.events;
+    }
+    expect(events).toContainEqual(expect.objectContaining({ type: "assertion.issued", spId: "acme-app" }));
   });
 
   test("the tenant's key rotates: rotate, then activate (forced here; 24 hours otherwise)", async () => {
