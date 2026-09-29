@@ -109,7 +109,8 @@
     "overrides": {
       "@better-auth/utils": "0.4.2",
       "sharp@<0.35.4": "0.35.4",
-      "deepmerge-ts@<8.0.0": "^8.0.0"
+      "deepmerge-ts@<8.0.0": "^8.0.0",
+      "undici@>=7.28.0 <7.29.1": "7.29.1"
     }
   },
   "types": "./dist/index.d.ts",
