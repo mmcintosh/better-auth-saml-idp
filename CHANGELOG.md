@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-29
+
+Multi-tenancy phases 2 and 3: a signing key per tenant, and delegated administration of a tenant's SPs by its organization's owners and admins. Both are opt-in; with neither set, nothing changes. Reviewed twice before release (D-060, D-061).
+
 ### Added
 
 - **Multi-tenant IdP, phase 2: a signing key per tenant** (`tenants: { enabled: true, keys: "per-tenant" }`; [guide](docs/guide/multi-tenant.md#per-tenant-signing-keys), D-058). Opt-in: with `keys: "shared"` (the default) nothing changes.
