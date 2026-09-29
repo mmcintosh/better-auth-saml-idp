@@ -26,6 +26,9 @@ export interface Org {
   id: string;
   name: string;
   slug: string;
+  /** Host admins' view (/api/demo/organizations): its owners' emails and member count. */
+  owners?: string[];
+  memberCount?: number;
 }
 
 /**
