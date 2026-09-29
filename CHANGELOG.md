@@ -12,6 +12,14 @@ All notable changes to this project. The format follows [Keep a Changelog](https
   - Rotation per tenant through the registry API: `/saml-idp/tenants/keys` (list), `/keys/rotate` (a next key, generated or uploaded), `/keys/activate` (after `minPublishedSeconds`, default 24 hours; `force` for a leaked key) and `/keys/retire` (erases the old private key).
   - Keys are stored in the new `samlIdpTenantKey` table, sealed with Better Auth's (versioned) secret or `tenants.keyEncryptionSecret`, and bound to their tenant and key id, so a key copied into another row is refused. D1: the example's migration `0009_tenant_keys.sql`.
   - New error codes: `INVALID_TENANT_SIGNING_KEY`, `TENANT_SIGNING_KEY_EXISTS`, `TENANT_SIGNING_KEY_NOT_FOUND`, `TENANT_SIGNING_KEY_TOO_NEW`. Tenant records gain `signing` and `keys` with per-tenant keys.
+- **Multi-tenant IdP, phase 3: delegated administration** (`tenants.delegation`, with per-tenant keys only; [guide](docs/guide/multi-tenant.md#delegated-administration), D-059). An organization's owners and admins manage their own tenant's SPs through the registry API.
+  - Membership is read from the database on every request, so a demotion takes effect at once; only enabled tenants count; impersonated sessions are refused.
+  - Scope: list is filtered in the query; get, update and delete of another tenant's SP, or the root's, answer 404; create only in their own tenants.
+  - Limits: attributes and NameID only from `userFields` (default `email`, `name`, `id`); no `metadata.url` unless `allowMetadataUrl`; no warnings naming another tenant's SP.
+  - Tenants and their keys stay with the host's managers. A tenant's administrator can read its own tenant record and certificates.
+  - With delegation alone (no `canManage`, no `permissions`), the registry API is mounted for tenants' administrators only.
+- **Audit log API:** `GET /saml-idp/audit` (with `auditLog.enabled`): newest first, paged with `before`, filtered by tenant in the query; a tenant's administrator sees only its own.
+- **Registry changes in the audit log:** a `service-provider.changed` event (`events.onServiceProviderChanged`) for each create, update, enable, disable and delete, with the acting user and `delegated`.
 - **Tenant changes in the audit log** (review 6 I-2): a `tenant.changed` event (`events.onTenantChanged`, and the audit log) when an administrator creates, enables, disables or deletes a tenant, or rotates, activates or retires one of its keys, with who did it.
 
 ## [1.0.2] - 2026-09-29

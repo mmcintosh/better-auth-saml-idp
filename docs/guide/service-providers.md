@@ -96,7 +96,7 @@ Enabling it adds the `samlIdpServiceProvider` table ([schema](schema.md#samlidps
 
 ### Registry API
 
-The API is mounted when `canManage` or `permissions` is set. Every call needs a signed-in user whose session is re-read from the database; see [Registry permissions](users-and-access.md#registry-permissions) for who's allowed.
+The API is mounted when `canManage` or `permissions` is set, or with [tenant delegation](multi-tenant.md#delegated-administration). Every call needs a signed-in user whose session is re-read from the database; see [Registry permissions](users-and-access.md#registry-permissions) for who's allowed.
 
 | Method | Path | Body / query | Returns |
 |---|---|---|---|
@@ -105,6 +105,9 @@ The API is mounted when `canManage` or `permissions` is set. Every call needs a 
 | POST | `/saml-idp/service-providers/create` | `{ serviceProvider, enabled? }` | `{ serviceProvider: ServiceProviderRecord }` |
 | POST | `/saml-idp/service-providers/update` | `{ id, serviceProvider, enabled? }` (full replacement; `id` can't change) | `{ serviceProvider: ServiceProviderRecord }` |
 | POST | `/saml-idp/service-providers/delete` | `{ id }` | `{ deleted: id }` |
+| GET | `/saml-idp/audit` | `?tenantId=&limit=&before=` (with `auditLog.enabled`) | `{ events }`: the [audit log](observability.md#audit-log-table), newest first (`limit` up to 500, default 100; `before` an ISO time to page back). With tenants, `tenantId` filters in the query (`""` is the root IdP's). |
+
+Each create, update, enable, disable and delete is a `service-provider.changed` event: in the audit log and `events.onServiceProviderChanged`, with the acting user.
 
 Every route returns SPs in one shape, `ServiceProviderRecord` (exported):
 

@@ -4,9 +4,10 @@
 
 Give each of your customers (a Better Auth organization) its own SAML identity: its own entity ID, metadata, and SSO and SLO URLs, next to the root IdP you already have. Their IT team configures their SPs (AWS, Google Workspace, Salesforce…) with *their* IdP, and only members of *their* organization can sign in through it.
 
-This covers phases 1 and 2 of [the multi-tenant design](../design/multi-tenant.md) (DECISIONS.md D-052, D-058):
-- **In this version:** per-organization identities; tenants sign with your one `signing` key (`keys: "shared"`, the default) or **each with its own key** (`keys: "per-tenant"`, [below](#per-tenant-signing-keys)); only **your** administrators create tenants and manage their SPs.
-- **Not yet:** letting an organization's own administrators manage their SPs (phase 3, which needs per-tenant keys). [Why the order matters](#signing-keys-shared-or-per-tenant).
+This is [the multi-tenant design](../design/multi-tenant.md), phases 1 to 3 (DECISIONS.md D-052, D-058, D-059):
+- per-organization identities;
+- tenants sign with your one `signing` key (`keys: "shared"`, the default) or **each with its own key** (`keys: "per-tenant"`, [below](#per-tenant-signing-keys));
+- **your** administrators create tenants, and with per-tenant keys, optionally, an **organization's own administrators manage its SPs** (`tenants.delegation`, [below](#delegated-administration)). [Why that needs per-tenant keys](#signing-keys-shared-or-per-tenant).
 
 Tenancy is off unless you turn it on. With `tenants` unset, nothing changes: no tables, no columns, no routes, and every response is byte for byte what it was.
 
@@ -49,7 +50,7 @@ Then create the tables ([Database](#database)).
 | `keyEncryptionSecret` | Better Auth's `secrets` / `secret` | With per-tenant keys: what seals tenants' private keys. At least 32 characters. |
 | `minPublishedSeconds` | `86400` | With per-tenant keys: how long a next key must have been published before `activate` accepts it. 0 to 31536000. |
 
-`tenants.delegation` (organization administrators managing their own SPs) is refused at startup: it comes in phase 3, on per-tenant keys.
+| `delegation` | off | With per-tenant keys: organizations' own administrators manage their tenant's SPs ([below](#delegated-administration)). A startup error with `keys: "shared"`. |
 
 ## Create a tenant
 
@@ -202,6 +203,45 @@ In `samlIdpTenantKey`, one row per key, **encrypted** with Better Auth's secret 
 - **Caching:** each isolate keeps a tenant's keys for `cacheSeconds`, and a decrypted key by row. A rotation in one isolate is seen in the others within that time.
 - **CPU:** generating a key (on `create` and `rotate` only, never on a sign-in) takes a few hundred milliseconds of CPU, more than the Workers Free plan allows a request; the [Workers guide](cloudflare-workers.md) already recommends Paid.
 
+## Delegated administration
+
+With per-tenant keys, you can let each customer's own administrators manage their tenant's SPs through the same registry API, without you:
+
+```ts
+tenants: {
+  enabled: true,
+  keys: "per-tenant",
+  delegation: {}, // or { roles: ["owner", "admin"], userFields: ["email", "name", "id"], allowMetadataUrl: false }
+},
+```
+
+| `delegation` option | Default | What it does |
+|---|---|---|
+| `roles` | `["owner", "admin"]` | The organization roles that manage the tenant's SPs. Better Auth's comma-separated multiple roles count. |
+| `userFields` | `["email", "name", "id"]` | The only user fields a delegated SP may send, as attributes or as its NameID. Constants and organization attributes are fine. |
+| `allowMetadataUrl` | `false` | Whether delegated SPs may use `metadata.url`: it makes your server fetch that URL. |
+
+**Who counts.** A user who holds one of `roles` in an **enabled tenant's** organization. It's decided on every request from the database: the membership table (not the session's active organization), the user row (a ban counts) and the session (an impersonated one is refused). A demoted administrator loses access at the next request. Your own managers (`canManage`, `permissions`) are unaffected and still manage everything. With delegation alone (no `canManage`, no `permissions`) the registry API is mounted for tenants' administrators only.
+
+**What a tenant's administrator can do**, through the [registry API](service-providers.md#registry-api):
+
+| Route | For a tenant's administrator |
+|---|---|
+| `GET /saml-idp/service-providers` | Its tenant's SPs, filtered in the query. With several tenants, `?tenantId=` is required. Another tenant's, or the root's: 403. |
+| `…/get`, `…/update`, `…/delete` | Its tenant's SPs only. Another tenant's SP, or the root's, is **404**, as if it didn't exist (`id` is global, so this is what stops one tenant reaching another's). |
+| `…/create` | Only with `serviceProvider.tenant` one of its tenants (403 otherwise), and only allowed user fields and, unless allowed, no `metadata.url` (400 `INVALID_SERVICE_PROVIDER`, `issues` says which). An SP's tenant can't change afterwards, for anyone. |
+| `GET /saml-idp/tenants/get`, `GET /saml-idp/tenants/keys` | Its own tenant only: URLs and certificates, never private keys. |
+| `GET /saml-idp/audit` | Its tenant's events ([below](#events-and-the-audit-log)). |
+| Everything else under `/saml-idp/tenants` | 403: creating, disabling and deleting tenants and managing their keys stay with you. |
+
+**Why those limits.**
+- **User fields:** without them, a tenant's administrator could map any column of your user table (your `role`, a ban reason, an internal flag) into an SP of theirs and read it for their members.
+- **`metadata.url`:** your server fetches it (the certificate refresh), so it would let them make your server request URLs of their choosing.
+- **Warnings:** a record shown to a tenant's administrator carries no warning about another tenant's SP. Your managers still see the [overlap warning](#signing-keys-shared-or-per-tenant).
+- **An SP's `id` is global:** creating one with an `id` another tenant uses answers `SERVICE_PROVIDER_EXISTS`. That tells them the `id` is taken, and nothing about the SP.
+
+Every change a tenant's administrator makes is a `service-provider.changed` event with `delegated: true`, in the audit log and `events.onServiceProviderChanged`.
+
 ## The same SP in several tenants
 
 Entity IDs are unique per tenant, so AWS or Google Workspace can be registered once per customer. Each tenant's copy is a separate SP (its own `id`), gets its own tenant's identity, and each is found only through its own tenant's URLs.
@@ -264,7 +304,11 @@ A cached tenant answers slightly faster than a database miss; that timing differ
 
 ## Events and the audit log
 
-`assertion.issued`, `denied` and `logout` events carry `tenantId` when the SP belongs to a tenant (every refusal that names a tenant's SP), and so does each participant in `session.ended` (root IdP: absent, so root events are unchanged). The audit log gets a `tenantId` column (null for the root IdP), for filtering in SQL. Creating, disabling and deleting tenants is logged (`logger.info`), not yet written to the audit log.
+`assertion.issued`, `denied` and `logout` events carry `tenantId` when the SP belongs to a tenant (every refusal that names a tenant's SP), and so does each participant in `session.ended` (root IdP: absent, so root events are unchanged). The audit log gets a `tenantId` column (null for the root IdP), for filtering in SQL.
+
+Changes are events too, in the audit log with who made them: `tenant.changed` (a tenant created, enabled, disabled or deleted, and its keys rotated, activated or retired) and `service-provider.changed` (a stored SP created, updated, enabled, disabled or deleted, `delegated` when a tenant's administrator did it).
+
+`GET /saml-idp/audit?tenantId=` reads one tenant's events, filtered in the query. Your managers can read any tenant's, or the root's (`tenantId=`). A tenant's administrator can read only its own; the `tenantId` can be left out when it administers one tenant.
 
 ## Database
 
@@ -310,7 +354,6 @@ It writes the same keys through the driver. Then turn tenants on: the index is b
 
 | | Why not yet |
 |---|---|
-| Organization administrators managing their SPs | Phase 3; needs per-tenant keys ([above](#signing-keys-shared-or-per-tenant)). |
 | Tenant keys held outside the database (a KMS, an HSM, Secrets Store) | Deferred until a host needs it: a callback that returns a tenant's signing configuration. |
 | A tenant entity ID of your choosing | Only useful to migrate a customer from another IdP; it would need its own uniqueness guarantees. |
 | Tenants by host name (`acme.idp.example.com`) | DNS, TLS and cookies per host. |

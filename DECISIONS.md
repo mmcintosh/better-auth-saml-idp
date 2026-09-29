@@ -63,6 +63,7 @@ A running log of the non-obvious choices, with the options considered and the ev
 - [D-056](#d-056-101-from-running-on-chardb-2026-09-29): 1.0.1, from running on CharDB (2026-09-29)
 - [D-057](#d-057-102-the-client-plugin-under-typescript-5-2026-09-29): 1.0.2, the client plugin under TypeScript 5 (2026-09-29)
 - [D-058](#d-058-multi-tenant-idp-phase-2-a-signing-key-per-tenant-2026-09-29): Multi-tenant IdP, phase 2: a signing key per tenant (2026-09-29)
+- [D-059](#d-059-multi-tenant-idp-phase-3-delegated-administration-2026-09-29): Multi-tenant IdP, phase 3: delegated administration (2026-09-29)
 
 ---
 
@@ -1798,3 +1799,47 @@ Phase 2 of `docs/design/multi-tenant.md`, opt-in with `tenants.keys: "per-tenant
   - keeping the shared certificate published;
   - erasing a retired key.
 - **Not in this phase:** delegation (phase 3), and keys outside the database (a KMS/HSM callback, deferred until a host needs it). Live CPU on a deployed Worker is still to measure.
+
+## D-059: Multi-tenant IdP, phase 3: delegated administration (2026-09-29)
+
+Phase 3 of `docs/design/multi-tenant.md` (§5.4), opt-in with `tenants.delegation`, allowed only with `keys: "per-tenant"` (startup enforces it: under a shared key only the Issuer tells tenants apart, §5.1). The design's defaults were taken as they stood: roles `owner` and `admin`, user fields `email`, `name` and `id`, and no `metadata.url`.
+- **Who.** One `access()` check serves every registry route.
+  - A host manager (`canManage` and/or `permissions`, both when both are set) may do everything.
+  - Otherwise, with `delegated` routes, the user's memberships are read from the member table on every request (`loadMemberships`, never the session's active organization), and each one holding a delegation role in an **enabled** tenant (the directory's check, D-053) adds that tenant to the actor's scope. No tenant means 403.
+  - The existing rules hold for both: the user is re-read (R4-L3), not banned, and impersonation is refused. A demotion therefore takes effect at the next request.
+  - `manager()` stays for host-only routes: tenant create, update and delete, and keys.
+- **Scope, per route** (§5.4's list):
+  - **list:** filtered by `tenantId` in the query (required with several tenants; another tenant's, or the root's, is 403).
+  - **get, update and delete:** load the row and compare its tenant. Otherwise it's 404, so another tenant's SP, or the root's, looks absent, because `spId` is global.
+  - **create:** needs `tenant` in scope (403).
+  - `tenant` stays immutable (D-052).
+  - A tenant's administrator may read its own tenant record and certificate list; everything else under `/tenants` is 403.
+- **Config limits** (400 `INVALID_SERVICE_PROVIDER`, with `issues`):
+  - attribute sources (a string or `{ field }`) and `nameId.field` only from `userFields`; otherwise a tenant administrator could export any user column for their members;
+  - `metadata` only with `allowMetadataUrl`: D-029 accepted server-side fetches to internal hosts only because the registry was admin-only.
+  - ACS and SLO URLs are navigated by the browser, not fetched, so they aren't limited.
+- **No leaks.**
+  - Overlap warnings (D-052) are computed only for host managers: they name another tenant's SP.
+  - `SERVICE_PROVIDER_EXISTS` on create still tells a tenant administrator that an `id` is taken somewhere. That's accepted: `id` is a global name, it reveals nothing about the SP, and the alternative (tenant-prefixed ids) would burden everyone.
+- **Auditing** (§5.5).
+  - A `service-provider.changed` event (`events.onServiceProviderChanged`, and the audit log) for each registry create, update, enable, disable and delete, with the acting user and `delegated`. Until now registry changes only went to `logger.info`.
+  - `GET /saml-idp/audit` reads the log newest first, paged with `before`, filtered by `tenantId` in the query. Tenant administrators see only their tenants'.
+  - The route list with every feature on gains that one route; its snapshot was updated for exactly that line.
+- **Mounting.** The registry API is mounted with delegation alone, for tenant administrators only.
+- **Tests.** `test/integration/tenant-delegation.test.ts`: 16 on Node, 15 on workerd (the cross-tenant-warning test needs one entity ID in two tenants, which the D1 test schema's `UNIQUE(entityId)` refuses; Node covers it). They cover:
+  - list scoping, and IDOR on get, update and delete for another tenant's SP and the root's, with nothing changed;
+  - create outside the tenant, and the immutable tenant;
+  - disallowed fields as attributes and as NameID, allowed fields and constants, and a widened allow-list;
+  - `metadata.url` refused and then allowed;
+  - no cross-tenant warning;
+  - a plain member refused, a demotion, a disabled tenant, impersonation, and custom roles;
+  - tenant and key routes staying host-only, with read access to its own tenant;
+  - the startup error without per-tenant keys, and delegation-only mounting;
+  - the audit view scoped by tenant;
+  - a delegated SP's sign-in signed under the tenant's own key.
+- **Mutation proof.** Each of 12 gates, removed in turn, fails at least one test:
+  - scope on get, update, delete, list, tenant read and audit;
+  - the delegated config check, the field allow-list and the metadata-URL refusal;
+  - the role check, and the enabled-tenant check;
+  - the warning suppression.
+- **Still to do before release:** the design recommends an external review of phases 2 and 3 before they ship.

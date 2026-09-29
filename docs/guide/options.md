@@ -96,7 +96,7 @@ An IdP identity per Better Auth organization: its own entity ID, metadata and SS
 | `keyEncryptionSecret` | `string` | Better Auth's | With per-tenant keys: what seals tenants' private keys (at least 32 characters). By default Better Auth's `secrets` (versioned) or `secret`. |
 | `minPublishedSeconds` | `number` | `86400` | With per-tenant keys: how long a next key must have been published before `activate` accepts it without `force`. 0 to 31536000. |
 
-`delegation` (organization administrators managing their own SPs) is a startup error: it comes in phase 3, on per-tenant keys ([why](multi-tenant.md#signing-keys-shared-or-per-tenant)).
+| `delegation` | `{ roles?, userFields?, allowMetadataUrl? }` | off | With per-tenant keys: organizations' own administrators (`roles`, default `["owner", "admin"]`) manage their tenant's SPs, sending only `userFields` (default `["email", "name", "id"]`) and without `metadata.url` unless `allowMetadataUrl`. A startup error with `keys: "shared"` ([Delegated administration](multi-tenant.md#delegated-administration)). |
 
 ## `auditLog`
 
