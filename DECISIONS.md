@@ -60,6 +60,7 @@ A running log of the non-obvious choices, with the options considered and the ev
 - [D-053](#d-053-review-6-fixes-2026-09-28): Review 6 fixes (2026-09-28)
 - [D-054](#d-054-aws-iam-identity-center-verified-live-2026-09-28): AWS IAM Identity Center verified live (2026-09-28)
 - [D-055](#d-055-repository-clean-up-before-100-2026-09-28): Repository clean-up before 1.0.0 (2026-09-28)
+- [D-056](#d-056-101-from-running-on-chardb-2026-09-29): 1.0.1, from running on CharDB (2026-09-29)
 
 ---
 
@@ -1720,3 +1721,20 @@ The repository kept working material that no longer reflects the project. Everyt
 - **`test/review2` … `test/review6`:** the proof tests stay as regression tests, in `test/regression/`, named for what they guard (such as `slo-relaystate-limit`, `tenant-key-reuse`). Their test titles keep the finding IDs (R4-1, R6-2 …) that this log refers to.
 - **`spike/` and `test/spike/`:** the Phase 0 spike is removed: the patched libxml2-wasm copy that reproduced the workerd blocker (D-003), the bundle-size and coexistence workers, and the samlify round-trip test that the interop tests have long covered. The workerd test host moves to `test/support/worker.ts`. The spike's two dev dependencies stay, because the wasm-validator benchmarks use them.
 - **This file:** an index of entries at the top. Entries are unchanged, so references to them (D-0xx) in code and docs still work.
+
+## D-056: 1.0.1, from running on CharDB (2026-09-29)
+
+The plugin 1.0.0, with `tenants: { enabled: true }`, in a [CharDB](https://github.com/zpg6/chardb) app: Better Auth's tables in a Durable Object (CharDB's Catalog) through CharDB's own adapter, on Better Auth 1.7.6 (CharDB itself needed a small upgrade from 1.6, prepared separately).
+- **What held.**
+  - CharDB's `migrations generate` produced our tables as an additive migration, with every UNIQUE key: the replay key, `spId`, `lookupKey`, the tenant's `organizationId` and `tenantKey`, the retired `tenantKey`.
+  - Root metadata was schema-valid; `smoke` passed every check (15), replays and single-use POST re-entry included.
+  - A tenant made through the API; a second one for the same organization was refused (`TENANT_EXISTS`).
+  - A member's SP-initiated sign-in at the tenant's URL: a signed Response and Assertion with the tenant's entity ID as Issuer. A replay was refused, and SPs were found only through their own IdP's URLs (a tenant SP at the root, and a root SP at the tenant, were both `UNKNOWN_SERVICE_PROVIDER`). A non-member got 403 `ACCESS_DENIED`.
+- **Fixed: the types under `exactOptionalPropertyTypes`.**
+  - CharDB's starter compiles with it, and `samlIdp()` wasn't assignable to `BetterAuthPlugin`. Our build didn't use the option, so the declarations gave conditionally mounted endpoints `?: Endpoint | undefined`, and `init()` could return `{ options?: undefined }`. `samlIdpClient()` failed the same way, and optional options refused an explicit `undefined`.
+  - The package is now compiled with the option. Optional fields of the public types accept `undefined`, and the resolved types use `Defined<T>` in place of `Required<T>` so they stay exact.
+  - `test/types/strict-host.ts` is a host with the option, compiled by `pack:check` against `dist/`. 1.0.0's declarations fail it with 5 errors.
+  - better-auth-cloudflare 0.3.1's plugin types fail the same way; the one test that passes them straight to `betterAuth` casts.
+- **Fixed: the CLI couldn't target a tenant.** `metadataUrl()` kept only URLs ending in `/metadata`, so a tenant's `…/metadata/<tenantKey>` got `/saml2/idp/metadata` appended (a 404). `smoke` derived the auth base from a root SSO URL only. Both now accept a tenant's URLs (the resume route is shared, at the root).
+  - Verified against the CharDB tenant: every check passed.
+  - `test/cli/cli.test.ts` runs `inspect` and `smoke` against a tenant in-process, and fails on 1.0.0's CLI.

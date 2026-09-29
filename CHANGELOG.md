@@ -4,6 +4,15 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-09-29
+
+Two fixes found by running the plugin, with multi-tenancy on, in a [CharDB](https://github.com/zpg6/chardb) app (Better Auth on Durable Objects). Everything else passed there: the tables and their UNIQUE keys came through CharDB's migrations, and every `smoke` check passed at the root and at a tenant (D-056).
+
+### Fixed
+
+- **Types under `exactOptionalPropertyTypes`.** In a host compiled with that option, `samlIdp()` wasn't assignable to `BetterAuthPlugin` (in `betterAuth({ plugins })` too), nor `samlIdpClient()` in `createAuthClient`, and optional options refused an explicit `undefined`. Nothing changed at runtime. The package is now built with the option, optional fields accept `undefined`, and `pnpm pack:check` compiles a strict host against the built declarations (`test/types/strict-host.ts`; 1.0.0's fail it with 5 errors).
+- **The CLI and tenants.** `inspect`, `smoke`, `request` and `decode --idp` now accept a tenant's metadata URL (`…/saml2/idp/metadata/<tenantKey>`); 1.0.0 treated it as a base URL. `smoke` runs every check at the tenant's SSO URL.
+
 ## [1.0.0] - 2026-09-28
 
 The first stable release, on npm's `latest` tag. It's 1.0.0-rc.2 with the changes below; the full feature list is under 1.0.0-rc.1 and 1.0.0-rc.2 in the [CHANGELOG](https://github.com/mmcintosh/better-auth-saml-idp/blob/main/CHANGELOG.md). From here on, [Versioning and support](https://github.com/mmcintosh/better-auth-saml-idp/blob/main/docs/guide/versioning.md) applies. better-auth-cloudflare 0.4 isn't needed: with 0.3.1, keep verification and rate limits in the database, as the Workers guide says. Support for 0.4 comes in a 1.x minor release.
