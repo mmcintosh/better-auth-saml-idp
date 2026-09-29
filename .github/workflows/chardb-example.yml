@@ -1,0 +1,26 @@
+# The experimental CharDB example (examples/chardb): typecheck and its workerd tests, weekly and
+# when it changes. Its own workflow, never a required check: CharDB is 0.1, and a break there
+# must not block the plugin's pull requests or releases.
+name: CharDB example
+on:
+  schedule: [{ cron: "0 7 * * 1" }]
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["examples/chardb/**", "vendor/chardb-*", ".github/workflows/chardb-example.yml"]
+  pull_request:
+    paths: ["examples/chardb/**", "vendor/chardb-*", ".github/workflows/chardb-example.yml"]
+permissions: { contents: read }
+jobs:
+  example:
+    runs-on: ubuntu-24.04
+    defaults:
+      run: { working-directory: examples/chardb }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 24 }
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run test # CharDB's generated test and test/saml.test.ts, inside workerd
