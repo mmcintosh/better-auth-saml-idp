@@ -261,3 +261,49 @@ describe("delegation: the audit view (D-059)", () => {
     expect(xml).toContain(cert.replace(/-----[^-]+-----|\s+/g, "").slice(0, 60));
   });
 });
+
+describe("review 7: delegation boundaries (D-060)", () => {
+  it("R7-5: a tenant still signing with the shared key isn't delegated until it has its own key", async () => {
+    // A tenant made while keys were shared, then per-tenant keys and delegation turned on.
+    const database = await createHostDatabase();
+    const base = { registry: { enabled: true, canManage, cacheSeconds: 0 }, auditLog: { enabled: true }, serviceProviders: [] };
+    const { auth: shared } = await createHost({ database, plugins: [organization()], saml: { ...base, tenants: { enabled: true, keys: "per-tenant", cacheSeconds: 0 } } });
+    const sctx = (await shared.$context) as any;
+    // Made as a pre-per-tenant tenant would be: a tenant row with no key rows.
+    const o = await sctx.adapter.create({ model: "organization", data: { name: "Old", slug: `old-${Date.now()}`, createdAt: new Date() } });
+    const org = await sctx.adapter.findOne({ model: "organization", where: [{ field: "id", value: o.id }] });
+    await sctx.adapter.create({ model: "samlIdpTenant", data: { organizationId: String(o.id), tenantKey: `old-${Date.now()}`, organizationCreatedAt: new Date(org.createdAt), enabled: true, createdAt: new Date(), updatedAt: new Date() } });
+    const { auth } = await createHost({ database, plugins: [organization()], saml: { ...base, tenants: { enabled: true, keys: "per-tenant", cacheSeconds: 0, minPublishedSeconds: 0, delegation: {} } } });
+    const owner = new Browser(auth);
+    const u = await owner.signUp();
+    await sctx.adapter.create({ model: "member", data: { organizationId: String(o.id), userId: u.id, role: "owner", createdAt: new Date() } });
+    expect((await owner.fetch(`${AUTH_BASE}/saml-idp/service-providers`)).status).toBe(403);
+    // Once the host rotates its own key in, its owner is delegated.
+    const host = new Browser(auth);
+    const hu = await host.signUp();
+    await sctx.adapter.update({ model: "user", where: [{ field: "id", value: hu.id }], update: { role: "admin" } });
+    const post = (p: string, b: unknown) => host.fetch(`${AUTH_BASE}/saml-idp${p}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) });
+    expect((await post("/tenants/keys/rotate", { organizationId: String(o.id) })).status).toBe(200);
+    expect((await post("/tenants/keys/activate", { organizationId: String(o.id) })).status).toBe(200);
+    expect((await owner.fetch(`${AUTH_BASE}/saml-idp/service-providers`)).status).toBe(200);
+  });
+
+  it("R7-4: a delegated SP can't name other organizations in an organization attribute (only)", async () => {
+    const w = await world();
+    const res = await w.ownerA("/service-providers/create", w.sp("orgs", w.A, { attributes: { orgs: { organization: "slugs", only: [w.B] } } }));
+    expect(res.status).toBe(400);
+    expect((await body(res)).issues.join()).toMatch(/only/);
+    // Its own organization, without `only`, is fine: the tenant is the scope.
+    expect((await w.ownerA("/service-providers/create", w.sp("orgs-ok", w.A, { attributes: { orgs: { organization: "slugs" }, roles: { organization: "roles" } } }))).status).toBe(200);
+  });
+
+  it("R7-6: naming another organization answers the same whether or not it is a tenant", async () => {
+    const w = await world();
+    const ctx = w.ctx;
+    const plain = await ctx.adapter.create({ model: "organization", data: { name: "Plain", slug: `plain-${w.t}`, createdAt: new Date() } });
+    const toTenant = await w.ownerA("/service-providers/create", w.sp("x1", w.B));
+    const toPlain = await w.ownerA("/service-providers/create", w.sp("x2", String(plain.id)));
+    const toNothing = await w.ownerA("/service-providers/create", w.sp("x3", "no-such-organization"));
+    expect([toTenant.status, toPlain.status, toNothing.status]).toEqual([403, 403, 403]);
+  });
+});

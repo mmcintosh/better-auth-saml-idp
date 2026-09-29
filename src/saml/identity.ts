@@ -68,9 +68,9 @@ type Adapter = Parameters<TenantDirectory["byOrganization"]>[0] & Parameters<Ten
  * A tenant's identity, signing with its own key when tenants have keys (D-058). Throws
  * TenantKeyError when that key can't be used: the caller refuses, never signs with another key.
  */
-export async function resolveTenantIdentity(state: IdentityState, adapter: Adapter, secret: KeySecret, baseURL: string, tenant: Tenant): Promise<IdpIdentity> {
+export async function resolveTenantIdentity(state: IdentityState, adapter: Adapter, secret: KeySecret, baseURL: string, tenant: Tenant, warn?: (message: string) => void): Promise<IdpIdentity> {
   if (!state.tenantKeys) return tenantIdentity(state.options, baseURL, tenant);
-  return tenantIdentity(state.options, baseURL, tenant, await state.tenantKeys.signing(adapter, secret, tenant.organizationId, state.options.signing));
+  return tenantIdentity(state.options, baseURL, tenant, await state.tenantKeys.signing(adapter, secret, tenant.organizationId, state.options.signing, warn));
 }
 
 /**
@@ -83,10 +83,11 @@ export async function identityFor(
   secret: KeySecret,
   requestBaseURL: string,
   sp: Pick<ResolvedServiceProvider, "tenantId">,
+  warn?: (message: string) => void,
 ): Promise<IdpIdentity | undefined> {
   const base = idpBaseURL(state.options, requestBaseURL);
   if (sp.tenantId === undefined) return rootIdentity(state.options, base);
   if (!state.tenants) return undefined;
   const tenant = await state.tenants.byOrganization(adapter, sp.tenantId);
-  return tenant ? resolveTenantIdentity(state, adapter, secret, base, tenant) : undefined;
+  return tenant ? resolveTenantIdentity(state, adapter, secret, base, tenant, warn) : undefined;
 }

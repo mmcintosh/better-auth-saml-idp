@@ -99,6 +99,8 @@ export interface TenantRecord {
   signing?: "shared" | "own" | undefined;
   /** With `tenants.keys: "per-tenant"`: its keys, without private material, newest first. */
   keys?: TenantSigningKeyInfo[] | undefined;
+  /** With `tenants.keys: "per-tenant"`: its own keys' certificates that expire within 30 days, or have. */
+  warnings?: string[] | undefined;
 }
 
 /** See `TenantOptions.delegation`. */

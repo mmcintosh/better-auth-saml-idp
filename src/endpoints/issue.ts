@@ -50,7 +50,7 @@ export const lookupLog = (ctx: GenericEndpointContext) => ({ error: (m: string) 
 
 /** The IdP identity this SP deals with (D-052); undefined when its tenant is gone or disabled. */
 export function spIdentity(ctx: GenericEndpointContext, state: PluginState, sp: Pick<ResolvedServiceProvider, "tenantId">): Promise<IdpIdentity | undefined> {
-  return identityFor(state, ctx.context.adapter as any, keySecret(ctx, state), ctx.context.baseURL, sp);
+  return identityFor(state, ctx.context.adapter as any, keySecret(ctx, state), ctx.context.baseURL, sp, (m) => ctx.context.logger.warn(m));
 }
 
 /**
@@ -75,7 +75,7 @@ export async function routeIdentity(ctx: GenericEndpointContext, state: PluginSt
   const base = idpBaseURL(state.options, ctx.context.baseURL);
   if (tenantKey === undefined) return rootIdentity(state.options, base);
   const tenant = state.tenants && (await state.tenants.byKey(ctx.context.adapter as any, tenantKey));
-  return tenant ? resolveTenantIdentity(state, ctx.context.adapter as any, keySecret(ctx, state), base, tenant) : undefined;
+  return tenant ? resolveTenantIdentity(state, ctx.context.adapter as any, keySecret(ctx, state), base, tenant, (m) => ctx.context.logger.warn(m)) : undefined;
 }
 
 /** The tenant field of events and requests: present only for a tenant's SP (D-052). */

@@ -17,6 +17,8 @@ import {
   generateTenantKey,
   SHARED_KID,
   stateKeyOf,
+  expiryWarning,
+  KEEP_RETIRED,
   TENANT_KEY_MODEL,
   TenantKeyError,
   type TenantKeyRow,
@@ -63,14 +65,19 @@ function record(ctx: GenericEndpointContext, state: PluginState, row: TenantRow,
     updatedAt: row.updatedAt,
     updatedBy: row.updatedBy ?? null,
     ...(state.tenantKeys && keys
-      ? { signing: keys.some((k) => k.state === "active") ? ("own" as const) : ("shared" as const), keys: keyInfo(state, keys) }
+      ? {
+          signing: keys.some((k) => k.state === "active") ? ("own" as const) : ("shared" as const),
+          keys: keyInfo(state, keys),
+          // Its own keys only: the shared key's "previous" row is the root's, warned about at startup.
+          warnings: keys.flatMap((k) => (k.state !== "retired" && k.kid !== SHARED_KID ? (expiryWarning(k) ?? []) : [])),
+        }
       : {}),
   };
 }
 
 /** A tenant's key rows, read now (not the per-isolate cache): exactly its own, whatever the collation. */
 async function keyRows(ctx: GenericEndpointContext, tenantId: string): Promise<TenantKeyRow[]> {
-  const rows = (await adapterOf(ctx).findMany({ model: TENANT_KEY_MODEL, where: [{ field: "tenantId", value: tenantId }], limit: 100 })) as TenantKeyRow[];
+  const rows = (await adapterOf(ctx).findMany({ model: TENANT_KEY_MODEL, where: [{ field: "tenantId", value: tenantId }], limit: 100, sortBy: { field: "createdAt", direction: "desc" } })) as TenantKeyRow[];
   return rows.filter((r) => r.tenantId === tenantId);
 }
 
@@ -129,6 +136,11 @@ export function tenantEndpoints(state: PluginState) {
   /** Move a row to another state; `next`/`active` take the tenant's UNIQUE slot, others free it. */
   const moveKey = (ctx: GenericEndpointContext, row: TenantKeyRow, to: TenantKeyState, update: Record<string, unknown> = {}) =>
     adapterOf(ctx).update({ model: TENANT_KEY_MODEL, where: [{ field: "id", value: row.id }], update: { state: to, stateKey: stateKeyOf(row.tenantId, to), ...update } });
+  /** Keep the newest KEEP_RETIRED retired rows of a tenant (R7-1); the audit log has the rest. */
+  const pruneRetired = async (ctx: GenericEndpointContext, tenantId: string) => {
+    const retiredRows = (await keyRows(ctx, tenantId)).filter((k) => k.state === "retired").sort((a, b) => date(b.createdAt).getTime() - date(a.createdAt).getTime());
+    for (const old of retiredRows.slice(KEEP_RETIRED)) await adapterOf(ctx).delete({ model: TENANT_KEY_MODEL, where: [{ field: "id", value: old.id }] });
+  };
   /** The tenant of a key request, as the manager reads it. */
   const tenantFor = async (ctx: GenericEndpointContext, organizationId: string) => {
     const row = await findTenant(ctx, organizationId);
@@ -140,7 +152,8 @@ export function tenantEndpoints(state: PluginState) {
   const keysOf = async (ctx: GenericEndpointContext, tenantIds: string[]) => {
     const by = new Map<string, TenantKeyRow[]>();
     if (!state.tenantKeys || tenantIds.length === 0) return by;
-    const rows = (await adapterOf(ctx).findMany({ model: TENANT_KEY_MODEL, limit: tenantIds.length * 20 + 100 })) as TenantKeyRow[];
+    // The listed tenants' rows only, in the query (R7-3); a tenant has at most nine (R7-1).
+    const rows = (await adapterOf(ctx).findMany({ model: TENANT_KEY_MODEL, where: [{ field: "tenantId", value: tenantIds, operator: "in" }], limit: tenantIds.length * 10 + 10 })) as TenantKeyRow[];
     for (const r of rows) if (tenantIds.includes(r.tenantId)) by.set(r.tenantId, [...(by.get(r.tenantId) ?? []), r]);
     return by;
   };
@@ -367,6 +380,7 @@ export function tenantEndpoints(state: PluginState) {
                 });
               }
               await moveKey(ctx, next, "active", { activatedAt: now, updatedBy: user.id });
+              await pruneRetired(ctx, row.organizationId);
               changed();
               changedBy(ctx, user.id, row, "key.activated", `activated key ${next.kid} for tenant ${row.tenantKey}${forced ? " (forced, before minPublishedSeconds)" : ""}`, {
                 kid: next.kid,
@@ -386,6 +400,7 @@ export function tenantEndpoints(state: PluginState) {
               const previous = (await keyRows(ctx, row.organizationId)).filter((k) => k.state === "previous");
               if (previous.length === 0) throw fail("CONFLICT", "TENANT_SIGNING_KEY_NOT_FOUND", { state: "previous" });
               for (const k of previous) await moveKey(ctx, k, "retired", { encryptedPrivateKey: "", updatedBy: user.id });
+              await pruneRetired(ctx, row.organizationId);
               changed();
               const kids = previous.map((k) => k.kid).join(", ");
               changedBy(ctx, user.id, row, "key.retired", `retired key ${kids} of tenant ${row.tenantKey}`, { kid: kids });

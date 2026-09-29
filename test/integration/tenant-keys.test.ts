@@ -367,3 +367,47 @@ describe("tenant signing keys: moving from the shared key (D-058)", () => {
     expect(w.events.at(-1)).toMatchObject({ action: "deleted", tenantId: w.orgA.id });
   });
 });
+
+describe("review 7: key rows over time (D-060)", () => {
+  it("R7-1: many rotations keep a bounded number of rows (the newest retired ones), and the tenant keeps signing", async () => {
+    const w = await world();
+    await json(await w.tenants("/create", { organizationId: w.orgA.id }));
+    for (let i = 0; i < 8; i++) {
+      await json(await w.tenants("/keys/rotate", { organizationId: w.orgA.id }));
+      await json(await w.tenants("/keys/activate", { organizationId: w.orgA.id }));
+    }
+    const rows = (await w.ctx.adapter.findMany({ model: TENANT_KEY_MODEL, where: [{ field: "tenantId", value: w.orgA.id }], limit: 1000 })) as any[];
+    expect(rows.filter((r) => r.state === "retired").length).toBeLessThanOrEqual(5);
+    expect(rows.filter((r) => r.state === "active")).toHaveLength(1);
+    const active = rows.find((r) => r.state === "active");
+    expect(signedWith((await readAutoPost(await w.signIn(w.orgA.id))).xml, active.certificate)).toBe(true);
+  });
+
+  it("R7-2: a tenant key whose certificate expires within 30 days, or has expired, is flagged in its record", async () => {
+    const { generateKeyPairSync } = await import("node:crypto");
+    const { selfSignedCertificate } = await import("../../src/saml/certificate");
+    const w = await world();
+    await json(await w.tenants("/create", { organizationId: w.orgA.id }));
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const shortLived = selfSignedCertificate(privateKey, { commonName: "short", days: 10 });
+    await json(await w.tenants("/keys/rotate", { organizationId: w.orgA.id, privateKey: privateKey.export({ type: "pkcs8", format: "pem" }).toString(), certificate: shortLived }));
+    const record = (await json(await w.tenants("/keys/activate", { organizationId: w.orgA.id }))).tenant;
+    expect(record.warnings.join()).toMatch(/expires on .* \(within 30 days\)/);
+    const fresh = (await json(await w.tenants(`/get?organizationId=${w.orgB.id}`).then(async (r) => (r.status === 404 ? w.tenants("/create", { organizationId: w.orgB.id }) : r)))).tenant;
+    expect(fresh.warnings).toEqual([]);
+  });
+
+  it("R7-3: listing tenants reads their own key rows, however many other key rows there are", async () => {
+    const w = await world();
+    // Rows of no listed tenant (left by hand, or another app), written first.
+    for (let i = 0; i < 160; i++)
+      await w.ctx.adapter.create({
+        model: TENANT_KEY_MODEL,
+        data: { tenantId: `ghost-${w.t}`, kid: `g${i}`, state: "retired", stateKey: `retired:ghost-${w.t}-${i}`, encryptedPrivateKey: "", certificate: "x", notAfter: new Date(), createdAt: new Date(), activatedAt: null },
+      });
+    await json(await w.tenants("/create", { organizationId: w.orgA.id }));
+    const listed = (await json(await w.tenants(""))).tenants.find((t: any) => t.organizationId === w.orgA.id);
+    expect(listed.signing).toBe("own");
+    expect(listed.keys).toHaveLength(1);
+  });
+});

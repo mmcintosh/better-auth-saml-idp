@@ -30,7 +30,7 @@ const MAX_AUDIT = 500;
 export type Adapter = {
   create(a: { model: string; data: Record<string, unknown> }): Promise<unknown>;
   findOne(a: { model: string; where: { field: string; value: unknown }[] }): Promise<unknown>;
-  findMany(a: { model: string; where?: { field: string; value: unknown }[]; limit?: number; offset?: number; sortBy?: { field: string; direction: "asc" | "desc" } }): Promise<unknown[]>;
+  findMany(a: { model: string; where?: { field: string; value: unknown; operator?: "in" | "lt" }[]; limit?: number; offset?: number; sortBy?: { field: string; direction: "asc" | "desc" } }): Promise<unknown[]>;
   update(a: { model: string; where: { field: string; value: unknown }[]; update: Record<string, unknown> }): Promise<unknown>;
   delete(a: { model: string; where: { field: string; value: unknown }[] }): Promise<void>;
   deleteMany(a: { model: string; where: { field: string; value: unknown }[] }): Promise<number>;
@@ -93,8 +93,12 @@ export async function access(
   const tenants = new Set<string>();
   for (const m of await loadMemberships(ctx.context.adapter as any, String(user.id))) {
     if (!m.roles.some((r) => delegation.roles.includes(r))) continue;
-    // Only an enabled tenant whose organization is still the one it was made for (D-053).
-    if (await state.tenants.byOrganization(ctx.context.adapter as any, m.id)) tenants.add(m.id);
+    // Only an enabled tenant whose organization is still the one it was made for (D-053), and
+    // that signs with its own key: one still on the shared key would let its administrator have
+    // assertions for another identity's SPs signed with that key (review 7 R7-5, design §5.1).
+    if (!(await state.tenants.byOrganization(ctx.context.adapter as any, m.id))) continue;
+    const keys = state.tenantKeys ? await state.tenantKeys.load(ctx.context.adapter as any, m.id) : [];
+    if (keys.some((k) => k.state === "active")) tenants.add(m.id);
   }
   if (tenants.size === 0) throw fail("FORBIDDEN", "REGISTRY_NOT_ALLOWED");
   return { user: user as { id: string }, tenants };
@@ -120,6 +124,10 @@ function delegatedIssues(config: StoredServiceProviderConfig, actor: Actor, dele
   for (const [name, source] of Object.entries(config.attributes ?? {})) {
     const field = typeof source === "string" ? source : "field" in source ? source.field : undefined;
     if (field !== undefined && !allowed.has(field)) issues.push(`serviceProvider.attributes.${name}: the user field "${field}" isn't one a tenant's administrator may send (${[...allowed].join(", ")})`);
+    // `only` names organizations: others than the tenant's would tell it its members' other
+    // memberships. Without it, a tenant SP's organization attributes cover the tenant (R7-4).
+    if (typeof source === "object" && "organization" in source && source.only !== undefined)
+      issues.push(`serviceProvider.attributes.${name}.only: a tenant's administrator can't name organizations; the tenant's own is the scope`);
   }
   if (config.nameId !== undefined && !allowed.has(config.nameId.field)) issues.push(`serviceProvider.nameId.field: "${config.nameId.field}" isn't one a tenant's administrator may send`);
   if (config.metadata !== undefined && !delegation.allowMetadataUrl) issues.push("serviceProvider.metadata: a tenant's administrator can't set a metadata URL (the server would fetch it)");
@@ -265,6 +273,14 @@ export function registryEndpoints(state: PluginState) {
     audit(ctx, `${actor.tenants ? "tenant administrator" : "user"} ${actor.user.id} ${what}`);
     emit(ctx, state.options, { type: "service-provider.changed", action, userId: actor.user.id, spId: sp.spId, entityId: sp.entityId, ...(sp.tenantId ? { tenantId: sp.tenantId } : {}), delegated: actor.tenants !== null });
   };
+  /**
+   * Before validation, which would say whether a named organization is a tenant: a delegated
+   * administrator naming anything but its own tenants gets the same 403 (review 7 R7-6).
+   */
+  const scopeFirst = (actor: Actor, input: Record<string, unknown>) => {
+    if (actor.tenants && !(typeof input.tenant === "string" && actor.tenants.has(input.tenant)))
+      throw fail("FORBIDDEN", "REGISTRY_NOT_ALLOWED", { issues: ["serviceProvider.tenant: must be a tenant you administer"] });
+  };
   /** A delegated administrator's SP config: 403 outside its tenants, 400 for fields it may not set. */
   const checkDelegated = (actor: Actor, config: StoredServiceProviderConfig) => {
     const delegation = state.options.tenants?.delegation;
@@ -339,6 +355,7 @@ export function registryEndpoints(state: PluginState) {
       async (ctx) => {
         const actor = await access(ctx, state, "create", "samlServiceProvider", { delegated: true });
         const user = actor.user;
+        scopeFirst(actor, ctx.body.serviceProvider);
         const { config } = await validate(ctx, state, ctx.body.serviceProvider);
         checkDelegated(actor, config);
         const now = new Date();
@@ -387,6 +404,7 @@ export function registryEndpoints(state: PluginState) {
         // An SP's tenant is part of what its SPs were given (entity ID, URLs, NameIDs): fixed, as the id is (D-052).
         if (state.options.tenants && (ctx.body.serviceProvider.tenant ?? "") !== (row.tenantId ?? ""))
           throw fail("BAD_REQUEST", "INVALID_SERVICE_PROVIDER", { issues: ["serviceProvider.tenant: can't be changed (delete and re-create instead)"] });
+        scopeFirst(actor, ctx.body.serviceProvider);
         const { config } = await validate(ctx, state, ctx.body.serviceProvider);
         checkDelegated(actor, config);
         const keys = await keyColumns(state, config);

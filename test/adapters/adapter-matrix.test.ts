@@ -413,6 +413,18 @@ describe.skipIf(!KIND)(`adapter matrix: ${KIND}, tenants`, { timeout: 60_000 }, 
     const { xml } = await readAutoPost(await user.fetch(url));
     const certInXml = /<(?:ds:)?X509Certificate>([^<]+)</.exec(xml)?.[1]?.replace(/\s+/g, "");
     expect(certInXml).toBe(active.certificate.replace(/-----[^-]+-----|\s+/g, ""));
+    // Review 7: rows stay bounded over rotations (sorted reads, pruning), and the tenant list reads
+    // its tenants' key rows with an `in` filter, on this database.
+    for (let i = 0; i < 7; i++) {
+      expect((await post("/tenants/keys/rotate", { organizationId: org })).status).toBe(200);
+      expect((await post("/tenants/keys/activate", { organizationId: org })).status).toBe(200);
+    }
+    expect((await post("/tenants/keys/retire", { organizationId: org })).status).toBe(200);
+    const after = (await c.adapter.findMany({ model: "samlIdpTenantKey", where: [{ field: "tenantId", value: org }], limit: 1000 })) as any[];
+    expect(after.filter((r) => r.state === "retired").length).toBeLessThanOrEqual(5);
+    expect(after.filter((r) => r.state === "active")).toHaveLength(1);
+    const listed = (await (await admin.fetch(`${AUTH_BASE}/saml-idp/tenants`)).json()) as any;
+    expect(listed.tenants.find((t: any) => t.organizationId === org)).toMatchObject({ signing: "own" });
   });
 });
 

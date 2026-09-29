@@ -24,6 +24,18 @@ export const GENERATED_KEY_BITS = 3072;
 export const GENERATED_CERT_DAYS = 730;
 const PURPOSE = "better-auth-saml-idp/tenant-signing-key";
 const MAX_CACHE_ENTRIES = 1000;
+/** Retired rows kept per tenant (their history is in the audit log): reads stay bounded (R7-1). */
+export const KEEP_RETIRED = 5;
+/** Warn this long before a tenant certificate expires, as for the root key (D-058, R7-2). */
+export const EXPIRY_WARNING_MS = 30 * 86_400_000;
+
+/** A tenant key certificate that has expired or expires within 30 days; undefined otherwise. */
+export function expiryWarning(row: Pick<TenantKeyRow, "kid" | "notAfter">, now = Date.now()): string | undefined {
+  const at = new Date(row.notAfter as string | Date);
+  if (at.getTime() < now) return `key ${row.kid}: EXPIRED on ${at.toISOString()}; SPs that check validity will reject it (rotate it)`;
+  if (at.getTime() < now + EXPIRY_WARNING_MS) return `key ${row.kid}: expires on ${at.toISOString()} (within 30 days); rotate it`;
+  return undefined;
+}
 
 export interface TenantKeyRow {
   id: string;
@@ -94,7 +106,7 @@ export function generateTenantKey(tenantKey: string, now = new Date()): { privat
 }
 
 type Adapter = {
-  findMany(args: { model: string; where: { field: string; value: unknown }[]; limit?: number }): Promise<unknown[]>;
+  findMany(args: { model: string; where: { field: string; value: unknown }[]; limit?: number; sortBy?: { field: string; direction: "asc" | "desc" } }): Promise<unknown[]>;
 };
 type Signing = ResolvedSamlIdpOptions["signing"];
 
@@ -120,7 +132,8 @@ export class TenantKeyStore {
   async load(adapter: Adapter, tenantId: string): Promise<TenantKeyRow[]> {
     const hit = this.rows.get(tenantId);
     if (hit && hit.expires > this.now()) return hit.rows;
-    const found = (await adapter.findMany({ model: TENANT_KEY_MODEL, where: [{ field: "tenantId", value: tenantId }], limit: 50 })) as TenantKeyRow[];
+    // Newest first: with retired rows pruned (KEEP_RETIRED) a tenant has at most nine rows (R7-1).
+    const found = (await adapter.findMany({ model: TENANT_KEY_MODEL, where: [{ field: "tenantId", value: tenantId }], limit: 50, sortBy: { field: "createdAt", direction: "desc" } })) as TenantKeyRow[];
     const rows = found.filter((r) => r.tenantId === tenantId);
     if (this.cacheMs > 0) {
       if (this.rows.size >= MAX_CACHE_ENTRIES) this.rows.clear();
@@ -134,7 +147,7 @@ export class TenantKeyStore {
    * its next and previous certificates, or, before it has one, the shared key with its next.
    * Throws TenantKeyError when its active key can't be used; the caller refuses the request.
    */
-  async signing(adapter: Adapter, secret: KeySecret, tenantId: string, shared: Signing): Promise<Signing> {
+  async signing(adapter: Adapter, secret: KeySecret, tenantId: string, shared: Signing, warn?: (message: string) => void): Promise<Signing> {
     const rows = await this.load(adapter, tenantId);
     const of = (state: TenantKeyState) => rows.filter((r) => r.state === state);
     const active = of("active");
@@ -152,6 +165,9 @@ export class TenantKeyStore {
     if (!loaded) {
       const pem = await decryptTenantKey(secret, own);
       loaded = { key: checkKeyPair(pem, own.certificate).key, pem };
+      // Once per key and isolate, when it is loaded (R7-2).
+      const expiring = expiryWarning(own);
+      if (expiring) warn?.(`[saml-idp] tenant ${tenantId}: ${expiring}`);
       if (this.keys.size >= MAX_CACHE_ENTRIES) this.keys.clear();
       this.keys.set(cacheKey, loaded);
     }
