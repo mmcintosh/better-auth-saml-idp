@@ -1908,3 +1908,4 @@ Before tagging 1.1.0: first a check for new advisories and alerts, then a fresh 
   - uploaded keys: RSA of at least 2048 bits, matching the certificate, encrypted PEM refused.
 - **Info, not changed:** a tenant's audit view shows `denied` rows for users outside its organization who were sent to its SSO URL (their user id, IP address and user agent). The request came to the tenant's own IdP, and the rows hold opaque ids, no email.
 - The full suite (1,421 tests) passed.
+- **Live CPU for per-tenant keys** (the design asked for it; measured after 1.1.0 on the demo Worker with `wrangler tail`, one sample): a rotation that generates an RSA 3072 key took 488 ms of CPU (1.2 s wall); an activation 43 ms; activations refused by `minPublishedSeconds` 24 ms; the tenant list 22 ms. Key generation runs only when a tenant is created or a key rotated, never on sign-in: fine on Workers Paid, over the Free plan's 10 ms. RSA generation time varies with the prime search.
