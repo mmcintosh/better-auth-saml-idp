@@ -1,21 +1,25 @@
-# The experimental CharDB example (examples/chardb): typecheck and its workerd tests, weekly and
-# when it changes. Its own workflow, never a required check: CharDB is 0.1, and a break there
-# must not block the plugin's pull requests or releases.
+# The experimental CharDB examples (examples/chardb, and examples/chardb-astro with an Astro front
+# end): typecheck, their workerd tests, and the web build, weekly and when they change. Their own
+# workflow, never a required check: CharDB is 0.1, and a break there must not block the plugin.
 name: CharDB example
 on:
   schedule: [{ cron: "0 7 * * 1" }]
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["examples/chardb/**", "vendor/chardb-*", ".github/workflows/chardb-example.yml"]
+    paths: ["examples/chardb/**", "examples/chardb-astro/**", "vendor/chardb-*", ".github/workflows/chardb-example.yml"]
   pull_request:
-    paths: ["examples/chardb/**", "vendor/chardb-*", ".github/workflows/chardb-example.yml"]
+    paths: ["examples/chardb/**", "examples/chardb-astro/**", "vendor/chardb-*", ".github/workflows/chardb-example.yml"]
 permissions: { contents: read }
 jobs:
   example:
+    strategy:
+      fail-fast: false
+      matrix:
+        example: [chardb, chardb-astro]
     runs-on: ubuntu-24.04
     defaults:
-      run: { working-directory: examples/chardb }
+      run: { working-directory: "examples/${{ matrix.example }}" }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -24,3 +28,18 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun run test # CharDB's generated test and test/saml.test.ts, inside workerd
+      - run: bun run build:web
+
+  # The Astro example's Worker is the React example's: the same files, byte for byte. Only the web
+  # app, the dev scripts and the Worker's name differ.
+  same-worker:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: |
+          cd examples
+          status=0
+          for f in $(git -C chardb ls-files src test scripts | grep -vE '^src/web/|^scripts/(dev|dev-keys)\.mjs$'); do
+            cmp -s "chardb/$f" "chardb-astro/$f" || { echo "::error file=examples/chardb-astro/$f::differs from examples/chardb/$f"; status=1; }
+          done
+          exit $status

@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 import react from "@vitejs/plugin-react";
 import { chardb } from "@chardb/core/vite";
 import { defineConfig } from "vite";
@@ -27,6 +28,8 @@ export default defineConfig({
   plugins: [
     react(),
     chardb(),
+    // The build empties public/ (emptyOutDir); keep the committed placeholder that keeps it in git.
+    { name: "keep-public-placeholder", apply: "build", closeBundle: () => writeFileSync("public/.gitkeep", "") },
   ],
   build: {
     outDir: "public",

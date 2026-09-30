@@ -1,0 +1,55 @@
+{
+  "name": "chardb-saml-idp-astro",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "bun@1.2.22",
+  "engines": {
+    "bun": ">=1.2.22",
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit && tsc --noEmit -p test/tsconfig.json",
+    "generate": "chardb generate",
+    "test": "bun scripts/test.mjs",
+    "build": "bun scripts/build.mjs",
+    "build:web": "astro build",
+    "build:worker": "wrangler deploy --dry-run --outdir dist/worker",
+    "dev": "bun scripts/dev.mjs",
+    "dev:web": "astro dev",
+    "setup:cloudflare": "bun scripts/setup-cloudflare.mjs",
+    "deploy:bootstrap": "bun scripts/deploy.mjs --bootstrap",
+    "deploy": "bun scripts/deploy.mjs",
+    "keys": "bun scripts/dev-keys.mjs",
+    "migrations:generate": "bun --env-file=.dev.vars node_modules/@chardb/core/dist/cli/bin.mjs migrations generate"
+  },
+  "dependencies": {
+    "better-auth": "1.7.6",
+    "@chardb/core": "file:../../vendor/chardb-core-0.1.0-ba17-3329fa5.tgz",
+    "@chardb/react": "file:../../vendor/chardb-react-0.1.0-ba17-3329fa5.tgz",
+    "drizzle-orm": "0.45.2",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "uuidv7": "1.2.1",
+    "zod": "4.4.3",
+    "better-auth-saml-idp": "^1.1.0",
+    "astro": "7.3.5",
+    "@astrojs/react": "7.0.0"
+  },
+  "overrides": {
+    "@chardb/core": "$@chardb/core"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.1.2",
+    "@cloudflare/workers-types": "5.20260820.1",
+    "@msw/cloudflare": "0.0.1",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "@vitejs/plugin-react": "6.1.0",
+    "msw": "2.15.0",
+    "typescript": "5.9.3",
+    "vite": "^8.3.0",
+    "vitest": "4.1.11",
+    "wrangler": "4.125.0"
+  }
+}

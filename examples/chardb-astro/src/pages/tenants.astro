@@ -1,0 +1,8 @@
+---
+import Shell from "../layouts/Shell.astro";
+import { Gate } from "../web/Gate.tsx";
+---
+
+<Shell title="Tenants">
+  <Gate page="tenants" client:only="react" />
+</Shell>

@@ -1,0 +1,49 @@
+---
+// The page frame, rendered to static HTML at build time: the sidebar and its links are plain HTML;
+// only "signed in as" and the page's content are React islands (client:only, as they need the session).
+import { WhoAmI } from "../web/WhoAmI.tsx";
+import "../web/styles.css";
+
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+const links = [
+  ["/", "Overview"],
+  ["/organizations", "Organizations"],
+  ["/tenants", "Tenants"],
+  ["/service-providers", "Service providers"],
+  ["/try", "Try it"],
+  ["/activity", "Activity"],
+];
+const here = Astro.url.pathname.replace(/\/$/, "") || "/";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} · CharDB SAML IdP</title>
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="logo">◆</span>
+          <div>
+            <strong>CharDB SAML IdP</strong>
+            <small class="muted">Astro · experimental example</small>
+          </div>
+        </div>
+        <nav>
+          {links.map(([href, label]) => <a href={href} class={here === href ? "active" : undefined}>{label}</a>)}
+        </nav>
+        <WhoAmI client:only="react" />
+      </aside>
+      <main class="content">
+        <slot />
+      </main>
+    </div>
+  </body>
+</html>
