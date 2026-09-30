@@ -1,0 +1,9 @@
+{"message":"connected.","label":"vite","level":"info"}
+{"message":"Generated 0ms","label":"types","level":"info"}
+{"message":"connected.","label":"vite","level":"info"}
+{"message":"Re-optimizing dependencies because vite config has changed","label":"vite","level":"info"}
+{"message":" astro  v7.3.5 ready in 587 ms\n┃ Local    http://127.0.0.1:4321/","label":"SKIP_FORMAT","level":"info"}
+{"message":"watching for file changes...","label":null,"level":"info"}
+{"message":"[chardb] no clients declared on chardb(); generate waits for src/worker.ts to change","label":"vite","level":"info"}
+{"message":"[200] / 22ms","label":null,"level":"info"}
+{"message":"[200] /tenants 8ms","label":null,"level":"info"}
