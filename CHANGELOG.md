@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-02
+
+A fix for Cloudflare Access: every sign-in through it failed on 1.1.0 and earlier. Upgrade if you use Cloudflare Access; nothing else changes.
+
 ### Fixed
 
 - **Cloudflare Access sign-ins failed with `RELAY_STATE_TOO_LONG`.** Cloudflare Access now sends a RelayState of over 1000 bytes (1069, up from about 200 when it was first tested), past the 1024-byte cap. The default and maximum `relayStateMaxBytes` is now 4096 (D-062). Found in a live test of a new deployment.
