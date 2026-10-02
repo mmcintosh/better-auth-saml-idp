@@ -304,7 +304,7 @@ async function requestReport(msg: Message, doc: any, opts: DecodeOptions, report
   if (!Number.isNaN(issueInstant.getTime()) && now.getTime() - issueInstant.getTime() > 300_000)
     report.info(`IssueInstant is ${since(issueInstant, now)}: the IdP only accepts requests up to 5 minutes old`);
   if (msg.relayState && Buffer.byteLength(msg.relayState) > 80)
-    report.info(`RelayState is ${Buffer.byteLength(msg.relayState)} bytes: over the spec's 80, within the IdP's default 1024`);
+    report.info(`RelayState is ${Buffer.byteLength(msg.relayState)} bytes: over the spec's 80, within the IdP's default 4096`);
 
   const certs = opts.cert.flatMap((f) => pemCertificates(readFileArg(f, "certificate")));
   if (msg.raw?.signed) {

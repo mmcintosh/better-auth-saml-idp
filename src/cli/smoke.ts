@@ -108,9 +108,9 @@ export async function smoke(target: string | undefined, opts: SmokeOptions): Pro
     return "400, 400";
   });
 
-  await check("RelayState over 1024 bytes → 400; 200 bytes → accepted", async () => {
-    const big = await redirect(req().xml, `&RelayState=${"x".repeat(1025)}`);
-    expect(big.res.status === 400 && pageCode(big.text) === "RELAY_STATE_TOO_LONG", `1025 bytes: ${big.res.status}`);
+  await check("RelayState over 4096 bytes → 400; 200 bytes → accepted", async () => {
+    const big = await redirect(req().xml, `&RelayState=${"x".repeat(4097)}`);
+    expect(big.res.status === 400 && pageCode(big.text) === "RELAY_STATE_TOO_LONG", `4097 bytes: ${big.res.status}`);
     const ok = await redirect(req().xml, `&RelayState=${"r".repeat(200)}`);
     expect(ok.res.status === 302, `200 bytes: ${ok.res.status}`);
     return "400, 302";

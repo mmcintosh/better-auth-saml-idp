@@ -123,7 +123,7 @@ Each rule has a test that fails when the rule is removed. Without rule 2, the si
 | Limit | Value | Error |
 |---|---|---|
 | Decoded request (AuthnRequest, LogoutRequest) | 64 KiB, checked before and during DEFLATE inflation | `INVALID_SAML_REQUEST` |
-| RelayState | `relayStateMaxBytes` (default and maximum 1024) | `RELAY_STATE_TOO_LONG` |
+| RelayState | `relayStateMaxBytes` (default and maximum 4096) | `RELAY_STATE_TOO_LONG` |
 | SP metadata fetched from `metadata.url` | 1 MiB, enforced while streaming | refresh fails and the last good copy is kept |
 | Registry config (API) | 64 KB of JSON | `INVALID_SERVICE_PROVIDER` |
 | Logout participants per session | 200 (more is reported as `PartialLogout`) | |

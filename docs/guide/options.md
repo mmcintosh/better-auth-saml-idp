@@ -30,7 +30,7 @@ Every option `samlIdp()` accepts. Options are validated when `samlIdp()` is call
 | `assertionLifetimeSeconds` | `number` | `300` | How long an assertion is valid (`NotOnOrAfter`). 30 to 3600; above 300 logs a warning. |
 | `clockSkewSeconds` | `number` | `60` | Tolerance for clock differences, applied to `NotBefore` and to request `IssueInstant` checks. 0 to 300. |
 | `pendingRequestTtlSeconds` | `number` | `600` | How long a request waits while the user signs in (the `resume` link's lifetime). 60 to 3600. |
-| `relayStateMaxBytes` | `number` | `1024` | Largest RelayState accepted, in UTF-8 bytes. 80 (the spec's limit) to 1024. Cloudflare Access sends more than 80. |
+| `relayStateMaxBytes` | `number` | `4096` | Largest RelayState accepted, in UTF-8 bytes. 80 (the spec's limit) to 4096. Cloudflare Access sends over 1000. |
 | `authnContextClassRef` | `string` | `urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified` | The authentication context asserted, and matched against an SP's `RequestedAuthnContext`. Set it to what your sign-in actually guarantees, for example `…:PasswordProtectedTransport`. |
 | `authnContext` | `{ levels: string[]; current: ({ user, session }) => string }` | none | Step-up: the classes your sign-in can deliver (weakest first) and which one this session achieved. SPs' `RequestedAuthnContext` is judged against them, and the user is sent to sign in again (`prompt=login`, `acr_values`) when more is needed. Exclusive with `authnContextClassRef`. See [RequestedAuthnContext](flows.md#requestedauthncontext). |
 | `accountPolicy` | `object` | strict | Who may receive assertions. See [`accountPolicy`](#accountpolicy). |
