@@ -31,7 +31,7 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "uuidv7": "1.2.1",
-    "zod": "4.4.3",
+    "zod": "4.6.5",
     "better-auth-saml-idp": "^1.1.0",
     "astro": "7.3.5",
     "@astrojs/react": "7.0.0"
