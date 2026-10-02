@@ -66,6 +66,7 @@ A running log of the non-obvious choices, with the options considered and the ev
 - [D-059](#d-059-multi-tenant-idp-phase-3-delegated-administration-2026-09-29): Multi-tenant IdP, phase 3: delegated administration (2026-09-29)
 - [D-060](#d-060-review-7-phases-2-and-3-before-release-2026-09-29): Review 7, phases 2 and 3 before release (2026-09-29)
 - [D-061](#d-061-review-8-a-fresh-look-before-110-2026-09-29): Review 8, a fresh look before 1.1.0 (2026-09-29)
+- [D-062](#d-062-relaystate-cap-4096-for-cloudflare-access-2026-10-02): RelayState cap 4096, for Cloudflare Access (2026-10-02)
 
 ---
 
@@ -1909,3 +1910,12 @@ Before tagging 1.1.0: first a check for new advisories and alerts, then a fresh 
 - **Info, not changed:** a tenant's audit view shows `denied` rows for users outside its organization who were sent to its SSO URL (their user id, IP address and user agent). The request came to the tenant's own IdP, and the rows hold opaque ids, no email.
 - The full suite (1,421 tests) passed.
 - **Live CPU for per-tenant keys** (the design asked for it; measured after 1.1.0 on the demo Worker with `wrangler tail`, one sample): a rotation that generates an RSA 3072 key took 488 ms of CPU (1.2 s wall); an activation 43 ms; activations refused by `minPublishedSeconds` 24 ms; the tenant list 22 ms. Key generation runs only when a tenant is created or a key rotated, never on sign-in: fine on Workers Paid, over the Free plan's 10 ms. RSA generation time varies with the prime search.
+
+## D-062: RelayState cap 4096, for Cloudflare Access (2026-10-02)
+
+A new deployment's first Cloudflare Access sign-in failed with `RELAY_STATE_TOO_LONG`. Cloudflare's RelayState is now 1069 bytes: a hex digest, then base64 of URL-encoded JSON holding the auth domain, nonce, attempt, replay and SAML ids. It was about 200 bytes when D-016 tested it, and the cap since then has been 1024 (D-016's reasoning: the spec's 80 is too small for real SPs).
+
+- **Fix:** the default and hard cap `relayStateMaxBytes` is now 4096. RelayState is opaque to us, length-checked, and always HTML-escaped where it's echoed. The real limit on its size is the URL's, and at 4096 there's still room for a Redirect-binding URL under common 8 KB limits. Hosts that want the spec's 80 can still set it.
+- **Test:** a 1069-byte RelayState shaped like Cloudflare's is accepted by default. The test fails with the old cap, and the over-the-cap and smoke checks now use 4097 bytes.
+- **Impact:** every Cloudflare Access sign-in through 1.1.0 or earlier fails, so this is a patch release.
+- **Lesson:** an SP's opaque values drift. Live checks against real SPs belong in the regular routine, not only at first integration.

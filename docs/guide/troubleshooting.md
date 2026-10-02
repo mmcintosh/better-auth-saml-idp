@@ -51,7 +51,7 @@ The user hasn't verified their email, and the default [account policy](users-and
 
 ## `RELAY_STATE_TOO_LONG`
 
-The SP's RelayState is over `relayStateMaxBytes`. The default and maximum is 1024 bytes; the spec says 80, but real SPs (Cloudflare Access among them) send more.
+The SP's RelayState is over `relayStateMaxBytes`. The default and maximum is 4096 bytes; the spec says 80, but real SPs send more (Cloudflare Access over 1000). Before 1.1.1 the limit was 1024, which Cloudflare Access now exceeds.
 
 ## Cloudflare Access: "Invalid login session"
 

@@ -281,9 +281,9 @@ describe("R3 fresh user check before signing", () => {
 });
 
 describe("§7 RelayState", () => {
-  it("over the cap → 400 (default 1024 bytes)", async () => {
+  it("over the cap → 400 (default 4096 bytes)", async () => {
     const { browser } = await host();
-    const res = await browser.fetch(await redirectUrl(authnRequestXml().xml, { relayState: "x".repeat(1025) }));
+    const res = await browser.fetch(await redirectUrl(authnRequestXml().xml, { relayState: "x".repeat(4097) }));
     expect(res.status).toBe(400);
     expect(await pageCode(res)).toBe("RELAY_STATE_TOO_LONG");
   });
@@ -292,6 +292,16 @@ describe("§7 RelayState", () => {
     const { browser } = await host();
     await browser.signUp();
     expect((await browser.fetch(await redirectUrl(authnRequestXml().xml, { relayState: "r".repeat(200) }))).status).toBe(200);
+  });
+
+  it("Cloudflare Access's RelayState as of 2026-10 (1069 bytes) is accepted by default (D-062)", async () => {
+    const { browser } = await host();
+    await browser.signUp();
+    // Its shape: a hex digest, ".", then base64 of URL-encoded JSON (iat, authDomain, nonce, ids…).
+    const json = encodeURIComponent(JSON.stringify({ iat: 1790966084, authDomain: "team.cloudflareaccess.com", nonce: "n".repeat(16), attemptId: "a".repeat(36), pad: "p".repeat(400) }));
+    const relayState = `${"f".repeat(64)}.${Buffer.from(json).toString("base64")}`.slice(0, 1069).padEnd(1069, "A");
+    expect(Buffer.byteLength(relayState)).toBe(1069);
+    expect((await browser.fetch(await redirectUrl(authnRequestXml().xml, { relayState }))).status).toBe(200);
   });
 
   it("strict spec mode: relayStateMaxBytes 80 rejects 81 bytes", async () => {

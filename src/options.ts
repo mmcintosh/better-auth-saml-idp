@@ -17,7 +17,11 @@ import { trimSlashes } from "./url";
 
 export const NAMEID_EMAIL = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress";
 export const AUTHN_CONTEXT_UNSPECIFIED = "urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified";
-export const RELAY_STATE_HARD_CAP = 1024;
+/**
+ * RelayState cap, in bytes. Cloudflare Access sent about 200 bytes in 2026-09 (D-016) and 1069 a
+ * week later (D-062), so the cap leaves room to grow; past it, a URL itself gets too long.
+ */
+export const RELAY_STATE_HARD_CAP = 4096;
 
 export class SamlIdpConfigError extends Error {
   constructor(readonly issues: string[]) {

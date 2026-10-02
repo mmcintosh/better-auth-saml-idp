@@ -319,7 +319,7 @@ npx better-auth-saml-idp smoke https://auth.example.com --sp <SP entity ID>
 | `assertionLifetimeSeconds` | number | `300` | Assertion validity window |
 | `clockSkewSeconds` | number | `60` | Tolerance for `NotBefore` and `IssueInstant` |
 | `pendingRequestTtlSeconds` | number | `600` | How long a request waits for the user to sign in |
-| `relayStateMaxBytes` | number | `1024` | 80 is the spec; real SPs such as Cloudflare Access send more |
+| `relayStateMaxBytes` | number | `4096` | 80 is the spec; real SPs send more (Cloudflare Access over 1000) |
 | `schema` | object | none | Rename tables and columns, as with other Better Auth plugins |
 | `schemaValidator` | object | libxml2 WASM | Replace the XSD validator |
 

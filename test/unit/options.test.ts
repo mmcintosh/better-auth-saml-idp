@@ -35,7 +35,7 @@ describe("resolveOptions: defaults", () => {
     expect(r.assertionLifetimeSeconds).toBe(300);
     expect(r.clockSkewSeconds).toBe(60);
     expect(r.pendingRequestTtlSeconds).toBe(600);
-    expect(r.relayStateMaxBytes).toBe(1024); // Cloudflare Access exceeds the spec's 80 (D-016)
+    expect(r.relayStateMaxBytes).toBe(4096); // Cloudflare Access sends over 1000 bytes (D-016, D-062)
     expect(r.warnings).toEqual([]);
     expect(typeof r.schemaValidator.validate).toBe("function");
     expect(r.accountPolicy).toEqual({ requireEmailVerified: true, allowImpersonatedSessions: false, allowAnonymousUsers: false });
@@ -306,7 +306,7 @@ describe("resolveOptions: limits", () => {
     [{ assertionLifetimeSeconds: 10 }, /assertionLifetimeSeconds/],
     [{ assertionLifetimeSeconds: 7200 }, /assertionLifetimeSeconds/],
     [{ relayStateMaxBytes: 40 }, /relayStateMaxBytes/],
-    [{ relayStateMaxBytes: 4096 }, /relayStateMaxBytes/],
+    [{ relayStateMaxBytes: 4097 }, /relayStateMaxBytes/],
     [{ clockSkewSeconds: -1 }, /clockSkewSeconds/],
     [{ pendingRequestTtlSeconds: 5 }, /pendingRequestTtlSeconds/],
   ])("rejects out-of-range %j", (over, msg) => {

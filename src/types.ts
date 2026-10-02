@@ -403,9 +403,9 @@ export interface SamlIdpOptions {
   /** How long a stored AuthnRequest waits for the user to sign in. Default 600 s. */
   pendingRequestTtlSeconds?: number | undefined;
   /**
-   * Maximum RelayState size in bytes. Default (and hard cap) 1024. SAML Bindings §3.4.3 says
-   * 80, but real SPs send more — Cloudflare Access does (DECISIONS.md D-016). Set 80 for
-   * strict spec behaviour. RelayState is opaque to the IdP and always HTML-escaped.
+   * Maximum RelayState size in bytes. Default (and hard cap) 4096. SAML Bindings §3.4.3 says
+   * 80, but real SPs send far more: Cloudflare Access sends over 1000 (DECISIONS.md D-016,
+   * D-062). Set 80 for strict spec behaviour. RelayState is opaque to the IdP and always HTML-escaped.
    */
   relayStateMaxBytes?: number | undefined;
   /**

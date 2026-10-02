@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cloudflare Access sign-ins failed with `RELAY_STATE_TOO_LONG`.** Cloudflare Access now sends a RelayState of over 1000 bytes (1069, up from about 200 when it was first tested), past the 1024-byte cap. The default and maximum `relayStateMaxBytes` is now 4096 (D-062). Found in a live test of a new deployment.
+
 ### Documentation
 
 - **The CharDB example with an Astro front end** (`examples/chardb-astro`, experimental): the same Worker (CI checks the files are identical), with Astro pages at real URLs, a static sidebar and React islands. Both CharDB examples now keep `public/.gitkeep` through a web build, and CI builds their web apps.
