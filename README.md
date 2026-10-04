@@ -19,6 +19,8 @@ Turn your [Better Auth](https://www.better-auth.com) server into a **SAML 2.0 Id
 
 > **Unofficial community plugin.** This project isn't affiliated with or endorsed by Better Auth. Status: **stable, 1.x** on npm (`npm install better-auth-saml-idp`), following semantic versioning: the npm badge above shows the current version, and the [CHANGELOG](CHANGELOG.md) what changed. Every design decision and its evidence is in [DECISIONS.md](DECISIONS.md).
 
+If it's useful to you, a ⭐ on [GitHub](https://github.com/mmcintosh/better-auth-saml-idp) helps others find it.
+
 > [!WARNING]
 > **Cloudflare Workers: put `samlIdp()` inside `withCloudflare`'s second argument.** A `plugins: [...]` next to `...withCloudflare(...)` **replaces** the Cloudflare plugin, which silently disables its storage validation, IP detection and geolocation.
 
