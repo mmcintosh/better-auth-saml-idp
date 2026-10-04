@@ -12,6 +12,17 @@ updates:
     ignore:
       - dependency-name: better-auth
       - dependency-name: "@better-auth/*"
+      # The CharDB examples stay on TypeScript 5: CharDB's Vite plugin uses the TypeScript JS API
+      # (ts.ScriptTarget), which TypeScript 7's native compiler doesn't ship (2026-10-04). The
+      # package and the other examples are on 7 already, so this only holds the CharDB ones.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # Prisma 7 (adapter tests only) pulls in mysql2 3.15.3, with GHSA-3f6p-5ww8-9rcr (high) and
+      # GHSA-rgwj-5xj2-c3m3, and changes its setup; revisit when it depends on a patched mysql2.
+      - dependency-name: prisma
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/client"
+        update-types: ["version-update:semver-major"]
   # The npm CLI the release job stages with (pinned by integrity; npm stage needs >= 11.15).
   # Only npm itself: its dependencies are bundled inside it, so updating one alone always fails.
   # Fixes for those arrive as a newer npm (alerts dismissed as tolerable risk, 2026-10-02).
