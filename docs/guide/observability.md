@@ -107,7 +107,7 @@ This records the same events in the [`samlIdpAuditEvent`](schema.md#samlidpaudit
 
 Create the table with your migrations: `npx auth migrate` or `generate`, or D1 migration `0005`.
 
-- **Anonymous denials aren't stored.** A refusal that identifies neither an SP nor a user (a malformed request, an unknown issuer) goes to `onDenied` but not the table, so an attacker can't grow it at will. A denial for a known SP or a signed-in user is stored.
+- **Only denials for a signed-in user are stored.** Any other refusal (a malformed request, an unknown issuer, or a SAML error Response to a known SP, whose entity ID anyone can put in a request) goes to `onDenied` but not the table, so an attacker can't grow it at will. SAML error Responses are also logged as warnings, such as `[saml-idp] SAML status Responder/InvalidNameIDPolicy for SP google-workspace: …`: when an SP only says "couldn't sign you in", that line says why.
 - **Retention:** rows expire after `retentionDays` and are swept automatically, like the plugin's other expiring rows.
 - **Best effort:** rows are written in the background. A failed write is logged; it never fails the sign-in. If you need every event durably, forward from the callbacks to a store that guarantees it.
 - **Personal data:** `details` holds the NameID (often an email) and the IP. Set `retentionDays` to what your privacy policy allows. The session-participant table (with Single Logout or `onSessionEnded`) also holds each SP's NameID; its rows expire with the session, and are removed at once when the user is deleted.

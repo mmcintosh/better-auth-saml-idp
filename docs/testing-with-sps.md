@@ -12,6 +12,7 @@ The IdP is checked against several independent SAML implementations, from automa
 | 2 | **node-saml SP**: HTTP-POST binding, cross-site redirect after its ACS | `pnpm e2e` (Playwright + Chromium) | ✅ |
 | 3 | **Cloudflare Access** (Zero Trust) | [sp-cloudflare-access.md](sp-cloudflare-access.md) | manual |
 | 3 | **AWS IAM Identity Center** | [sp-aws-iam-identity-center.md](sp-aws-iam-identity-center.md) | manual |
+| 3 | **Google Workspace** | [sp-google-workspace.md](sp-google-workspace.md) | manual |
 | 3 | HubSpot | [hubspot.md](hubspot.md) | manual, not yet verified |
 | 4 | SAMLtool, an external validator | below | manual |
 

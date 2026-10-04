@@ -134,7 +134,10 @@ export function samlError(
   status: SamlStatus,
   userId?: string,
 ): Response {
-  ctx.context.logger.debug(`[saml-idp] SAML status ${status.code}/${status.subCode ?? "-"} for SP ${req.spId}`);
+  // Warn, not debug: the SP and ACS URL are known by now, and the SP only says "couldn't sign you
+  // in", so this line is often the only way an admin learns why (it found D-063). It isn't stored
+  // unless a user is signed in (see emit), so the log is where it shows.
+  ctx.context.logger.warn(`[saml-idp] SAML status ${status.code}/${status.subCode ?? "-"} for SP ${req.spId}${status.message ? `: ${status.message}` : ""}`);
   emit(ctx, state.options, {
     type: "denied",
     code: "SAML_STATUS",
