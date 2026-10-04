@@ -40,16 +40,16 @@
     "@chardb/core": "$@chardb/core"
   },
   "devDependencies": {
-    "@cloudflare/vitest-plugin": "1.1.2",
+    "@cloudflare/vitest-plugin": "1.3.4",
     "@cloudflare/workers-types": "5.20260820.1",
-    "@msw/cloudflare": "0.0.1",
+    "@msw/cloudflare": "0.2.0",
     "@types/react": "18.3.31",
     "@types/react-dom": "18.3.7",
-    "@vitejs/plugin-react": "6.1.0",
+    "@vitejs/plugin-react": "6.1.1",
     "msw": "3.0.0",
     "typescript": "7.0.2",
     "vite": "^8.3.0",
     "vitest": "4.1.11",
-    "wrangler": "4.125.0"
+    "wrangler": "4.145.0"
   }
 }
