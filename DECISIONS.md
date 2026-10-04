@@ -1930,3 +1930,12 @@ A live test made Google Workspace use the IdP for sign-in, through an SSO profil
 - **Google's request:** HTTP-Redirect, unsigned, with ForceAuthn and IsPassive false, the emailAddress NameIDPolicy, and no RequestedAuthnContext. A first guess that Google wanted PasswordProtectedTransport was wrong; the logged request settled it.
 - **Verified live after the fix:** the user signed in to Google through the IdP (`assertion.issued`). Banning the user in Better Auth suspended the Workspace account (through better-auth-scim-provisioning) and the IdP then refused the sign-in ("You have been banned from this application"). Guide: docs/sp-google-workspace.md.
 - **Tests:** test/regression/nameid-format-short-names.test.ts. It covers Google's request against an SP set to `emailAddress`, every short name, a custom URN, a typo kept with a warning, and the warn line for a SAML status. Each failed before the fix.
+
+## D-064: Benchmark on Workers and D1 (2026-10-04)
+
+Measured with scripts/bench against the Workers example, deployed as its own Worker and D1 database (ENAM, no read replication). Better Auth's rate limit was off for the run (`RATE_LIMIT=off`), because the load came from one IP address. The write-up is docs/benchmark.md.
+
+- **Results:** a signed-in sign-in takes 262 ms p50 at one client, with 20 ms of Worker CPU. Throughput levels off at about 28 a second, with latency growing with concurrency. A full sign-in levels off at about 14 a second (the password check is 92 ms of CPU). There were no errors at any level.
+- **The limit is D1's query rate, not CPU.** `get-session` (two reads, 4 ms CPU) leveled off at about 110 a second, and metadata (no queries) reached 750 a second at flat latency. That's a ceiling of about 200 queries a second per database, against about 7 queries per sign-in, while D1 query insights put each query at only 0.25–0.5 ms of SQL.
+- **Not changed:** the user and session re-reads, which review findings proved load-bearing, and the participant write. The participant write is one insert on a session's first sign-in to an SP. It takes three queries only when the same session signs in to the same SP again, as in the benchmark, and changing that would make the common case slower. The page instead explains that turning off `auditLog` and Single Logout saves writes, and that heavier loads need more than one database.
+- **Example change:** `RATE_LIMIT` ("off" turns Better Auth's rate limit off), documented as benchmark-only.

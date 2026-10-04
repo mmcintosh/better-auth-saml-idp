@@ -90,7 +90,7 @@ ROADMAP = [
  ]),
  ("Proposed", "Under review", "Ideas raised before 1.0. Each one either moves into a release or goes.", [
    ("Salesforce as a live SP (done)", "Verified 2026-09-27 with a Developer Edition org: signed requests required and verified, NameID to Federation ID (D-042, docs/sp-salesforce.md)."),
-   ("Load test and benchmark", "Throughput and latency of sign-ins on Workers under concurrency, published with the method so others can rerun it."),
+   ("Load test and benchmark (done)", "Sign-ins on Workers and D1 under concurrency, with the method and scripts to rerun it (docs/benchmark.md, scripts/bench): about 260 ms and 20 ms of CPU per sign-in; one D1 database tops out at about 28 sign-ins a second, a limit set by the database's query rate, not the plugin's CPU."),
    ("Release automation", "Changesets: changelog entries written with each PR, version bumps and the release PR generated, so a release is one merge."),
    ("Admin page in the example (done)", "/admin in the Workers example: IdP details, SPs (add from metadata, edit, enable, delete, test sign-in) and recent audit events, on the registry API. The plugin itself ships no UI."),
    ("NameID from a user field (done)", "nameId: { field } for code and stored SPs (for example an employee ID); only fields users can't set themselves (D-041)."),

@@ -12,6 +12,8 @@
 //   login     a full sign-in from nothing: GET /sso (parked, 302), POST the password, GET /resume →
 //             signed Response. Adds Better Auth's password check (scrypt) and session creation.
 //   metadata  GET the IdP metadata: a baseline for the platform's own overhead.
+//   session   GET Better Auth's get-session for a signed-in user: two D1 reads and little CPU, to
+//             tell a database limit from a CPU one.
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -59,6 +61,11 @@ const work = {
     const r = await fetch(`${base}/api/auth/saml2/idp/metadata`);
     await r.arrayBuffer();
     return r.ok ? "ok" : `HTTP ${r.status}`;
+  },
+  session: async () => {
+    const r = await fetch(`${base}/api/auth/get-session`, { headers: { cookie: user().cookie } });
+    const body = await r.json().catch(() => null);
+    return r.ok && body?.user ? "ok" : `HTTP ${r.status}`;
   },
   sso: async () => {
     const r = await fetch(ssoUrl(), { headers: { cookie: user().cookie }, redirect: "manual" });
