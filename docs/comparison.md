@@ -9,7 +9,7 @@ Our own column links to the tests that prove each entry. The roadmap derived fro
 - **Replay protection you can check.** AuthnRequest replay is rejected by a database unique key and tested under concurrency across separate instances. Most peers don't document replay handling for inbound requests.
 - **Strict identity by default.** Only verified email addresses get assertions; admin-impersonation sessions and anonymous users are refused. The user and session are re-read from the database right before signing.
 - **Honest protocol answers.** IsPassive, RequestedAuthnContext, Subject and NameIDPolicy are honoured, and failures go back as signed SAML status Responses. authentik, Logto and Ory Polis show HTML errors instead.
-- **Runs where your app runs.** A Better Auth plugin that runs on Cloudflare Workers and Node, verified live against Cloudflare Access, Okta, Auth0, Salesforce and AWS IAM Identity Center. Every other self-hosted option here is a separate server.
+- **Runs where your app runs.** A Better Auth plugin that runs on Cloudflare Workers and Node, verified live against Cloudflare Access, Okta, Auth0, Salesforce, AWS IAM Identity Center and Google Workspace. Every other self-hosted option here is a separate server.
 
 ## Where we trail
 
@@ -68,7 +68,7 @@ Products: **better-auth-saml-idp** (This plugin, 1.1); **Shibboleth IdP** (Refer
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Register an SP from its metadata XML or URL | ✅ Yes<br><sub>XML import (helper and CLI, also from a URL); certificates refreshed from the metadata URL, entity ID and ACS URLs pinned</sub> | ✅ Yes<br><sub>file, URL, MDQ</sub> | 🟡 Partial<br><sub>converter, refresh add-on</sub> | ✅ Yes<br><sub>XML import, URL for certificates</sub> | ✅ Yes<br><sub>the only way</sub> | 🟡 Partial<br><sub>file import</sub> | ❌ No | ❌ No | 🟡 Partial<br><sub>fills URLs, not certificates</sub> | ❌ No<br><sub>manual fields</sub> | ❌ No | ❌ No |
 | Admin UI or management API for SPs | ✅ Yes<br><sub>management API over a database registry (admin-gated, audited); a reference admin page in the example, no UI in the plugin</sub> | ❌ No | ❌ No | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
-| Outbound SCIM provisioning | ❌ No<br><sub>not planned</sub> | ❌ No | ❌ No | 🟡 Partial<br><sub>preview</sub> | ❌ No<br><sub>inbound only</sub> | ✅ Yes | ❔ Not documented | ❌ No<br><sub>inbound only</sub> | ✅ Yes<br><sub>P1</sub> | ✅ Yes | 🟡 Partial<br><sub>catalog apps only</sub> | ❌ No |
+| Outbound SCIM provisioning | ✅ Yes<br><sub>companion plugin better-auth-scim-provisioning: SCIM 2.0, Google Workspace and signed webhooks; verified live with Cloudflare Access and Google Workspace</sub> | ❌ No | ❌ No | 🟡 Partial<br><sub>preview</sub> | ❌ No<br><sub>inbound only</sub> | ✅ Yes | ❔ Not documented | ❌ No<br><sub>inbound only</sub> | ✅ Yes<br><sub>P1</sub> | ✅ Yes | 🟡 Partial<br><sub>catalog apps only</sub> | ❌ No |
 
 ### Platform
 
