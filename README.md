@@ -3,7 +3,7 @@
 Turn your [Better Auth](https://www.better-auth.com) server into a **SAML 2.0 Identity Provider**, and sign your users in to Okta, Auth0, Salesforce, Cloudflare Access and any other SAML service provider. Runs on **Cloudflare Workers** and **Node 22+**, with no Java and no native binaries.
 
 [![CI](https://github.com/mmcintosh/better-auth-saml-idp/actions/workflows/ci.yml/badge.svg)](https://github.com/mmcintosh/better-auth-saml-idp/actions/workflows/ci.yml)
-[![npm next](https://img.shields.io/npm/v/better-auth-saml-idp/next?label=npm%40next)](https://www.npmjs.com/package/better-auth-saml-idp)
+[![npm](https://img.shields.io/npm/v/better-auth-saml-idp)](https://www.npmjs.com/package/better-auth-saml-idp)
 [![Better Auth](https://img.shields.io/badge/better--auth-%E2%89%A51.7.5%20%3C1.8-black)](https://www.better-auth.com)
 [![Runs on](https://img.shields.io/badge/runs%20on-Workers%20%7C%20Node%2022%2B%20%7C%20Bun%20%7C%20Deno-f38020)](docs/guide/README.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -17,7 +17,7 @@ Turn your [Better Auth](https://www.better-auth.com) server into a **SAML 2.0 Id
 - **Example IdP (Workers + Hono + D1)**: [better-auth-saml-idp-example.mmcintosh-f61.workers.dev](https://better-auth-saml-idp-example.mmcintosh-f61.workers.dev/), which signs users in to Cloudflare Access, Okta, Auth0 and Salesforce, verified live
 - **Feature comparison with eleven SAML IdPs**: [mmcintosh.github.io/better-auth-saml-idp/comparison](https://mmcintosh.github.io/better-auth-saml-idp/comparison/)
 
-> **Unofficial community plugin.** This project isn't affiliated with or endorsed by Better Auth. Status: **1.0** on npm (`npm install better-auth-saml-idp`); see the [CHANGELOG](CHANGELOG.md). Every design decision and its evidence is in [DECISIONS.md](DECISIONS.md).
+> **Unofficial community plugin.** This project isn't affiliated with or endorsed by Better Auth. Status: **stable, 1.x** on npm (`npm install better-auth-saml-idp`), following semantic versioning: the npm badge above shows the current version, and the [CHANGELOG](CHANGELOG.md) what changed. Every design decision and its evidence is in [DECISIONS.md](DECISIONS.md).
 
 > [!WARNING]
 > **Cloudflare Workers: put `samlIdp()` inside `withCloudflare`'s second argument.** A `plugins: [...]` next to `...withCloudflare(...)` **replaces** the Cloudflare plugin, which silently disables its storage validation, IP detection and geolocation.
