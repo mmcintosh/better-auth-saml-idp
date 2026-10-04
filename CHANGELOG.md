@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-04
+
+A fix for Google Workspace, and any SP that names its NameID format: with `nameIdFormat` set to a short name as the README documents (`emailAddress`, `persistent`, `transient`), those sign-ins failed with `InvalidNameIDPolicy`. Upgrade if you set `nameIdFormat`; nothing else changes.
+
 ### Fixed
 
 - **`nameIdFormat` short names now work.** The README documents `emailAddress`, `persistent` and `transient`, but they were compared as given against the URN an SP asks for, so an SP configured that way was refused with `InvalidNameIDPolicy` whenever it named a format. Google Workspace always does, so every Workspace sign-in failed. The short names (and `unspecified`) now stand for the standard URNs. A full URN is kept as it is; any other value is kept too, with a startup warning.
