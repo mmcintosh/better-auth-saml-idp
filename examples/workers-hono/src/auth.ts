@@ -25,6 +25,11 @@ export interface Env {
    * /dev/mailbox instead of sending email. Never set this in production.
    */
   DEV_MAILBOX?: string;
+  /**
+   * BENCHMARK ONLY. "off" turns Better Auth's rate limit off, so a load test from one machine
+   * measures the IdP rather than the per-IP limit (scripts/bench). Never set this in production.
+   */
+  RATE_LIMIT?: string;
 }
 
 /** DEV_MAILBOX: the latest verification link per email address (per isolate). */
@@ -135,7 +140,7 @@ function buildAuth(env: Env, origin: string) {
         },
         // ADDENDUM-01: single-use state and rate limits in the database, never KV.
         verification: { storeInDatabase: true },
-        rateLimit: { enabled: true, storage: "database" },
+        rateLimit: { enabled: env.RATE_LIMIT !== "off", storage: "database" },
         advanced: {
           database: { validateSchema: true },
           backgroundTasks: {

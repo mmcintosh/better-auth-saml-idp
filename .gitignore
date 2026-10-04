@@ -11,3 +11,5 @@ wrangler.deploy.jsonc
 docs/comparison/.artifact.html
 __pycache__/
 .claude/worktrees/
+examples/workers-hono/wrangler.bench.jsonc
+scripts/bench/.state/
