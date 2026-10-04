@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Documentation
+
+- A benchmark of sign-ins on Workers and D1, with the scripts to rerun it (`docs/benchmark.md`, `scripts/bench`). The Workers example gains a benchmark-only `RATE_LIMIT=off`.
+
 ## [1.1.2] - 2026-10-04
 
 A fix for Google Workspace, and any SP that names its NameID format: with `nameIdFormat` set to a short name as the README documents (`emailAddress`, `persistent`, `transient`), those sign-ins failed with `InvalidNameIDPolicy`. Upgrade if you set `nameIdFormat`; nothing else changes.
