@@ -16,6 +16,7 @@ A fix for Google Workspace, and any SP that names its NameID format: with `nameI
 ### Documentation
 
 - A guide for Google Workspace as a service provider, verified live: sign-in to Google through the IdP, with an SSO profile assigned to one organizational unit.
+- The README lists CharDB (Durable Objects, experimental) with the other databases, as the databases guide does.
 - The observability guide said a denial for a known SP is stored in the audit log. Only denials for a signed-in user are; the others go to `onDenied`, and SAML error Responses to the log.
 
 ## [1.1.1] - 2026-10-02

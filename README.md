@@ -30,7 +30,7 @@ Turn your [Better Auth](https://www.better-auth.com) server into a **SAML 2.0 Id
 - 🛡️ **Hardened input**: every message is checked against the OASIS XSDs by a libxml2 WebAssembly build that also runs on Workers. DOCTYPEs are refused, DEFLATE output is capped, and duplicate or encoded parameters are rejected.
 - ✅ **Signed AuthnRequests** over Redirect *and* POST, with defences against XML signature wrapping. Each defence was mutation-checked when written, and is fuzzed on every CI run.
 - 🔁 **Replay protection** you can check: a database unique key, tested under concurrency across separate instances.
-- 🗄️ **Your database**: proven in CI on PostgreSQL, MySQL, MongoDB, SQLite and Cloudflare D1, through Kysely, Drizzle and Prisma ([Databases](docs/guide/databases.md)).
+- 🗄️ **Your database**: proven in CI on PostgreSQL, MySQL, MongoDB, SQLite and Cloudflare D1, through Kysely, Drizzle and Prisma, and experimentally on [CharDB](https://github.com/zpg6/chardb) (Durable Objects) ([Databases](docs/guide/databases.md)).
 - 🎲 **Fuzz-tested**: property-based tests throw hostile input at every inbound parser (AuthnRequest, LogoutRequest, LogoutResponse, SP metadata, raw XML) and the signature verifier, and hostile user data at issuance ([D-036](DECISIONS.md)).
 - 📦 **Supply chain**: SHA-pinned actions, CodeQL, dependency audits, OpenSSF Scorecard, and a release workflow that publishes with npm provenance and an SBOM ([SECURITY.md](SECURITY.md)).
 - 👤 **Strict identity**: only verified emails get assertions; impersonated and anonymous sessions are refused; the user and session are re-read right before signing. The NameID can come from a user field (an employee number), but only from fields users can't change themselves.
@@ -127,13 +127,14 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 - [x] SAMLtool: Response validation
 - [x] AWS IAM Identity Center: live (multi-Region instance), the access portal and the AWS console in an assigned permission set, SP stored in the D1 registry ([guide](docs/sp-aws-iam-identity-center.md))
 - [x] Google Workspace: live (an SSO profile assigned to one organizational unit), sign-in to Google through the IdP, with the users created and suspended by [better-auth-scim-provisioning](https://www.npmjs.com/package/better-auth-scim-provisioning) ([guide](docs/sp-google-workspace.md))
+- [ ] HubSpot: guide written ([HubSpot](docs/hubspot.md)), not yet run live
 
 **Databases, in CI:**
 
 - [x] PostgreSQL 17, MySQL 8.4 and MongoDB 8.2 (replica set): the database-dependent behaviours (replay protection under concurrency, single use, registry, logout participants, memberships, the sweep, the audit log)
 - [x] SQLite (Node) and Cloudflare D1 via Drizzle (workerd): the whole suite
 - [x] Drizzle on PostgreSQL and MySQL, and Prisma on PostgreSQL: the adapter matrix, in CI
-- [ ] HubSpot: guide written ([HubSpot](docs/hubspot.md)), not yet run live
+- [x] CharDB 0.1 (Durable Objects), experimental: the [example](examples/chardb/README.md)'s flow (tenants, per-tenant keys, replay protection) in workerd, weekly in CI; not the whole suite
 
 ## 📚 Table of Contents
 
