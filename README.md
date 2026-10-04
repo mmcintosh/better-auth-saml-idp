@@ -126,6 +126,7 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 - [x] node-saml, samlify and `@better-auth/sso`: in CI, on Node and workerd, including an **identity broker** (`@better-auth/sso` upstream and this plugin downstream in one Better Auth, [guide](docs/guide/better-auth-sso.md#one-app-both-roles-an-identity-broker))
 - [x] SAMLtool: Response validation
 - [x] AWS IAM Identity Center: live (multi-Region instance), the access portal and the AWS console in an assigned permission set, SP stored in the D1 registry ([guide](docs/sp-aws-iam-identity-center.md))
+- [x] Google Workspace: live (an SSO profile assigned to one organizational unit), sign-in to Google through the IdP, with the users created and suspended by [better-auth-scim-provisioning](https://www.npmjs.com/package/better-auth-scim-provisioning) ([guide](docs/sp-google-workspace.md))
 
 **Databases, in CI:**
 
@@ -284,7 +285,7 @@ Unauthenticated users are sent to `loginPage?callbackURL=<absolute resume URL>`.
 
 ### 5. Register a service provider
 
-Give the SP your metadata URL, `https://auth.example.com/api/auth/saml2/idp/metadata`. Take its entity ID and ACS URL, or its metadata, and add an entry to `serviceProviders`, or store it at runtime with the [registry](#managing-sps-at-runtime-registry). Step-by-step guides: [Cloudflare Access](docs/sp-cloudflare-access.md) · [HubSpot](docs/hubspot.md) · [AWS IAM Identity Center](docs/sp-aws-iam-identity-center.md) · [testing with other SPs](docs/testing-with-sps.md).
+Give the SP your metadata URL, `https://auth.example.com/api/auth/saml2/idp/metadata`. Take its entity ID and ACS URL, or its metadata, and add an entry to `serviceProviders`, or store it at runtime with the [registry](#managing-sps-at-runtime-registry). Step-by-step guides: [Cloudflare Access](docs/sp-cloudflare-access.md) · [Google Workspace](docs/sp-google-workspace.md) · [HubSpot](docs/hubspot.md) · [AWS IAM Identity Center](docs/sp-aws-iam-identity-center.md) · [testing with other SPs](docs/testing-with-sps.md).
 
 ### 6. Check it
 
@@ -330,7 +331,7 @@ npx better-auth-saml-idp smoke https://auth.example.com --sp <SP entity ID>
 | `id` | string | (required) | Your name for the SP (logs, `/init?sp=`, registry) |
 | `entityId` | string | (required) | Matched exactly against the AuthnRequest `Issuer` |
 | `acsUrls` | string[] | (required) | Allow-list; a requested ACS URL must match exactly |
-| `nameIdFormat` | string | `emailAddress` | Or `persistent`, `transient` |
+| `nameIdFormat` | string | `emailAddress` | Or `persistent`, `transient`, `unspecified`, or a full NameID format URN; the short names stand for the standard URNs |
 | `nameId` | function or `{ field }` | per format | Custom NameID value; `{ field }` works for stored SPs too, and only takes fields users can't set |
 | `attributes` | map or function | none | [Attributes](#attributes) |
 | `authorize` | function | allow | Decide per user and SP (gets `organizations` and the re-read session); `true`, or `{ allow: false, reason?, reauthenticate? }` to deny or send the user to sign in again |

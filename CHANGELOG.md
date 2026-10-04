@@ -4,6 +4,16 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Fixed
+
+- **`nameIdFormat` short names now work.** The README documents `emailAddress`, `persistent` and `transient`, but they were compared as given against the URN an SP asks for, so an SP configured that way was refused with `InvalidNameIDPolicy` whenever it named a format. Google Workspace always does, so every Workspace sign-in failed. The short names (and `unspecified`) now stand for the standard URNs. A full URN is kept as it is; any other value is kept too, with a startup warning.
+- A SAML error Response sent to an SP (`InvalidNameIDPolicy`, `NoAuthnContext`, `NoPassive`, …) is logged as a warning with its reason, not at debug level. SPs usually show only "couldn't sign you in", so this line is often the only way to see why.
+
+### Documentation
+
+- A guide for Google Workspace as a service provider, verified live: sign-in to Google through the IdP, with an SSO profile assigned to one organizational unit.
+- The observability guide said a denial for a known SP is stored in the audit log. Only denials for a signed-in user are; the others go to `onDenied`, and SAML error Responses to the log.
+
 ## [1.1.1] - 2026-10-02
 
 A fix for Cloudflare Access: every sign-in through it failed on 1.1.0 and earlier. Upgrade if you use Cloudflare Access; nothing else changes.

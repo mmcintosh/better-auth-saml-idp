@@ -224,7 +224,11 @@ export interface ServiceProviderConfig {
    * of these exactly; with no requested URL, the first entry is used.
    */
   acsUrls: [string, ...string[]];
-  /** Defaults to `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`. */
+  /**
+   * `emailAddress` (the default), `persistent`, `transient`, `unspecified`, or a full NameID
+   * format URN. The short names stand for the standard URNs, e.g.
+   * `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`.
+   */
   nameIdFormat?: string | undefined;
   /**
    * Value of `<NameID>`. Default depends on `nameIdFormat`:

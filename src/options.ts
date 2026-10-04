@@ -14,6 +14,7 @@ import type {
   SessionLimit,
 } from "./types";
 import { trimSlashes } from "./url";
+import { NAMEID_FORMAT } from "./types";
 
 export const NAMEID_EMAIL = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress";
 export const AUTHN_CONTEXT_UNSPECIFIED = "urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified";
@@ -498,6 +499,22 @@ function tenantOrganization(sp: ParsedServiceProvider, path: string, d: SpDefaul
 }
 
 /** Per-SP checks and defaults, shared by code SPs and database-registry SPs. */
+/**
+ * An SP's NameID format as the URN that requests and responses carry. The short names
+ * (`emailAddress`, `persistent`, `transient`, `unspecified`) are what the README documents, but
+ * they were compared as given, so they never matched an SP that names its format: Google
+ * Workspace sends NameIDPolicy emailAddress and got InvalidNameIDPolicy for every sign-in (D-063).
+ * Any other URN is kept (a host's own `nameId` may produce it). Anything else is most likely a
+ * typo: warned about, and kept as it is, as before, so an SP stored that way still loads.
+ */
+export function nameIdFormatOf(value: string | undefined, path: string, warnings: string[]): string {
+  if (value === undefined) return NAMEID_EMAIL;
+  if (Object.hasOwn(NAMEID_FORMAT, value)) return NAMEID_FORMAT[value as keyof typeof NAMEID_FORMAT];
+  if (!value.startsWith("urn:"))
+    warnings.push(`${path}: "${value.slice(0, 100)}" isn't a NameID format, so an SP that asks for one is refused: use emailAddress, persistent, transient, unspecified, or a full URN`);
+  return value;
+}
+
 function resolveServiceProvider(sp: ParsedServiceProvider, path: string, d: SpDefaults, issues: string[], warnings: string[]): ResolvedServiceProvider {
   // "ignore" + metadata: the metadata's signing certificates are never used, so logout requests
   // are authenticated by SessionIndex alone (pre-release review L-2). Legitimate when metadata is
@@ -546,7 +563,7 @@ function resolveServiceProvider(sp: ParsedServiceProvider, path: string, d: SpDe
     id: sp.id,
     entityId: sp.entityId,
     acsUrls: sp.acsUrls as [string, ...string[]],
-    nameIdFormat: sp.nameIdFormat ?? NAMEID_EMAIL,
+    nameIdFormat: nameIdFormatOf(sp.nameIdFormat, `${path}.nameIdFormat`, warnings),
     nameId:
       typeof sp.nameId === "function"
         ? sp.nameId
