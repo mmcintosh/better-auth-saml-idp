@@ -358,10 +358,16 @@ export function tenantEndpoints(state: PluginState) {
               const activatableAt = new Date(date(next.createdAt).getTime() + (state.options.tenants?.minPublishedMs ?? 0));
               const forced = ctx.body.force === true && activatableAt > now;
               if (activatableAt > now && !forced) throw fail("CONFLICT", "TENANT_SIGNING_KEY_TOO_NEW", { activatableAt });
-              for (const old of keys.filter((k) => k.state === "previous")) await moveKey(ctx, old, "retired", { encryptedPrivateKey: "" });
               const active = keys.find((k) => k.state === "active");
-              if (active) await moveKey(ctx, active, "previous");
-              else {
+              const previous = keys.filter((k) => k.state === "previous");
+              if (active) {
+                for (const old of previous) await moveKey(ctx, old, "retired", { encryptedPrivateKey: "" });
+                await moveKey(ctx, active, "previous");
+              } else if (previous.length) {
+                // An activation cut short after the active key moved to previous: finish it. That
+                // previous key is what was signing; retiring it, or adding the shared one, would
+                // publish the wrong certificates (D-065).
+              } else {
                 // The tenant's first own key: the shared certificate stays published as its previous,
                 // so SPs that haven't fetched the new one yet still verify (a normal rotation, D-058).
                 const shared = rootIdentity(state.options, idpBaseURL(state.options, ctx.context.baseURL)).signing.certificate;

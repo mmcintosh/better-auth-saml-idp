@@ -35,7 +35,7 @@ The plugin can't protect against a host misconfiguration it can't see. In produc
 2. **No DTDs:** any `<!DOCTYPE` is refused, so entity-expansion and external-entity attacks never reach a parser.
 3. **XSD validation** against the OASIS SAML 2.0 schemas, with a WebAssembly build of libxml2 that also runs on Workers.
 4. **Strict parse:** any parser warning or error rejects the document, as do two attributes with the same expanded name (Namespaces in XML §6.3) and elements nested more than 100 deep. The parse is linear in the input size.
-5. **Structure:** the right root element, `Version="2.0"`, exactly one `Issuer`, an `ID`, `Destination` equal to this IdP's endpoint if present, and `ProtocolBinding` HTTP-POST if present.
+5. **Structure:** the right root element, `Version="2.0"`, exactly one `Issuer`, an `ID`, `Destination` equal to this IdP's endpoint if present, and `ProtocolBinding` HTTP-POST if present (HTTP-Redirect is taken as no preference: the Response always goes back by POST).
 
 HTTP-Redirect query parameters are parsed by the plugin itself: names are decoded before matching (`Relay%53tate` counts as `RelayState`), and every SAML parameter may appear at most once.
 
@@ -80,7 +80,7 @@ Pending sign-ins and logout steps are stored as Better Auth verification values 
 - **HTTP-Redirect:** the signature covers the exact query octets as received (`SAMLRequest`, `RelayState`, `SigAlg`, in that order, undecoded). A parameter name that needed decoding can't have been signed, so it's refused. This is verified with Node's crypto and the SP's certificate, with no XML involved.
 - **HTTP-POST:** an enveloped XML signature on the request, checked with the rules in [XML signature verification](#xml-signature-verification).
 - Any of the SP's certificates may have signed (SPs rotate keys). Certificates come from `spCertificates` and/or the SP's [metadata URL](service-providers.md#keeping-sp-certificates-current). A certificate embedded in the message is never trusted.
-- If an SP has certificates, a signature that's present but invalid is always refused, even when signing isn't required.
+- If an SP has certificates, a signature that's present but invalid is always refused, even when signing isn't required. Over HTTP-Redirect the signature is the query's `Signature` parameter; an XML signature inside a Redirect-bound request isn't evaluated (with `verify-if-signed` that request counts as unsigned, which is accepted there anyway).
 
 **Options.**
 
@@ -147,4 +147,4 @@ Each rule has a test that fails when the rule is removed. Without rule 2, the si
 
 - **Auto-POST page** (the Response to the SP): a nonce-based CSP (`default-src 'none'`), `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `no-store`, `Referrer-Policy: no-referrer`, and a `<noscript>` button. There's deliberately **no** `form-action`: browsers apply it to the SP's own redirect after its ACS, which real SPs send to other origins, and that would break sign-in (reproduced in Chromium). The form's action is always an allow-listed ACS URL.
 - **Error pages:** the same headers plus `form-action 'none'`. They show a fixed message and a code, never request contents.
-- **Everything is escaped:** values placed in XML and HTML (NameID, attributes, RelayState, URLs) are escaped, and RelayState is opaque to the IdP.
+- **Everything is escaped:** values placed in XML and HTML (NameID, attributes, RelayState, URLs) are escaped, and RelayState is opaque to the IdP: it goes back to the SP exactly as it came. A RelayState with control characters is refused (`INVALID_SAML_REQUEST`), since a browser's form submission would change them.

@@ -4,6 +4,20 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Fixed
+
+From an external review of 1.1.2 (nothing critical or high; D-065):
+- **Events and the audit log read the client IP the way Better Auth does.** They took the left-most `X-Forwarded-For` entry without checking it, which any client can set. Now a valid IP only, and a multi-value header only through `advanced.ipAddress.trustedProxies`.
+- **A retried tenant key activation finishes the activation.** Cut short after the active key moved to "previous", a retry retired the tenant's own old key and published the shared root certificate for that tenant.
+- **`/saml2/idp/init` answers an unknown SP id and one that hasn't opted in alike** (`IDP_INITIATED_NOT_ALLOWED`), so SP ids and tenant keys can't be listed from outside. A missing `sp` is still `UNKNOWN_SERVICE_PROVIDER`.
+- **RelayState goes back to the SP exactly as it came.** The form escaped it as XML, which dropped some characters and rewrote line endings. A RelayState with control characters, which a browser's form submission would change, is now refused (`INVALID_SAML_REQUEST`).
+- **SP metadata up to 1 MiB is accepted, as documented.** The validator capped it at 128 KiB; protocol messages are still held to 128 KiB (`libxml2Validator({ maxMetadataBytes })`).
+
+### Documentation
+
+- The getting-started sign-in snippet only follows a `callbackURL` on the IdP's own origin. As written, a signed-in user opening `/sign-in?callbackURL=javascript:…` would have run it, and another site's URL redirected there.
+- Corrected where the docs said something the code doesn't do: the replay key, the minimum better-auth-cloudflare version, when the registry API is mounted, ProtocolBinding, Redirect-bound XML signatures, InvalidNameIDPolicy's status, tenant metadata's certificate, the flow diagram's order, ForceAuthn's meaning, and resume links.
+
 ### Project
 
 - Releases are one merge: `pnpm release patch|minor|major` opens the release PR, and merging it tags the version and starts the release run (`tag-release.yml`). Publishing still waits for the two approvals.

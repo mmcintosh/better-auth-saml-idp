@@ -1,4 +1,9 @@
-import { escapeXml as escapeHtml } from "./response";
+/**
+ * For HTML attribute values: & < > " ' only. Not escapeXml, which drops characters XML can't carry
+ * and rewrites line endings: RelayState is opaque and must come back as it was (D-065).
+ */
+const HTML_ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" };
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => HTML_ESCAPES[c] ?? c);
 
 /**
  * Headers for every HTML page the plugin returns (auto-POST form and error page).

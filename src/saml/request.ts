@@ -203,6 +203,11 @@ export function checkRelayState(relayState: string | undefined, maxBytes: number
   if (relayState === undefined) return;
   if (new TextEncoder().encode(relayState).byteLength > maxBytes)
     throw new SamlRequestError("RELAY_STATE_TOO_LONG", `RelayState exceeds ${maxBytes} bytes`);
+  // Control characters can't come back unchanged (a browser's form submission rewrites line
+  // breaks), so they're refused rather than silently altered (D-065). SPs' RelayStates are
+  // URL- or base64-like and never contain them.
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: matching control characters is the point
+  if (/[\u0000-\u001f\u007f]/.test(relayState)) throw invalid("RelayState contains control characters");
 }
 
 // ---------------------------------------------------------------------------------------

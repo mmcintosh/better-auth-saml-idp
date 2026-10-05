@@ -295,7 +295,7 @@ The chain is browser redirects: each SP sees only its own tenant's messages. Wha
 
 ## Metadata
 
-Each tenant's metadata is at its metadata URL: its entity ID, its SSO and SLO URLs, your signing certificate (and `additionalCertificates`), the NameID formats of its SPs in code, and `WantAuthnRequestsSigned="false"` (as with any registry). With `signMetadata`, it's signed with your key.
+Each tenant's metadata is at its metadata URL: its entity ID, its SSO and SLO URLs, its signing certificate (the tenant's own with per-tenant keys, otherwise yours, with `additionalCertificates`), the NameID formats of its SPs in code, and `WantAuthnRequestsSigned="false"` (as with any registry). With `signMetadata`, it's signed with the key it signs with.
 
 Metadata is public by design. What a stranger can learn from tenant URLs is which organizations have a tenant. To keep that small:
 - an unknown key, a disabled tenant and an organization that isn't a tenant all get the **same 404** (same status, headers and body);

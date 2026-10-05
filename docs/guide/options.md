@@ -76,7 +76,7 @@ SPs stored in the database, managed at runtime. See [Service providers › Regis
 | `cacheSeconds` | `number` | `60` | How long each isolate caches a stored SP, and a miss. 0 to 3600. Other isolates see changes within this window. |
 | `authorize` | `(ctx) => AuthorizeResult` | allow | `authorize` for stored SPs (functions can't be stored). |
 
-The API is mounted only when `canManage` or `permissions` is set.
+The API is mounted only when `canManage` or `permissions` is set, or with tenant delegation (`tenants.delegation`).
 
 ## `singleLogout`
 

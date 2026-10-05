@@ -28,8 +28,8 @@ Browser            SP                          IdP (Better Auth)
    │  302 + AuthnRequest (Redirect) or auto-POST     │
    │<───────────────│                                │
    │──────────────────────────────────────────────── >│  /saml2/idp/sso
-   │                                                  │  validate · replay check · SP lookup
-   │                                                  │  signed? · ACS allow-list
+   │                                                  │  validate · SP lookup · signed?
+   │                                                  │  ACS allow-list · replay check
    │        302 /sign-in?callbackURL=…/resume?rid=    │  (no session: park the request)
    │<──────────────────────────────────────────────── │
    │  sign in ─────────────────────────────────────── >│
@@ -48,7 +48,7 @@ Step by step:
 4. **Resolve the ACS URL**: the requested one if it's allow-listed, otherwise the first `acsUrls` entry. Anything else is `ACS_URL_NOT_ALLOWED`.
 5. **Replay check**: the (SP, request `ID`) pair is recorded; a second time is `DUPLICATE_REQUEST_ID`.
 6. **Unsatisfiable requests** get a signed SAML status Response (see [below](#requests-the-idp-cant-satisfy)).
-7. **No session, or `ForceAuthn`**: the request is stored (bound to this browser) and the user is sent to `loginPage`. After signing in, they come back through `resume`.
+7. **No session, or `ForceAuthn`**: the request is stored (bound to this browser) and the user is sent to `loginPage`. After signing in, they come back through `resume`. The resume link works once, and only in that browser: a leaked link can't be used elsewhere, though a signed-in user who has it can spend it, and the user then simply starts again from the app.
 8. **Issue**: the user and session are re-read from the database, then the [account policy](users-and-access.md#account-policy), the SP's `organization` rule and `authorize()` run. The NameID and attributes are computed, and the Response is signed (and encrypted), then auto-posted to the ACS URL with the RelayState.
 
 ### Bindings
@@ -66,11 +66,11 @@ A valid request from a known SP that the IdP can't honour gets a signed SAML Res
 | `IsPassive="true"` and the user has no session | `Responder` / `NoPassive` |
 | `RequestedAuthnContext` the IdP can't meet | `Responder` / `NoAuthnContext` |
 | a `Subject` other than the signed-in user | `Responder` / `UnknownPrincipal` |
-| `NameIDPolicy` with another format than the SP's | `Requester` / `InvalidNameIDPolicy` |
+| `NameIDPolicy` with another format than the SP's | `Responder` / `InvalidNameIDPolicy` |
 
 ### ForceAuthn and IsPassive
 
-- **`ForceAuthn="true"`**: the user must sign in again, even with a session. The session that comes back through `resume` must be newer than the request, otherwise `REAUTHENTICATION_REQUIRED`. Verified live with Cloudflare Access's "reauthenticate" setting.
+- **`ForceAuthn="true"`**: the user must sign in again, even with a session. The session that comes back through `resume` must be newer than the request, otherwise `REAUTHENTICATION_REQUIRED`. "Newer" is all the IdP can check: any Better Auth flow that creates a session counts, including ones that don't ask for credentials (a one-time token, for example). If that matters, keep such flows off your login page. Verified live with Cloudflare Access's "reauthenticate" setting.
 - **`IsPassive="true"`**: the IdP must not interact with the user. With a session, they're signed in silently; without one, the SP gets `NoPassive`.
 
 ### RequestedAuthnContext
@@ -128,7 +128,7 @@ Link to `/api/auth/saml2/idp/init?sp=hubspot` (or `authClient.samlIdp.launch("hu
 - **Drive-by protection:** a cross-site navigation the user didn't make (a script or an embedded redirect) gets a confirmation page instead of an assertion. Clicked links and bookmarks go straight through.
 - **Replay** of an unsolicited Response can't be detected by `InResponseTo`, so SPs should track assertion IDs, and short assertion lifetimes help.
 
-**Errors.** `UNKNOWN_SERVICE_PROVIDER` (no or unknown `sp`), `IDP_INITIATED_NOT_ALLOWED`.
+**Errors.** `UNKNOWN_SERVICE_PROVIDER` (no `sp`), and `IDP_INITIATED_NOT_ALLOWED` for both an unknown `sp` and one that hasn't opted in, so SP ids can't be listed from outside (the log and `onDenied` say which). An SP that has opted in is observable by design: `/init?sp=<id>` starts its sign-in, and for a tenant SP the login URL carries the tenant key.
 
 ## Metadata
 
