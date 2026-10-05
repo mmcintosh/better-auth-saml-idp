@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Examples
+
+- The Workers example's pages are redesigned: one layout with a sidebar (the IdP's sections for admins, your apps for everyone), separate Overview, Service providers, Tenants and Activity pages, a matching sign-in page, light and dark themes, and user emails in the activity log. The styles and code are same-origin files, so the pages' CSP allows no inline code at all.
+
 ### Documentation
 
 - A guide to using this plugin with better-auth-scim-provisioning, so your app both signs people in to its apps and keeps their accounts in step there (`docs/guide/provisioning.md`).

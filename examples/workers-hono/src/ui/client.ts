@@ -1,0 +1,234 @@
+// The pages' code, served as /assets/app.js. Each page names its part in <body data-page>, and
+// gets its data from <script type="application/json" id="page-data">. Everything user-controlled
+// (stored SP configs, names, audit details) goes into the page with textContent: data, never markup.
+// Written without template literals, so it can live in this TypeScript string as it is.
+export const JS = String.raw`"use strict";
+const $ = (id) => document.getElementById(id);
+const el = (tag, props, ...kids) => { const e = document.createElement(tag); Object.assign(e, props || {}); for (const k of kids) if (k !== null && k !== undefined && k !== "") e.append(k); return e; };
+const pageData = () => { const s = $("page-data"); return s ? JSON.parse(s.textContent || "null") : null; };
+
+function toast(text, kind) {
+  const t = $("toast"); if (!t) return;
+  t.textContent = text; t.className = "toast" + (kind === "err" ? " err" : ""); t.hidden = false;
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => { t.hidden = true; }, kind === "err" ? 9000 : 4500);
+}
+async function call(path, body) {
+  const init = body === undefined ? { credentials: "include" } : { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
+  const r = await fetch(path, init);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error([j.message || j.error || "HTTP " + r.status].concat(j.issues || []).join(" — "));
+  return j;
+}
+const when = (v) => (v ? new Date(v).toLocaleString() : "");
+const pill = (text, tone) => el("span", { className: "pill " + (tone || ""), textContent: text });
+const emptyRow = (cols, text, cls) => el("tr", {}, el("td", { colSpan: cols, className: cls || "empty", textContent: text }));
+
+// Everywhere: copy buttons and sign-out.
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.copy !== undefined) {
+    await navigator.clipboard.writeText(b.dataset.copy);
+    const was = b.textContent; b.textContent = "Copied"; setTimeout(() => { b.textContent = was; }, 1200);
+  }
+  if (b.hasAttribute("data-sign-out")) {
+    await fetch("/api/auth/sign-out", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: "{}" });
+    location.assign("/");
+  }
+});
+
+const pages = {};
+
+// ---- Sign in ----
+pages["sign-in"] = () => {
+  const f = $("signin"), err = $("err"), name = $("nameField");
+  let signUp = false;
+  const safeCallback = () => { const raw = new URLSearchParams(location.search).get("callbackURL") || "/"; try { const u = new URL(raw, location.origin); return u.origin === location.origin ? u.href : "/"; } catch { return "/"; } };
+  $("toggle").onclick = () => {
+    signUp = !signUp; name.hidden = !signUp; $("name").required = signUp;
+    $("submit").textContent = signUp ? "Create account" : "Sign in";
+    $("toggle").textContent = signUp ? "I already have an account" : "Create an account instead";
+    $("title").textContent = signUp ? "Create an account" : "Sign in";
+  };
+  f.onsubmit = async (e) => {
+    e.preventDefault(); err.textContent = ""; $("submit").disabled = true;
+    const body = { email: f.email.value, password: f.password.value, callbackURL: safeCallback() };
+    if (signUp) body.name = f.name.value || f.email.value;
+    const r = await fetch("/api/auth/" + (signUp ? "sign-up" : "sign-in") + "/email", { method: "POST", headers: { "content-type": "application/json" }, credentials: "include", body: JSON.stringify(body) });
+    $("submit").disabled = false;
+    if (r.ok && signUp) { f.hidden = true; $("sent").hidden = false; return; }
+    if (r.ok) { location.assign(safeCallback()); return; }
+    const j = await r.json().catch(() => ({})); err.textContent = j.message || ("Failed (" + r.status + ")");
+  };
+};
+
+// ---- Service providers ----
+const REGISTRY = "/api/auth/saml-idp/service-providers";
+const TENANTS = "/api/auth/saml-idp/tenants";
+let tenantNames = new Map();
+async function loadTenantNames() {
+  try {
+    const [t, o] = await Promise.all([call(TENANTS), call("/admin/api/organizations")]);
+    tenantNames = new Map(o.organizations.map((x) => [x.id, x.name]));
+    return t.tenants;
+  } catch { return []; }
+}
+
+pages.sps = () => {
+  const { codeLaunchable } = pageData();
+  let editing = null;
+  async function load() {
+    const tbody = $("sps");
+    try {
+      const { serviceProviders } = await call(REGISTRY);
+      tbody.replaceChildren(...(serviceProviders.length ? serviceProviders.map(row) : [emptyRow(5, "No service providers yet. Add one below.")]));
+    } catch (e) { tbody.replaceChildren(emptyRow(5, e.message, "bad")); }
+  }
+  function row(sp) {
+    const status = el("td", {}, pill(sp.valid ? (sp.enabled ? "active" : "disabled") : "invalid", sp.valid ? (sp.enabled ? "ok" : "") : "bad"));
+    const notes = sp.issues.map((t) => ["bad", t]).concat(sp.warnings.map((t) => ["warn", t]));
+    if (notes.length) status.append(el("ul", { className: "issues" }, ...notes.map(([k, t]) => el("li", { className: k, textContent: t }))));
+    const actions = el("div", { className: "actions" });
+    const launchable = sp.source === "code" ? codeLaunchable.includes(sp.id) : sp.config && sp.config.allowIdpInitiated === true;
+    if (launchable && sp.enabled && sp.valid) actions.append(el("a", { className: "button ghost small", href: "/api/auth/saml2/idp/init?sp=" + encodeURIComponent(sp.id), textContent: "Test sign-in", target: "_blank", rel: "noopener" }));
+    if (sp.source === "database") {
+      actions.append(el("button", { className: "ghost small", textContent: "Edit", onclick: () => openEditor("update", sp.id, sp.config, sp.enabled) }));
+      actions.append(el("button", { className: "ghost small", textContent: sp.enabled ? "Disable" : "Enable", onclick: () => toggle(sp.id, !sp.enabled) }));
+      actions.append(el("button", { className: "danger small", textContent: "Delete", onclick: () => remove(sp.id) }));
+    } else actions.append(el("span", { className: "muted small", textContent: "defined in code" }));
+    const tenant = sp.tenantId ? tenantNames.get(sp.tenantId) || sp.tenantId : "root";
+    return el("tr", {},
+      el("td", {}, el("strong", { textContent: sp.id }), el("div", { className: "muted small", textContent: sp.source + (sp.updatedAt ? " · updated " + when(sp.updatedAt) : "") })),
+      el("td", { className: "break" }, el("code", { textContent: sp.entityId })),
+      el("td", { className: sp.tenantId ? "" : "muted", textContent: tenant }),
+      status,
+      el("td", {}, actions));
+  }
+  function openEditor(mode, id, config, enabled) {
+    editing = { mode, id };
+    $("editorTitle").textContent = mode === "create" ? "New service provider: " + id : "Edit " + id;
+    $("cfg").value = JSON.stringify(config, null, 2); $("enabled").checked = enabled;
+    $("editor").hidden = false; $("editor").scrollIntoView({ behavior: "smooth" });
+  }
+  async function save() {
+    let config;
+    try { config = JSON.parse($("cfg").value); } catch (e) { return toast("The configuration isn't valid JSON: " + e.message, "err"); }
+    try {
+      if (editing.mode === "create") await call(REGISTRY + "/create", { serviceProvider: config, enabled: $("enabled").checked });
+      else await call(REGISTRY + "/update", { id: editing.id, serviceProvider: config, enabled: $("enabled").checked });
+      toast("Saved " + editing.id + "."); $("editor").hidden = true; editing = null; await load();
+    } catch (e) { toast(e.message, "err"); }
+  }
+  async function toggle(id, enabled) {
+    try { await call(REGISTRY + "/update", { id, enabled }); toast((enabled ? "Enabled " : "Disabled ") + id + "."); await load(); } catch (e) { toast(e.message, "err"); }
+  }
+  async function remove(id) {
+    if (!confirm("Delete service provider " + id + "? Sign-ins to it stop immediately.")) return;
+    try { await call(REGISTRY + "/delete", { id }); toast("Deleted " + id + "."); await load(); } catch (e) { toast(e.message, "err"); }
+  }
+  const idOk = () => { const id = $("newId").value.trim(); if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) { toast("Enter an ID first: 1-64 letters, digits, - and _.", "err"); return null; } return id; };
+  $("save").onclick = save;
+  $("cancel").onclick = () => { $("editor").hidden = true; editing = null; };
+  $("blank").onclick = () => { const id = idOk(); if (id) openEditor("create", id, { id, entityId: "", acsUrls: [""], attributes: { email: "email" } }, true); };
+  $("convert").onclick = async () => {
+    const id = idOk(); if (!id) return;
+    const xml = $("xml").value.trim(); if (!xml) return toast("Paste the SP's metadata XML.", "err");
+    try {
+      const r = await call("/admin/api/from-metadata", { id, xml });
+      const config = Object.assign({}, r.serviceProvider, { attributes: r.serviceProvider.attributes || { email: "email" } });
+      if (r.encryptionCertificates && r.encryptionCertificates[0]) config.encryption = { certificate: r.encryptionCertificates[0] };
+      $("convertWarnings").replaceChildren(...(r.warnings || []).map((w) => el("li", { className: "warn", textContent: w })));
+      openEditor("create", id, config, true); toast("Converted. Review the configuration, then save.");
+    } catch (e) { toast(e.message, "err"); }
+  };
+  loadTenantNames().then(load);
+};
+
+// ---- Tenants ----
+pages.tenants = () => {
+  async function load() {
+    const tbody = $("tenants");
+    try {
+      const tenants = await loadTenantNames();
+      tbody.replaceChildren(...(tenants.length ? tenants.map(row) : [emptyRow(5, "No tenants yet.")]));
+    } catch (e) { tbody.replaceChildren(emptyRow(5, e.message, "bad")); }
+  }
+  function row(t) {
+    const id = t.organizationId;
+    const has = (s) => (t.keys || []).some((k) => k.state === s);
+    const keys = el("td", {}, el("div", { className: "muted small", textContent: t.signing === "own" ? "its own key" : "the shared key" }),
+      el("ul", { className: "issues" }, ...(t.keys || []).filter((k) => k.state !== "retired").map((k) =>
+        el("li", {}, pill(k.state, k.state === "active" ? "ok" : ""), " ", el("code", { textContent: k.kid }), el("span", { className: "muted small", textContent: k.state === "next" ? " · activatable " + when(k.activatableAt) : " · expires " + String(k.notAfter).slice(0, 10) })))));
+    if (t.warnings && t.warnings.length) keys.append(el("ul", { className: "issues" }, ...t.warnings.map((w) => el("li", { className: "warn", textContent: w }))));
+    const actions = el("div", { className: "actions" });
+    const act = (label, fn, cls) => actions.append(el("button", { className: (cls || "ghost") + " small", textContent: label, onclick: fn }));
+    if (!has("next")) act("Rotate key", () => tenantCall("/keys/rotate", { organizationId: id }, "Published a next key. SPs pick it up from the metadata; activate it once they have."));
+    else {
+      act("Activate next key", () => tenantCall("/keys/activate", { organizationId: id }, "The next key signs now."));
+      act("Activate now (force)", () => confirm("Activate before SPs have had 24 hours to fetch the new certificate? SPs that haven't will reject sign-ins until they do. Meant for a leaked key.") && tenantCall("/keys/activate", { organizationId: id, force: true }, "The next key signs now (forced)."), "danger");
+    }
+    if (has("previous")) act("Retire previous key", () => tenantCall("/keys/retire", { organizationId: id }, "The previous key is no longer published, and its private key is erased."));
+    act(t.enabled ? "Disable" : "Enable", () => tenantCall("/update", { organizationId: id, enabled: !t.enabled }, (t.enabled ? "Disabled " : "Enabled ") + t.tenantKey + "."));
+    act("Delete", () => confirm("Delete tenant " + t.tenantKey + "? Its key is retired for good: no tenant can have its URLs again. Its SPs must be deleted first.") && tenantCall("/delete", { organizationId: id }, "Deleted " + t.tenantKey + "."), "danger");
+    return el("tr", {},
+      el("td", {}, el("strong", { textContent: tenantNames.get(id) || id }), el("div", {}, el("code", { textContent: t.tenantKey }))),
+      el("td", { className: "break" }, el("code", { textContent: t.entityId }), el("div", {}, el("a", { href: t.metadataUrl, target: "_blank", rel: "noopener", textContent: "metadata" }))),
+      keys,
+      el("td", {}, pill(t.enabled ? "enabled" : "disabled", t.enabled ? "ok" : "")),
+      el("td", {}, actions));
+  }
+  async function tenantCall(path, body, done) {
+    try { await call(TENANTS + path, body); toast(done); await load(); } catch (e) { toast(e.message, "err"); }
+  }
+  $("createTenant").onclick = async () => {
+    const name = $("orgName").value.trim(), slug = $("orgSlug").value.trim();
+    if (!name) return toast("Enter the organization's name.", "err");
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(slug)) return toast("The slug: 1-64 letters, digits, - and _ (it's also the tenant key in URLs).", "err");
+    try {
+      const org = await call("/api/auth/organization/create", { name, slug, keepCurrentActiveOrganization: true });
+      await call(TENANTS + "/create", { organizationId: org.id, tenantKey: slug });
+      $("orgName").value = ""; $("orgSlug").value = "";
+      toast("Created tenant " + slug + " with its own signing key."); await load();
+    } catch (e) { toast(e.message, "err"); }
+  };
+  $("backfill").onclick = async () => {
+    try {
+      const r = await call("/admin/api/backfill", {});
+      toast("Backfill: " + r.updated + " SP(s) updated" + (r.skipped.length ? "; skipped: " + r.skipped.join(", ") : "") + (r.failed.length ? "; failed: " + r.failed.join(", ") : "") + ".", r.failed.length ? "err" : "ok");
+    } catch (e) { toast(e.message, "err"); }
+  };
+  load();
+};
+
+// ---- Activity (and the overview's recent part) ----
+function auditRow(e) {
+  let detail = e.code || "";
+  try { const d = JSON.parse(e.details || "{}"); detail = [e.code, d.reason, d.detail, d.participants && d.participants.length + " SP(s) not told"].filter(Boolean).join(" · "); } catch {}
+  const tone = e.type === "denied" ? "bad" : e.type === "assertion.issued" ? "ok" : "info";
+  return el("tr", {}, el("td", { className: "nowrap", textContent: when(e.at) }), el("td", {}, pill(e.type, tone)), el("td", { textContent: e.spId || "" }), el("td", {}, e.email ? el("span", { textContent: e.email, title: e.userId }) : el("code", { textContent: e.userId || "" })), el("td", { textContent: detail }));
+}
+async function loadAudit(tbodyId, limit) {
+  const tbody = $(tbodyId);
+  try {
+    const { events } = await call("/admin/api/audit");
+    const shown = events.slice(0, limit);
+    tbody.replaceChildren(...(shown.length ? shown.map(auditRow) : [emptyRow(5, "No events yet.")]));
+    return events;
+  } catch (e) { tbody.replaceChildren(emptyRow(5, e.message, "bad")); return []; }
+}
+pages.activity = () => { loadAudit("audit", 50); };
+
+pages.overview = async () => {
+  const [events, sps, tenants] = await Promise.all([
+    loadAudit("recent", 8),
+    call(REGISTRY).then((r) => r.serviceProviders).catch(() => []),
+    call(TENANTS).then((r) => r.tenants).catch(() => []),
+  ]);
+  void events; // the day's sign-ins and refusals are counted on the server, from the whole audit log
+  $("countSps").textContent = String(sps.filter((s) => s.enabled && s.valid).length);
+  $("countTenants").textContent = String(tenants.length);
+};
+
+const run = pages[document.body.dataset.page];
+if (run) run();
+`;

@@ -1,46 +1,37 @@
-// A reference admin page for the SAML IdP, built only on the plugin's public API: the registry
+// The example's admin pages for the SAML IdP, built only on the plugin's public API: the registry
 // API (list/create/update/delete stored SPs), the tenant API (tenants and their signing keys),
-// serviceProviderFromMetadata, and the audit table.
-// The plugin itself ships no UI (like @better-auth/sso); copy and adapt this for your own app.
+// serviceProviderFromMetadata, and the audit table. The plugin itself ships no UI (like
+// @better-auth/sso); copy and adapt these for your own app.
 //
 // Access: signed-in users listed in SAML_REGISTRY_ADMINS with a verified email, the same rule
 // as the registry's canManage. Everything user-controlled is rendered with textContent (stored
-// SP configs are data, never markup), under a nonce CSP with no inline handlers.
+// SP configs are data, never markup), under a CSP that allows no inline code.
 import { X509Certificate } from "node:crypto";
 import { serviceProviderFromMetadata, SpMetadataError } from "better-auth-saml-idp";
 import type { Context, Hono } from "hono";
 import { type Env, type getAuth, idpInitiatedApps, isRegistryAdmin } from "./auth";
+import { card, copy, esc, head, htmlResponse, kv, page, type Viewer } from "./ui/layout";
 
 type C = Context<{ Bindings: Env }>;
 type Auth = ReturnType<typeof getAuth>;
 
-const html = (body: string, nonce: string, status = 200) =>
-  new Response(body, {
-    status,
-    headers: {
-      "content-type": "text/html; charset=utf-8",
-      "content-security-policy": `default-src 'self'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`,
-      "x-frame-options": "DENY",
-      "cache-control": "no-store",
-    },
-  });
-const esc = (s: string) => s.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
-const newNonce = () => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
-
 /** The signed-in admin, or a Response to send instead (sign-in redirect, or 403). */
 async function requireAdmin(c: C, auth: Auth): Promise<{ email: string } | Response> {
   const session = await auth.api.getSession({ headers: c.req.raw.headers, query: { disableCookieCache: true } });
-  if (!session) return c.redirect(`/sign-in?callbackURL=${encodeURIComponent("/admin")}`);
+  if (!session) return c.redirect(`/sign-in?callbackURL=${encodeURIComponent(new URL(c.req.url).pathname)}`);
   // The user as the database has it now (a demotion or ban applies at once), and never an admin
   // acting as someone else: the registry API refuses impersonated sessions too.
   const user = (await (await auth.$context).internalAdapter.findUserById(session.user.id)) as { email: string; emailVerified?: boolean; banned?: boolean } | null;
   const impersonated = Boolean((session.session as { impersonatedBy?: string | null }).impersonatedBy);
   if (!user || user.banned || impersonated || !isRegistryAdmin(c.env, user)) {
-    const nonce = newNonce();
-    return html(
-      `<!doctype html><meta charset="utf-8"><title>Not allowed</title><style nonce="${nonce}">body{font:16px system-ui;margin:2rem}</style>` +
-        `<h1>Not an administrator</h1><p>${esc(session.user.email)} isn't in <code>SAML_REGISTRY_ADMINS</code>, its email isn't verified, or this is an impersonated session.</p><p><a href="/">Home</a></p>`,
-      nonce,
+    const viewer: Viewer = { email: session.user.email, admin: false };
+    return htmlResponse(
+      page({
+        title: "Not allowed",
+        active: "",
+        viewer,
+        content: head("Not an administrator") + card("Why", `<p>${esc(session.user.email)} isn't in <code>SAML_REGISTRY_ADMINS</code>, its email isn't verified, or this is an impersonated session.</p><p><a href="/">Back to your apps</a></p>`),
+      }),
       403,
     );
   }
@@ -131,258 +122,108 @@ export function registerAdmin(app: Hono<{ Bindings: Env }>, authFor: (c: C) => A
       if (admin instanceof Response) return c.json({ error: "not allowed" }, 403);
       const ctx = await auth.$context;
       const rows = (await ctx.adapter.findMany({ model: "samlIdpAuditEvent", sortBy: { field: "at", direction: "desc" }, limit: 50 })) as Record<string, unknown>[];
-      return c.json({ events: rows.map(({ type, at, spId, userId, code, details, tenantId }) => ({ type, at, spId, userId, code, details, tenantId })) });
+      // Emails for the users named (one query; 50 ids at most, within D1's 100 bound parameters).
+      const ids = [...new Set(rows.map((r) => r.userId).filter((v): v is string => typeof v === "string"))];
+      const users = ids.length ? ((await ctx.adapter.findMany({ model: "user", where: [{ field: "id", value: ids, operator: "in" }], limit: ids.length })) as { id: string; email: string }[]) : [];
+      const emails = new Map(users.map((u) => [u.id, u.email]));
+      return c.json({ events: rows.map(({ type, at, spId, userId, code, details, tenantId }) => ({ type, at, spId, userId, email: typeof userId === "string" ? emails.get(userId) : undefined, code, details, tenantId })) });
     }),
   );
 
-  app.get("/admin", (c: C) =>
-    withCf(c, async () => {
-      const auth = authFor(c);
-      const admin = await requireAdmin(c, auth);
-      if (admin instanceof Response) return admin;
-      const origin = new URL(c.req.url).origin;
-      const idp = `${origin}/api/auth/saml2/idp`;
-      const cert = certSummary(c.env.SAML_IDP_CERT);
-      const nonce = newNonce();
-      const row = (k: string, v: string) => `<tr><th>${esc(k)}</th><td><code>${esc(v)}</code></td></tr>`;
-      return html(PAGE(nonce, {
-        who: admin.email,
-        idpRows:
-          row("Entity ID (Issuer)", idp) +
-          row("Single sign-on URL", `${idp}/sso`) +
-          row("Single logout URL", `${idp}/slo`) +
-          row("Metadata", `${idp}/metadata`) +
-          (cert ? row("Certificate", `${cert.subject} · expires ${cert.validTo} (${cert.days} days)`) + row("SHA-256", cert.sha256) : ""),
-        codeLaunchable: idpInitiatedApps(c.env),
-      }), nonce);
-    }),
+  registerPages(app, authFor, withCf);
+}
+
+const table = (cols: string[], tbodyId: string, loading = "Loading…") =>
+  `<table class="table"><thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody id="${tbodyId}"><tr><td colspan="${cols.length}" class="empty">${esc(loading)}</td></tr></tbody></table>`;
+
+function registerPages(app: Hono<{ Bindings: Env }>, authFor: (c: C) => Auth, withCf: <T>(c: C, fn: () => T) => T) {
+  /** An admin page: the guard, then the layout around `content`. */
+  const adminPage = (path: string, title: string, script: string, content: (c: C, auth: Auth) => Promise<string> | string, data?: (c: C) => unknown) =>
+    app.get(path, (c: C) =>
+      withCf(c, async () => {
+        const auth = authFor(c);
+        const admin = await requireAdmin(c, auth);
+        if (admin instanceof Response) return admin;
+        return htmlResponse(page({ title, active: path, viewer: { email: admin.email, admin: true }, script, content: await content(c, auth), data: data?.(c) }));
+      }),
+    );
+
+  adminPage("/admin", "Overview", "overview", async (c, auth) => {
+    const idp = `${new URL(c.req.url).origin}/api/auth/saml2/idp`;
+    const cert = certSummary(c.env.SAML_IDP_CERT);
+    // Sign-ins and refusals in the last day, counted in the audit log (not just the recent page).
+    const ctx = await auth.$context;
+    const since = new Date(Date.now() - 86_400_000);
+    const count = (type: string) => ctx.adapter.count({ model: "samlIdpAuditEvent", where: [{ field: "type", value: type }, { field: "at", value: since, operator: "gt" }] }).catch(() => 0);
+    const [signIns, denied] = await Promise.all([count("assertion.issued"), count("denied")]);
+    const tile = (label: string, value: string, id?: string, note?: string) =>
+      `<div class="tile"><span class="muted small">${esc(label)}</span><span class="stat"${id ? ` id="${id}"` : ""}>${esc(value)}</span>${note ? `<span class="muted small">${note}</span>` : ""}</div>`;
+    const certNote = cert ? (cert.days < 30 ? `<span class="note bad">expires in ${cert.days} days</span>` : `<span class="muted">expires ${esc(cert.validTo)} (${cert.days} days)</span>`) : "";
+    return (
+      head("Overview", "This identity provider: what service providers need to trust it, and what it's been doing.") +
+      `<div class="tiles">${tile("Active service providers", "…", "countSps", '<a href="/admin/sps">Manage</a>')}${tile("Tenants", "…", "countTenants", '<a href="/admin/tenants">Manage</a>')}${tile("Sign-ins, last 24 hours", String(signIns))}${tile("Refused, last 24 hours", String(denied), undefined, denied ? '<a href="/admin/activity">See why</a>' : "")}</div>` +
+      `<div class="top"></div>` +
+      card(
+        "This identity provider",
+        kv([
+          ["Entity ID (Issuer)", copy(idp)],
+          ["Single sign-on URL", copy(`${idp}/sso`)],
+          ["Single logout URL", copy(`${idp}/slo`)],
+          ["Metadata URL", copy(`${idp}/metadata`, true)],
+          ...(cert ? ([["Certificate", `${esc(cert.subject)}<div class="small">${certNote}</div>`], ["SHA-256 fingerprint", `<code class="break">${esc(cert.sha256)}</code>`]] as [string, string][]) : []),
+        ]) +
+          `<div class="row top"><a class="button" href="/admin/idp-metadata.xml">Download metadata (.xml)</a><a class="button ghost" href="/admin/idp.crt">Download certificate (.crt)</a></div>`,
+        { subtitle: "What service providers ask for when you set them up. Most take the metadata URL; the downloads are for forms that want a file." },
+      ) +
+      card("Recent activity", table(["When", "Event", "Service provider", "User", "Detail"], "recent"), { actions: '<a class="button ghost small" href="/admin/activity">All activity</a>' })
+    );
+  });
+
+  adminPage(
+    "/admin/sps",
+    "Service providers",
+    "sps",
+    () =>
+      head("Service providers", "The apps this IdP signs people in to. From code (<code>SAML_SERVICE_PROVIDERS</code>, read-only here) and from the database registry (editable).") +
+      card("Service providers", table(["Service provider", "Entity ID", "Tenant", "Status", ""], "sps")) +
+      `<section class="card" id="editor" hidden><div class="card-head"><h2 id="editorTitle">Edit</h2></div>
+<label class="field"><span>Configuration</span><textarea id="cfg" class="code" spellcheck="false"></textarea><small class="muted">JSON, the same shape as a <code>serviceProviders</code> entry, without functions.</small></label>
+<label class="check"><input id="enabled" type="checkbox"> Enabled (used for sign-in)</label>
+<div class="row"><button id="save" type="button">Save</button><button id="cancel" type="button" class="ghost">Cancel</button></div></section>` +
+      card(
+        "Add a service provider",
+        `<div class="inline"><label class="field"><span>ID</span><input id="newId" placeholder="salesforce"><small class="muted">Letters, digits, <code>-</code> and <code>_</code>.</small></label></div>
+<label class="field"><span>The SP's metadata XML</span><textarea id="xml" class="code short" spellcheck="false" placeholder="&lt;md:EntityDescriptor …"></textarea><small class="muted">Most SPs offer a "download metadata" link. It's converted into a configuration you review before saving.</small></label>
+<div class="row"><button id="convert" type="button">Convert to a configuration</button><button id="blank" type="button" class="ghost">Start from empty JSON</button></div>
+<ul id="convertWarnings" class="issues"></ul>`,
+        { subtitle: 'Step-by-step guides for <a href="https://github.com/mmcintosh/better-auth-saml-idp/blob/main/docs/guide/README.md#sp-guides" target="_blank" rel="noopener">real service providers</a>.' },
+      ),
+    (c) => ({ codeLaunchable: idpInitiatedApps(c.env) }),
+  );
+
+  adminPage(
+    "/admin/tenants",
+    "Tenants",
+    "tenants",
+    () =>
+      head("Tenants", "An organization made a tenant gets its own IdP: its own entity ID, metadata, sign-in and logout URLs, and signing key. Its SPs are stored SPs with <code>\"tenant\": \"&lt;organization id&gt;\"</code> in their configuration.") +
+      card("Tenants", table(["Organization", "Entity ID", "Signing keys", "Status", ""], "tenants"), {
+        subtitle: "Keys rotate in three steps: <b>Rotate</b> publishes a next key, <b>Activate</b> makes it sign (after 24 hours, so SPs have fetched it; <i>force</i> for a leaked key), <b>Retire</b> stops publishing the old one.",
+      }) +
+      card(
+        "New tenant",
+        `<div class="inline"><label class="field"><span>Organization name</span><input id="orgName" placeholder="Acme Corp"></label><label class="field"><span>Slug (also the tenant key)</span><input id="orgSlug" placeholder="acme"></label><button id="createTenant" type="button">Create tenant</button></div>`,
+        { subtitle: "Creates an organization (you become its owner) and makes it a tenant with a new key. The tenant key is in its URLs and entity ID, which SPs pin: it never changes." },
+      ) +
+      card("Upgrading an older registry", `<p class="muted">If this deployment's registry had stored SPs before tenants existed (migration 0008), run this once, or those SPs aren't found.</p><button id="backfill" type="button" class="ghost">Backfill SP lookup keys</button>`),
+  );
+
+  adminPage(
+    "/admin/activity",
+    "Activity",
+    "activity",
+    () =>
+      head("Activity", "From the audit log: sign-ins, refusals, logouts and ended sessions, newest first. Refusals before anyone signs in aren't stored (anyone can cause them); they're logged as warnings instead.") +
+      card("The last 50 events", table(["When", "Event", "Service provider", "User", "Detail"], "audit")),
   );
 }
-
-const PAGE = (nonce: string, d: { who: string; idpRows: string; codeLaunchable: string[] }) => `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>SAML IdP admin</title>
-<style nonce="${nonce}">
-body{font:15px system-ui;margin:0;color:#1d1d1f;background:#f6f7f9}header{background:#1d2939;color:#fff;padding:.9rem 1.5rem;display:flex;justify-content:space-between;align-items:center}
-header a{color:#cfd8e3}main{max-width:72rem;margin:0 auto;padding:1rem 1.5rem 3rem}section{background:#fff;border:1px solid #e3e6ea;border-radius:8px;padding:1rem 1.25rem;margin:1rem 0}
-h1{font-size:1.1rem;margin:0}h2{font-size:1.05rem;margin:.2rem 0 .8rem}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:.45rem .5rem;border-top:1px solid #eef0f3;vertical-align:top}
-th{font-weight:600;white-space:nowrap}code{font-size:.85em;word-break:break-all}.muted{color:#667085}.ok{color:#067647}.bad{color:#b42318}.warn{color:#b54708}
-button,.btn{font:inherit;padding:.3rem .7rem;border:1px solid #c9ced6;border-radius:6px;background:#fff;cursor:pointer;text-decoration:none;color:inherit;display:inline-block;margin:0 .2rem .2rem 0}
-button.primary{background:#1d4ed8;color:#fff;border-color:#1d4ed8}button.danger{color:#b42318}textarea,input{font:13px ui-monospace,monospace;width:100%;box-sizing:border-box;padding:.5rem;border:1px solid #c9ced6;border-radius:6px}
-textarea{min-height:10rem}label{display:block;margin:.6rem 0 .25rem;font-weight:600}#msg{position:sticky;top:0;padding:.5rem 1rem;display:none}#msg.show{display:block}#msg.err{background:#fee4e2}#msg.info{background:#d1fadf}
-ul.issues{margin:.2rem 0;padding-left:1.1rem}input.check{width:auto}.pill{font-size:.8em;border-radius:99px;padding:.05rem .5rem;border:1px solid #d0d5dd}
-</style></head><body>
-<header><h1>SAML IdP admin</h1><span>${esc(d.who)} · <a href="/">Home</a></span></header>
-<div id="msg" role="status"></div>
-<main>
-<section><h2>This identity provider</h2><p class="muted">What service providers ask for when you set them up.</p>
-<table>${d.idpRows}</table>
-<p><a class="btn" href="/admin/idp-metadata.xml">Download metadata (.xml)</a> <a class="btn" href="/admin/idp.crt">Download certificate (.crt)</a> <a class="btn" href="/api/auth/saml2/idp/metadata" target="_blank" rel="noopener">View metadata</a></p>
-<p class="muted">SPs that fetch metadata by URL use the Metadata address above; the download is for SP forms that want a file.</p></section>
-
-<section><h2>Tenants</h2>
-<p class="muted">An organization made a tenant gets its own IdP: its own entity ID, metadata, SSO and SLO URLs, and its own signing key. Its SPs are stored SPs with <code>"tenant": "&lt;organization id&gt;"</code> in their configuration. Keys rotate in three steps: <b>Rotate</b> publishes a next key, <b>Activate</b> makes it sign (after 24 hours, so SPs have fetched it; <i>force</i> for a leaked key), <b>Retire</b> stops publishing the old one.</p>
-<table><thead><tr><th>Organization</th><th>Entity ID</th><th>Signing keys</th><th>Status</th><th></th></tr></thead><tbody id="tenants"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody></table>
-<h3>New tenant</h3>
-<p class="muted">Creates an organization (you become its owner) and makes it a tenant with a new key. The tenant key is in its URLs and entity ID, which SPs pin: it never changes.</p>
-<label for="orgName">Organization name</label><input id="orgName" placeholder="Acme Corp">
-<label for="orgSlug">Slug (also the tenant key)</label><input id="orgSlug" placeholder="acme">
-<p><button id="createTenant" class="primary">Create tenant</button></p>
-<p class="muted">Upgrading a deployment whose registry already had stored SPs? Run this once, or those SPs aren't found: <button id="backfill">Backfill SP lookup keys</button></p></section>
-
-<section><h2>Service providers</h2>
-<p class="muted">From code (<code>SAML_SERVICE_PROVIDERS</code>, read-only here) and from the database registry (editable).</p>
-<table><thead><tr><th>ID</th><th>Entity ID</th><th>Tenant</th><th>Source</th><th>Status</th><th></th></tr></thead><tbody id="sps"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody></table></section>
-
-<section id="editor" hidden><h2 id="editorTitle">Edit</h2>
-<label for="cfg">Configuration (JSON, the same shape as a <code>serviceProviders</code> entry, without functions)</label>
-<textarea id="cfg" spellcheck="false"></textarea>
-<label><input id="enabled" type="checkbox" class="check"> Enabled (used for sign-in)</label>
-<p><button id="save" class="primary">Save</button> <button id="cancel">Cancel</button></p></section>
-
-<section><h2>Add a service provider</h2>
-<p class="muted">Paste the SP's metadata XML (most SPs offer a “download metadata” link). It is converted into a configuration you can review before saving. Or write the JSON yourself.</p>
-<label for="newId">ID (letters, digits, <code>-</code> and <code>_</code>)</label><input id="newId" placeholder="salesforce">
-<label for="xml">SP metadata XML</label><textarea id="xml" spellcheck="false" placeholder="&lt;md:EntityDescriptor …"></textarea>
-<p><button id="convert">Convert to configuration</button> <button id="blank">Start from empty JSON</button></p>
-<ul id="convertWarnings" class="issues warn"></ul></section>
-
-<section><h2>Recent activity</h2><p class="muted">From the audit log: sign-ins, denials, logouts, sessions ended.</p>
-<table><thead><tr><th>When</th><th>Event</th><th>SP</th><th>User</th><th>Detail</th></tr></thead><tbody id="audit"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody></table></section>
-</main>
-<script nonce="${nonce}">
-const CODE_LAUNCHABLE = ${JSON.stringify(d.codeLaunchable).replace(/</g, "\\u003c")};
-const API = "/api/auth/saml-idp/service-providers";
-const $ = (id) => document.getElementById(id);
-const el = (tag, props = {}, ...kids) => { const e = document.createElement(tag); Object.assign(e, props); for (const k of kids) e.append(k); return e; };
-let editing = null; // { mode: "create" | "update", id }
-
-function say(text, kind = "info") { const m = $("msg"); m.textContent = text; m.className = "show " + kind; clearTimeout(say.t); say.t = setTimeout(() => (m.className = ""), 6000); }
-async function call(path, body) {
-  const r = await fetch(path, body === undefined ? { credentials: "include" } : { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error([j.message || j.error || "HTTP " + r.status, ...(j.issues || [])].join(" — "));
-  return j;
-}
-
-async function loadSps() {
-  const tbody = $("sps");
-  try {
-    const { serviceProviders } = await call(API);
-    tbody.replaceChildren(...serviceProviders.map(row));
-    if (!serviceProviders.length) tbody.replaceChildren(el("tr", {}, el("td", { colSpan: 6, className: "muted", textContent: "None yet." })));
-  } catch (e) { tbody.replaceChildren(el("tr", {}, el("td", { colSpan: 6, className: "bad", textContent: e.message }))); }
-}
-
-function row(sp) {
-  const status = el("td");
-  status.append(el("span", { className: "pill " + (sp.valid ? (sp.enabled ? "ok" : "muted") : "bad"), textContent: sp.valid ? (sp.enabled ? "active" : "disabled") : "invalid" }));
-  const notes = [...sp.issues.map((t) => ["bad", t]), ...sp.warnings.map((t) => ["warn", t])];
-  if (notes.length) status.append(el("ul", { className: "issues" }, ...notes.map(([k, t]) => el("li", { className: k, textContent: t }))));
-  const actions = el("td");
-  const launchable = sp.source === "code" ? CODE_LAUNCHABLE.includes(sp.id) : sp.config && sp.config.allowIdpInitiated === true;
-  if (launchable && sp.enabled && sp.valid) actions.append(el("a", { className: "btn", href: "/api/auth/saml2/idp/init?sp=" + encodeURIComponent(sp.id), textContent: "Test sign-in", target: "_blank", rel: "noopener" }));
-  if (sp.source === "database") {
-    actions.append(el("button", { textContent: "Edit", onclick: () => openEditor("update", sp.id, sp.config, sp.enabled) }));
-    // Only the switch: no config sent, so an invalid row can still be disabled.
-    actions.append(el("button", { textContent: sp.enabled ? "Disable" : "Enable", onclick: () => toggle(sp.id, !sp.enabled) }));
-    actions.append(el("button", { className: "danger", textContent: "Delete", onclick: () => remove(sp.id) }));
-  } else actions.append(el("span", { className: "muted", textContent: "defined in code" }));
-  const meta = sp.updatedAt ? el("div", { className: "muted", textContent: "updated " + new Date(sp.updatedAt).toLocaleString() }) : "";
-  const tenant = sp.tenantId ? (tenantNames.get(sp.tenantId) || sp.tenantId) : "root";
-  return el("tr", {}, el("td", {}, el("code", { textContent: sp.id }), meta), el("td", {}, el("code", { textContent: sp.entityId })), el("td", { className: sp.tenantId ? "" : "muted", textContent: tenant }), el("td", { textContent: sp.source }), status, actions);
-}
-
-function openEditor(mode, id, config, enabled) {
-  editing = { mode, id };
-  $("editorTitle").textContent = mode === "create" ? "New service provider: " + id : "Edit " + id;
-  $("cfg").value = JSON.stringify(config, null, 2);
-  $("enabled").checked = enabled;
-  $("editor").hidden = false;
-  $("editor").scrollIntoView({ behavior: "smooth" });
-}
-
-async function save(id, config, enabled, mode) {
-  try {
-    if (mode === "create") await call(API + "/create", { serviceProvider: config, enabled });
-    else await call(API + "/update", { id, serviceProvider: config, enabled });
-    say("Saved " + id + ".");
-    $("editor").hidden = true; editing = null;
-    await loadSps();
-  } catch (e) { say(e.message, "err"); }
-}
-
-async function toggle(id, enabled) {
-  try { await call(API + "/update", { id, enabled }); say((enabled ? "Enabled " : "Disabled ") + id + "."); await loadSps(); } catch (e) { say(e.message, "err"); }
-}
-
-async function remove(id) {
-  if (!confirm("Delete service provider " + id + "? Sign-ins to it stop immediately.")) return;
-  try { await call(API + "/delete", { id }); say("Deleted " + id + "."); await loadSps(); } catch (e) { say(e.message, "err"); }
-}
-
-$("save").onclick = () => {
-  let config;
-  try { config = JSON.parse($("cfg").value); } catch (e) { return say("The configuration isn't valid JSON: " + e.message, "err"); }
-  save(editing.id, config, $("enabled").checked, editing.mode);
-};
-$("cancel").onclick = () => { $("editor").hidden = true; editing = null; };
-$("blank").onclick = () => {
-  const id = $("newId").value.trim();
-  if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) return say("Enter an ID first.", "err");
-  openEditor("create", id, { id, entityId: "", acsUrls: [""], attributes: { email: "email" } }, true);
-};
-$("convert").onclick = async () => {
-  const id = $("newId").value.trim(), xml = $("xml").value.trim();
-  if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) return say("Enter an ID first.", "err");
-  if (!xml) return say("Paste the SP's metadata XML.", "err");
-  try {
-    const r = await call("/admin/api/from-metadata", { id, xml });
-    const config = { ...r.serviceProvider, attributes: r.serviceProvider.attributes || { email: "email" } };
-    if (r.encryptionCertificates && r.encryptionCertificates[0]) config.encryption = { certificate: r.encryptionCertificates[0] };
-    $("convertWarnings").replaceChildren(...(r.warnings || []).map((w) => el("li", { textContent: w })));
-    openEditor("create", id, config, true);
-    say("Converted. Review the configuration, then Save.");
-  } catch (e) { say(e.message, "err"); }
-};
-
-// Tenants: the tenant API (host managers only), with organization names from /admin/api/organizations.
-const TENANTS = "/api/auth/saml-idp/tenants";
-let tenantNames = new Map(); // organization id -> name, also used by the SP table
-
-async function loadTenants() {
-  const tbody = $("tenants");
-  try {
-    const [{ tenants }, { organizations }] = await Promise.all([call(TENANTS), call("/admin/api/organizations")]);
-    tenantNames = new Map(organizations.map((o) => [o.id, o.name]));
-    if (!tenants.length) return tbody.replaceChildren(el("tr", {}, el("td", { colSpan: 5, className: "muted", textContent: "No tenants yet." })));
-    tbody.replaceChildren(...tenants.map(tenantRow));
-  } catch (e) { tbody.replaceChildren(el("tr", {}, el("td", { colSpan: 5, className: "bad", textContent: e.message }))); }
-}
-
-function tenantRow(t) {
-  const name = el("td", {}, el("div", { textContent: tenantNames.get(t.organizationId) || t.organizationId }), el("div", { className: "muted" }, el("code", { textContent: t.tenantKey })));
-  const idp = el("td", {}, el("code", { textContent: t.entityId }), el("div", {}, el("a", { href: t.metadataUrl, target: "_blank", rel: "noopener", textContent: "metadata" })));
-  const keys = el("td");
-  keys.append(el("div", { className: "muted", textContent: t.signing === "own" ? "signs with its own key" : "signs with the shared key" }));
-  keys.append(el("ul", { className: "issues" }, ...(t.keys || []).filter((k) => k.state !== "retired").map((k) => {
-    const when = k.state === "next" ? " · activatable " + new Date(k.activatableAt).toLocaleString() : " · expires " + String(k.notAfter).slice(0, 10);
-    return el("li", {}, el("span", { className: "pill " + (k.state === "active" ? "ok" : "muted"), textContent: k.state }), " ", el("code", { textContent: k.kid }), el("span", { className: "muted", textContent: when }));
-  })));
-  if (t.warnings && t.warnings.length) keys.append(el("ul", { className: "issues warn" }, ...t.warnings.map((w) => el("li", { textContent: w }))));
-  const status = el("td", {}, el("span", { className: "pill " + (t.enabled ? "ok" : "muted"), textContent: t.enabled ? "enabled" : "disabled" }));
-  const actions = el("td");
-  const id = t.organizationId;
-  const has = (s) => (t.keys || []).some((k) => k.state === s);
-  const act = (label, fn, cls = "") => actions.append(el("button", { className: cls, textContent: label, onclick: fn }));
-  if (!has("next")) act("Rotate key", () => tenantCall("/keys/rotate", { organizationId: id }, "Published a next key. SPs pick it up from the metadata; activate it once they have."));
-  else {
-    act("Activate next key", () => tenantCall("/keys/activate", { organizationId: id }, "The next key signs now."));
-    act("Activate now (force)", () => confirm("Activate before SPs have had 24 hours to fetch the new certificate? SPs that haven't will reject sign-ins until they do. Meant for a leaked key.") && tenantCall("/keys/activate", { organizationId: id, force: true }, "The next key signs now (forced)."), "danger");
-  }
-  if (has("previous")) act("Retire previous key", () => tenantCall("/keys/retire", { organizationId: id }, "The previous key is no longer published, and its private key is erased."));
-  act(t.enabled ? "Disable" : "Enable", () => tenantCall("/update", { organizationId: id, enabled: !t.enabled }, (t.enabled ? "Disabled " : "Enabled ") + t.tenantKey + "."));
-  act("Delete", () => confirm("Delete tenant " + t.tenantKey + "? Its key is retired for good: no tenant can have its URLs again. Its SPs must be deleted first.") && tenantCall("/delete", { organizationId: id }, "Deleted " + t.tenantKey + "."), "danger");
-  return el("tr", {}, name, idp, keys, status, actions);
-}
-
-async function tenantCall(path, body, done) {
-  try { await call(TENANTS + path, body); say(done); await loadTenants(); await loadSps(); } catch (e) { say(e.message, "err"); }
-}
-
-$("createTenant").onclick = async () => {
-  const name = $("orgName").value.trim(), slug = $("orgSlug").value.trim();
-  if (!name) return say("Enter the organization's name.", "err");
-  if (!/^[A-Za-z0-9_-]{1,64}$/.test(slug)) return say("The slug: 1-64 letters, digits, - and _ (it's also the tenant key in URLs).", "err");
-  try {
-    const org = await call("/api/auth/organization/create", { name, slug, keepCurrentActiveOrganization: true });
-    await call(TENANTS + "/create", { organizationId: org.id, tenantKey: slug });
-    $("orgName").value = ""; $("orgSlug").value = "";
-    say("Created tenant " + slug + " with its own signing key.");
-    await loadTenants(); await loadSps();
-  } catch (e) { say(e.message, "err"); }
-};
-
-$("backfill").onclick = async () => {
-  try {
-    const r = await call("/admin/api/backfill", {});
-    say("Backfill: " + r.updated + " SP(s) updated" + (r.skipped.length ? "; skipped: " + r.skipped.join(", ") : "") + (r.failed.length ? "; failed: " + r.failed.join(", ") : "") + ".", r.failed.length ? "err" : "info");
-    await loadSps();
-  } catch (e) { say(e.message, "err"); }
-};
-
-async function loadAudit() {
-  const tbody = $("audit");
-  try {
-    const { events } = await call("/admin/api/audit");
-    if (!events.length) return tbody.replaceChildren(el("tr", {}, el("td", { colSpan: 5, className: "muted", textContent: "No events yet." })));
-    tbody.replaceChildren(...events.map((e) => {
-      let detail = e.code || "";
-      try { const d = JSON.parse(e.details || "{}"); detail = [e.code, d.reason, d.detail, d.participants && d.participants.length + " SP(s) not told"].filter(Boolean).join(" · "); } catch {}
-      return el("tr", {}, el("td", { textContent: new Date(e.at).toLocaleString() }), el("td", { textContent: e.type }), el("td", { textContent: e.spId || "" }), el("td", {}, el("code", { textContent: e.userId || "" })), el("td", { textContent: detail }));
-    }));
-  } catch (e) { tbody.replaceChildren(el("tr", {}, el("td", { colSpan: 5, className: "bad", textContent: e.message }))); }
-}
-
-loadTenants().then(loadSps);
-loadAudit();
-</script></body></html>`;
