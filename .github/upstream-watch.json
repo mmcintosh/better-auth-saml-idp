@@ -27,12 +27,6 @@
   ],
   "held": [
     {
-      "name": "Prisma 7 (adapter tests only)",
-      "npm": "prisma",
-      "because": "Prisma 7 pulls in mysql2 3.15.3, with GHSA-3f6p-5ww8-9rcr (high) and GHSA-rgwj-5xj2-c3m3, and changes its setup.",
-      "takeWhen": "a Prisma 7 release depends on a patched mysql2 (then drop the ignore in .github/dependabot.yml)."
-    },
-    {
       "name": "TypeScript 7 in the CharDB examples",
       "npm": "typescript",
       "because": "CharDB's Vite plugin uses the TypeScript JS API (ts.ScriptTarget), which TypeScript 7's native compiler doesn't ship.",
@@ -47,5 +41,41 @@
   ],
   "monthly": [
     "Is the public demo (examples/workers-hono) running the latest release? Redeploy it if not (its README has the command)."
+  ],
+  "overrides": [
+    {
+      "selector": "@better-auth/utils",
+      "via": "better-auth@1",
+      "dependency": "@better-auth/utils",
+      "why": "Better Auth 1.7 pins 0.4.2, and pnpm resolved 0.5.0 for part of the tree (D-010). Remove when the workspace no longer needs it to install cleanly."
+    },
+    {
+      "selector": "sharp@<0.35.4",
+      "via": "miniflare",
+      "dependency": "sharp",
+      "fixedIn": "0.35.4",
+      "why": "Dependabot alert #1 (development only). Still needed on 2026-10-05: @cloudflare/vitest-pool-workers 0.22.0 (its newest) pins an older miniflare."
+    },
+    {
+      "selector": "deepmerge-ts@<8.0.0",
+      "via": "@prisma/config@7",
+      "dependency": "deepmerge-ts",
+      "fixedIn": "8.0.0",
+      "why": "GHSA-ggr8-5vv4-36mx, through Prisma (development only)."
+    },
+    {
+      "selector": "mysql2@<3.23.1",
+      "via": "prisma@7",
+      "dependency": "mysql2",
+      "fixedIn": "3.23.1",
+      "why": "GHSA-3f6p-5ww8-9rcr (high, fixed in 3.22.0) and GHSA-rgwj-5xj2-c3m3 (fixed in 3.23.1); Prisma 7's CLI pins mysql2 3.15.3 (development only)."
+    },
+    {
+      "selector": "undici@>=7.28.0 <7.29.1",
+      "via": "miniflare",
+      "dependency": "undici",
+      "fixedIn": "7.29.1",
+      "why": "GHSA-3wwx-pv8p-q78v, under the Workers test pool (development only). Still needed on 2026-10-05: @cloudflare/vitest-pool-workers 0.22.0 (its newest) pins an older miniflare."
+    }
   ]
 }

@@ -1974,3 +1974,13 @@ An outside reviewer read all of src/ at e79f168 (identical to v1.1.2's code) and
 - http-cache-semantics (bundled in the release job's npm, no patched version) joins the ignored npm-cli dependencies; its alert is dismissed as tolerable risk like the others (2026-10-02).
 - Release step 6: redeploy the public demo.
 
+## D-068: Prisma 7 in the adapter matrix; xml-crypto 6.3.3 (2026-10-05)
+
+- Prisma had been held at 6.19.3 because Prisma 7's CLI pins mysql2 3.15.3 (GHSA-3f6p-5ww8-9rcr high, fixed in 3.22.0; GHSA-rgwj-5xj2-c3m3, fixed in 3.23.1). 7.10.0, the newest stable, still pins it. The same kind of development-only override we already carry for deepmerge-ts (via @prisma/config) lifts it: `mysql2@<3.23.1` → `^3.24.5`. The CLI only uses mysql2 for MySQL work; our Prisma entry runs on Postgres. `pnpm audit` is clean.
+- npm's `latest` for the `prisma` CLI is 8.0.0-rc.20 while `@prisma/client`'s is 7.10.0; the 8 RC CLI has no matching client and brings an old hono with open advisories. Not taken.
+- Prisma 7 setup: no `url` in the datasource (the client connects through `@prisma/adapter-pg`), and the `prisma-client` generator (TypeScript output, `client/client.ts`), which is what Better Auth's CLI writes for Prisma 7 (`isV7 ? "prisma-client" : "prisma-client-js"` in auth 1.7.7). All 12 Prisma entries pass, as do Postgres and Drizzle on Postgres, locally against postgres:17.
+- The Prisma major-version ignore is removed from dependabot.yml.
+- Upstream watch: every `pnpm.overrides` entry must be listed in .github/upstream-watch.json (or the job fails), and the issue says whether the newest release of the package that brings it in still needs it. "May go", not "can go": on 2026-10-05 the newest miniflare no longer needs the sharp and undici overrides, but removing them brought back sharp 0.35.2 and undici 7.29.0 (3 high in `pnpm audit`) because @cloudflare/vitest-pool-workers 0.22.0, its newest, pins an older miniflare. Kept.
+- xml-crypto 6.3.3 (2026-10-05: canonicalization fixes for inherited namespace context, namespace values, processing instructions, InclusiveNamespaces). The range was `^6.3.2`, so fresh installs already resolved 6.3.3; the floor is now `^6.3.3`. Full suite (1447 tests, SP interop included), test:wasm and pack:check pass on it. This is a change to the published package, so it ships in the next release.
+- Also: @cloudflare/workers-types patch, and the Workers example on better-auth-scim-provisioning 0.3.1.
+
