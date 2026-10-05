@@ -230,6 +230,9 @@ function registerPages(app: Hono<{ Bindings: Env }>, authFor: (c: C) => Auth, wi
 
   // ---- Provisioning (better-auth-scim-provisioning), when a target is configured ----
 
+  // The page's earlier address (the SCIM field test's /admin/scim) keeps working.
+  app.get("/admin/scim", (c: C) => c.redirect("/admin/provisioning", 301));
+
   adminPage(
     "/admin/provisioning",
     "Users and apps",
