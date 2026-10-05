@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-10-05
+
+Fixes from an external review of 1.1.2: nothing critical or high, but upgrade if you log client IPs, use tenant key rotation, or pass RelayState with line breaks. No API changes.
+
 ### Fixed
 
 From an external review of 1.1.2 (nothing critical or high; D-065):
@@ -17,6 +21,8 @@ From an external review of 1.1.2 (nothing critical or high; D-065):
 
 - The getting-started sign-in snippet only follows a `callbackURL` on the IdP's own origin. As written, a signed-in user opening `/sign-in?callbackURL=javascript:…` would have run it, and another site's URL redirected there.
 - Corrected where the docs said something the code doesn't do: the replay key, the minimum better-auth-cloudflare version, when the registry API is mounted, ProtocolBinding, Redirect-bound XML signatures, InvalidNameIDPolicy's status, tenant metadata's certificate, the flow diagram's order, ForceAuthn's meaning, and resume links.
+- A guide to using this plugin with better-auth-scim-provisioning, so your app both signs people in to its apps and keeps their accounts in step there (`docs/guide/provisioning.md`).
+- A benchmark of sign-ins on Workers and D1, with the scripts to rerun it (`docs/benchmark.md`, `scripts/bench`). The Workers example gains a benchmark-only `RATE_LIMIT=off`.
 
 ### Project
 
@@ -26,11 +32,6 @@ From an external review of 1.1.2 (nothing critical or high; D-065):
 
 - The Workers example can also provision (better-auth-scim-provisioning, optional): set a SCIM app or Google Workspace target, apply migration 0011, and a **Users and apps** page shows each user's account at each app, the queue and the groups, with actions (add a test user, ban, re-sync, reconcile, …). A Cron Trigger, if added, delivers retries.
 - The Workers example's pages are redesigned: one layout with a sidebar (the IdP's sections for admins, your apps for everyone), separate Overview, Service providers, Tenants and Activity pages, a matching sign-in page, light and dark themes, and user emails in the activity log. The styles and code are same-origin files, so the pages' CSP allows no inline code at all.
-
-### Documentation
-
-- A guide to using this plugin with better-auth-scim-provisioning, so your app both signs people in to its apps and keeps their accounts in step there (`docs/guide/provisioning.md`).
-- A benchmark of sign-ins on Workers and D1, with the scripts to rerun it (`docs/benchmark.md`, `scripts/bench`). The Workers example gains a benchmark-only `RATE_LIMIT=off`.
 
 ## [1.1.2] - 2026-10-04
 
