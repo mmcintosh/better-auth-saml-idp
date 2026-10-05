@@ -55,7 +55,7 @@ jobs:
       # The package and its runtime dependencies as a user gets them, from the pinned lockfile
       # (not resolved afresh at release time); peers (better-auth) are the host's and left out.
       - run: pnpm --filter better-auth-saml-idp deploy --prod --legacy --config.node-linker=hoisted sbom-root
-      - uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+      - uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           path: sbom-root
           format: cyclonedx-json
