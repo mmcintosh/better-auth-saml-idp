@@ -1,6 +1,6 @@
-// The example's reference admin page (/admin), in real Chromium on workerd (review 5 R5-7):
-// the admin gate, the IdP details, and the add → save → disable → delete cycle on the
-// registry API, with the page's own CSP enforced.
+// The example's admin pages (/admin…), in real Chromium on workerd (review 5 R5-7): the admin
+// gate, the sidebar's navigation, the IdP details, and the add → save → disable → delete cycle on
+// the registry API, with the pages' own CSP enforced (no inline code at all).
 import { expect, test } from "@playwright/test";
 import { ADMIN_EMAIL, IDP } from "../lib/config.mjs";
 import { idpSignUpAndVerify, newEmail, watchCsp } from "./helpers.mjs";
@@ -38,14 +38,19 @@ test.describe.serial("example admin page", () => {
     await page.goto(`${IDP}/admin`);
     await expect(page.getByRole("heading", { name: "This identity provider" })).toBeVisible();
     await expect(page.getByText(`${IDP}/api/auth/saml2/idp/sso`)).toBeVisible();
+    // The sidebar reaches every section; the SPs have their own page.
+    const nav = page.getByRole("navigation", { name: "Main" });
+    for (const name of ["Overview", "Service providers", "Tenants", "Activity"]) await expect(nav.getByRole("link", { name })).toBeVisible();
+    await nav.getByRole("link", { name: "Service providers" }).click();
+    await expect(page).toHaveURL(`${IDP}/admin/sps`);
     // Code SPs (the e2e SPs) are listed, read-only.
     const keycloakRow = page.locator("#sps tr", { hasText: "keycloak" });
     await expect(keycloakRow).toContainText("defined in code");
 
     // Add from metadata, review, save.
     await page.getByLabel(/^ID/).fill(SP_ID);
-    await page.getByLabel("SP metadata XML").fill(SP_METADATA);
-    await page.getByRole("button", { name: "Convert to configuration" }).click();
+    await page.getByLabel(/metadata XML/).fill(SP_METADATA);
+    await page.getByRole("button", { name: "Convert to a configuration" }).click();
     await expect(page.locator("#editor")).toBeVisible();
     await expect(page.locator("#cfg")).toHaveValue(new RegExp(SP_ENTITY.replace(/[.]/g, "\\.")));
     await page.getByRole("button", { name: "Save" }).click();
