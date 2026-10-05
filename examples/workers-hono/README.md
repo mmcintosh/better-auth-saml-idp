@@ -47,21 +47,51 @@ Every SP gets NameID = the user's email, plus the attributes `email`, `name`, `f
 
 Optional per-SP keys passed through: `nameIdFormat`, `requestSignatures`, `spCertificates`, and for IdP-initiated SSO `allowIdpInitiated`, `idpInitiatedRelayState` and `allowedRelayStates`. SPs with `"allowIdpInitiated": true` are listed under **Apps** on the home page, each linking to `/api/auth/saml2/idp/init?sp=<id>`.
 
-## Admin page
+## Admin pages
 
-`/admin` is a reference admin page for the IdP, built only on the plugin's public API. Copy it into your own app (`src/admin.ts`); the plugin itself ships no UI, like `@better-auth/sso`. It has:
-- this IdP's details for SP setup forms (entity ID, SSO/SLO URLs, metadata, the certificate as a download, with its expiry);
-- the SPs from code and from the database registry, with their status, issues and warnings;
-- adding an SP by pasting its metadata XML, then reviewing the JSON before saving;
-- editing, enabling or disabling, and deleting stored SPs, plus a test sign-in button for SPs that allow IdP-initiated SSO;
-- tenants: creating one (an organization and its tenant), enabling or disabling it, and rotating its signing key (see [Tenants](#tenants));
-- recent audit events (sign-ins, denials, logouts, sessions ended).
+The example's pages share one layout, with a sidebar to move between them. The pages are built only on the plugins' public APIs: copy them into your own app (`src/admin.ts`, `src/ui/`). The plugins themselves ship no UI, like `@better-auth/sso`.
+
+| Page | What's on it |
+|---|---|
+| **My apps** (`/`) | For everyone signed in: the apps they can open from here (IdP-initiated SSO), and the tenants' metadata |
+| **Overview** (`/admin`) | Counts, this IdP's details for SP setup forms (entity ID, SSO and SLO URLs, metadata, with copy buttons; the metadata and certificate as downloads, with the certificate's expiry), and recent activity |
+| **Service providers** (`/admin/sps`) | SPs from code and from the database registry, with status, issues and warnings; add one from its metadata XML (reviewed as JSON before saving); edit, enable or disable, delete; test sign-in |
+| **Tenants** (`/admin/tenants`) | Create a tenant (an organization and its own IdP), enable or disable it, rotate its signing key (see [Tenants](#tenants)) |
+| **Activity** (`/admin/activity`) | The audit log: sign-ins, refusals, logouts, ended sessions, with each user's email |
+| **Users and apps** (`/admin/provisioning`) | With [provisioning](#provisioning-optional) on: each user's account at each app, the queue, groups, and actions (see below) |
+
+The styles and code are same-origin files (`/assets/app.css`, `/assets/app.js`), so the pages' Content Security Policy allows no inline code at all. Stored values (SP configurations, names, audit details) are rendered as text, never markup. The design has light and dark themes.
 
 Only emails listed in `SAML_REGISTRY_ADMINS` (comma-separated, a variable) with a verified address can open it or use the registry API:
 
 ```jsonc
 "vars": { "SAML_REGISTRY_ADMINS": "you@example.com" }
 ```
+
+## Provisioning (optional)
+
+With [better-auth-scim-provisioning](https://www.npmjs.com/package/better-auth-scim-provisioning), the same app also keeps accounts in step at the apps it signs people in to: created before the first sign-in, updated, deactivated when someone is banned or deleted, and organizations as groups. See [sign-in and provisioning together](../../docs/guide/provisioning.md).
+
+It's off until you configure a target:
+
+1. Apply migration `0011_scim_provisioning.sql` (`pnpm db:migrate:remote`). It's needed only once provisioning is on: Better Auth checks the schema (`validateSchema`), so the provisioning plugin is added only with a target.
+2. Set a target, and **who may be provisioned there** (comma-separated emails or `@domain` suffixes; empty means nobody, so a demo never pushes strangers' accounts out):
+
+| Target | Settings |
+|---|---|
+| A SCIM 2.0 app (Cloudflare Access, AWS IAM Identity Center, …) | `SCIM_URL`, `SCIM_TOKEN` (secrets); `SCIM_ALLOWED_EMAILS`; `SCIM_GROUPS="true"` for organizations as groups |
+| Google Workspace | `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_ADMIN_EMAIL` (secrets); `GOOGLE_ALLOWED_EMAILS`; `GOOGLE_ORG_UNIT` (e.g. `/Provisioned`); `GOOGLE_GROUPS="true"` for Google Groups |
+
+3. For retries, add a Cron Trigger and this Worker's public origin, so the scheduled run can deliver what's due:
+
+```jsonc
+"triggers": { "crons": ["* * * * *"] },
+"vars": { "PUBLIC_ORIGIN": "https://<your-worker>.workers.dev" }
+```
+
+**Users and apps** (`/admin/provisioning`) then shows each user's account at each app (provisioned, pending, deactivated, or not provisioned), any queued or failed delivery with its error, the groups, and the queue. From there an admin can add a test user, rename, change email, ban and unban, set a password (so a test user can sign in through the IdP), re-sync, delete, run the queue, and reconcile everyone a page at a time. The admin can't ban or delete their own account there.
+
+To try it locally without a real app, point `SCIM_URL` at any local SCIM server on `http://127.0.0.1` (http is allowed for loopback addresses only).
 
 ## Tenants
 

@@ -9,7 +9,7 @@
 import { X509Certificate } from "node:crypto";
 import { serviceProviderFromMetadata, SpMetadataError } from "better-auth-saml-idp";
 import type { Context, Hono } from "hono";
-import { type Env, type getAuth, idpInitiatedApps, isRegistryAdmin } from "./auth";
+import { type Env, type getAuth, hasProvisioning, idpInitiatedApps, isRegistryAdmin, provisioningTargets } from "./auth";
 import { card, copy, esc, head, htmlResponse, kv, page, type Viewer } from "./ui/layout";
 
 type C = Context<{ Bindings: Env }>;
@@ -30,6 +30,7 @@ async function requireAdmin(c: C, auth: Auth): Promise<{ email: string } | Respo
         title: "Not allowed",
         active: "",
         viewer,
+        provisioning: hasProvisioning(c.env),
         content: head("Not an administrator") + card("Why", `<p>${esc(session.user.email)} isn't in <code>SAML_REGISTRY_ADMINS</code>, its email isn't verified, or this is an impersonated session.</p><p><a href="/">Back to your apps</a></p>`),
       }),
       403,
@@ -144,7 +145,7 @@ function registerPages(app: Hono<{ Bindings: Env }>, authFor: (c: C) => Auth, wi
         const auth = authFor(c);
         const admin = await requireAdmin(c, auth);
         if (admin instanceof Response) return admin;
-        return htmlResponse(page({ title, active: path, viewer: { email: admin.email, admin: true }, script, content: await content(c, auth), data: data?.(c) }));
+        return htmlResponse(page({ title, active: path, viewer: { email: admin.email, admin: true }, script, content: await content(c, auth), data: data?.(c), provisioning: hasProvisioning(c.env) }));
       }),
     );
 
@@ -225,5 +226,147 @@ function registerPages(app: Hono<{ Bindings: Env }>, authFor: (c: C) => Auth, wi
     () =>
       head("Activity", "From the audit log: sign-ins, refusals, logouts and ended sessions, newest first. Refusals before anyone signs in aren't stored (anyone can cause them); they're logged as warnings instead.") +
       card("The last 50 events", table(["When", "Event", "Service provider", "User", "Detail"], "audit")),
+  );
+
+  // ---- Provisioning (better-auth-scim-provisioning), when a target is configured ----
+
+  adminPage(
+    "/admin/provisioning",
+    "Users and apps",
+    "provisioning",
+    (c) => {
+      if (!hasProvisioning(c.env))
+        return head("Provisioning", "Provisioning is off.") + card("Turn it on", `<p>Set a target (<code>SCIM_URL</code> and <code>SCIM_TOKEN</code>, or the <code>GOOGLE_*</code> settings), apply migration 0011, and list who may be provisioned. See the example's README.</p>`);
+      return (
+        head("Users and apps", "Accounts at the apps, kept in step by better-auth-scim-provisioning: created before the first sign-in, updated, and switched off when someone leaves.") +
+        `<div class="tiles" id="targets"></div><div class="top"></div>` +
+        card("Users", `<div class="table-wrap">${table(["User", "Status", "At each app", ""], "users")}</div><div class="row between top"><span class="muted small" id="usersNote"></span><div class="row"><button type="button" class="ghost small" id="prev">Previous</button><button type="button" class="ghost small" id="next">Next</button></div></div>`, {
+          subtitle: "Changes here go to the apps at once; anything that fails is retried by the scheduled run.",
+          actions: '<button type="button" class="ghost small" id="refresh">Refresh</button>',
+        }) +
+        card(
+          "Add a test user",
+          `<div class="inline"><label class="field"><span>Email</span><input id="newEmail" type="email" placeholder="ada@example.com"></label><label class="field"><span>Name</span><input id="newName" placeholder="Ada Lovelace"></label><button type="button" id="create">Create verified user</button></div><p class="muted small">Only addresses in a target's allowed list are provisioned there.</p>`,
+        ) +
+        card("Queue", `<p class="muted" id="queueNote">…</p><div class="inline"><button type="button" id="run">Run the queue now</button><label class="field"><span>Reconcile from (cursor)</span><input id="cursor" placeholder="start"></label><button type="button" class="ghost" id="reconcile">Reconcile a page</button></div>`, {
+          subtitle: "The scheduled run delivers what's due every minute. Reconcile queues every user (and group) again, a page at a time: after adding or fixing a target.",
+        }) +
+        card("Groups", table(["Group", "App", "Kind", "Id at the app"], "groups"), { subtitle: "Organizations (and roles) as groups at the apps, with the provisioned members." })
+      );
+    },
+    (c) => ({ targets: provisioningTargets(c.env).map((t) => ({ id: t.id, type: t.type ?? "scim", groups: !!t.groups, where: t.type === "google-workspace" ? "Google Workspace" : (() => { try { return new URL(t.url ?? "").host; } catch { return ""; } })() })) }),
+  );
+
+  app.get("/admin/api/provisioning", (c: C) =>
+    withCf(c, async () => {
+      const auth = authFor(c);
+      const admin = await requireAdmin(c, auth);
+      if (admin instanceof Response) return c.json({ error: "not allowed" }, 403);
+      if (!hasProvisioning(c.env)) return c.json({ error: "provisioning is off" }, 404);
+      const ctx = await auth.$context;
+      const offset = Math.max(0, Number(c.req.query("offset") ?? 0) || 0);
+      const users = (await ctx.adapter.findMany({ model: "user", sortBy: { field: "email", direction: "asc" }, limit: 26, offset })) as { id: string; email: string; name: string; emailVerified?: boolean; banned?: boolean; banExpires?: Date | null }[];
+      const page = users.slice(0, 25);
+      const ids = page.map((u) => u.id);
+      const [links, jobs] = ids.length
+        ? await Promise.all([
+            ctx.adapter.findMany({ model: "scimProvisioningLink", where: [{ field: "userId", value: ids, operator: "in" }], limit: 200 }) as Promise<{ userId: string; targetId: string; remoteId: string; active: boolean }[]>,
+            ctx.adapter.findMany({ model: "scimProvisioningJob", where: [{ field: "userId", value: ids, operator: "in" }], limit: 200 }) as Promise<{ userId: string; targetId: string; kind?: string | null; attempts: number; failed: boolean; lastError?: string | null; nextAttemptAt: Date }[]>,
+          ])
+        : [[], []];
+      const groups = (await ctx.adapter.findMany({ model: "scimProvisioningGroupLink", limit: 100 })) as { key: string; targetId: string; displayName: string; remoteId: string }[];
+      const count = (failed: boolean) => ctx.adapter.count({ model: "scimProvisioningJob", where: [{ field: "failed", value: failed }] }).catch(() => 0);
+      const [queued, failed] = await Promise.all([count(false), count(true)]);
+      return c.json({
+        offset,
+        more: users.length > 25,
+        users: page.map((u) => ({
+          id: u.id,
+          email: u.email,
+          name: u.name,
+          verified: u.emailVerified === true,
+          banned: u.banned === true && (!u.banExpires || new Date(u.banExpires).getTime() > Date.now()),
+          you: u.email === admin.email,
+          links: Object.fromEntries(links.filter((l) => l.userId === u.id).map((l) => [l.targetId, { remoteId: l.remoteId, active: l.active, pending: !l.remoteId }])),
+          jobs: Object.fromEntries(jobs.filter((j) => j.userId === u.id && !j.kind).map((j) => [j.targetId, { attempts: j.attempts, failed: j.failed, lastError: j.lastError ?? null, next: j.nextAttemptAt }])),
+        })),
+        groups: groups.map((g) => ({ targetId: g.targetId, displayName: g.displayName, remoteId: g.remoteId, kind: g.key.slice(g.targetId.length + 1).split(":")[0] })),
+        queue: { queued, failed },
+      });
+    }),
+  );
+
+  app.post("/admin/api/provisioning", (c: C) =>
+    withCf(c, async () => {
+      const auth = authFor(c);
+      const admin = await requireAdmin(c, auth);
+      if (admin instanceof Response) return c.json({ error: "not allowed" }, 403);
+      if (!sameOrigin(c)) return c.json({ error: "cross-origin" }, 403);
+      if (!hasProvisioning(c.env)) return c.json({ error: "provisioning is off" }, 404);
+      const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+      const str = (k: string) => (typeof body?.[k] === "string" ? (body[k] as string).trim() : "");
+      const ctx = await auth.$context;
+      const action = str("action");
+      const userId = str("userId");
+      const user = userId ? ((await ctx.internalAdapter.findUserById(userId)) as { id: string; email: string } | null) : null;
+      if (["rename", "email", "ban", "unban", "delete", "password", "resync"].includes(action)) {
+        if (!user) return c.json({ error: "no such user" }, 404);
+        // Never lock the admin out: no banning or deleting yourself here.
+        if ((action === "ban" || action === "delete") && user.email === admin.email) return c.json({ error: "that's your own account" }, 400);
+      }
+      switch (action) {
+        case "create": {
+          const email = str("email").toLowerCase();
+          if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return c.json({ error: "enter an email address" }, 400);
+          if (await ctx.internalAdapter.findUserByEmail(email)) return c.json({ error: "a user with that email exists" }, 409);
+          await ctx.internalAdapter.createUser({ email, name: str("name") || email, emailVerified: true }, { method: "admin" } as never);
+          return c.json({ ok: `Created ${email}.` });
+        }
+        case "rename":
+          if (!str("name")) return c.json({ error: "enter a name" }, 400);
+          await ctx.internalAdapter.updateUser(userId, { name: str("name") });
+          return c.json({ ok: "Renamed." });
+        case "email": {
+          const email = str("email").toLowerCase();
+          if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return c.json({ error: "enter an email address" }, 400);
+          await ctx.internalAdapter.updateUser(userId, { email, emailVerified: true });
+          return c.json({ ok: `Email changed to ${email}.` });
+        }
+        case "ban":
+          await ctx.internalAdapter.updateUser(userId, { banned: true, banReason: "banned on /admin/provisioning", banExpires: null });
+          return c.json({ ok: "Banned: deactivated at the apps." });
+        case "unban":
+          await ctx.internalAdapter.updateUser(userId, { banned: false, banReason: null, banExpires: null });
+          return c.json({ ok: "Unbanned: active at the apps again." });
+        case "delete":
+          await ctx.internalAdapter.deleteUser(userId);
+          return c.json({ ok: "Deleted: deprovisioned at the apps." });
+        case "password": {
+          // So a test user can sign in through the IdP (users made here have no password).
+          const password = str("password");
+          if (password.length < 12) return c.json({ error: "at least 12 characters" }, 400);
+          const hash = await ctx.password.hash(password);
+          const accounts = (await ctx.internalAdapter.findAccounts(userId)) as { id: string; providerId: string }[];
+          const credential = accounts.find((a) => a.providerId === "credential");
+          if (credential) await ctx.internalAdapter.updateAccount(credential.id, { password: hash });
+          else await ctx.internalAdapter.createAccount({ userId, providerId: "credential", accountId: userId, password: hash });
+          return c.json({ ok: "Password set." });
+        }
+        case "resync":
+          // Any change queues the user for every target: the plugin's hooks do the rest.
+          await ctx.internalAdapter.updateUser(userId, { updatedAt: new Date() });
+          return c.json({ ok: "Queued for every app." });
+        case "run": {
+          const r = await auth.api.scimProvisioningRun({ body: {} });
+          return c.json({ ok: `Delivered: ${r.done} done, ${r.retry} to retry, ${r.failed} failed, ${r.busy} busy.` });
+        }
+        case "reconcile": {
+          const r = await auth.api.scimProvisioningReconcile({ body: { limit: 200, ...(str("after") ? { after: str("after") } : {}) } });
+          return c.json({ ok: `Queued ${r.queued}.${r.next ? " More to go: run it again from the cursor below." : " All done."}`, next: r.next });
+        }
+        default:
+          return c.json({ error: "unknown action" }, 400);
+      }
+    }),
   );
 }

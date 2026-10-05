@@ -229,6 +229,63 @@ pages.overview = async () => {
   $("countTenants").textContent = String(tenants.length);
 };
 
+// ---- Provisioning (better-auth-scim-provisioning) ----
+pages.provisioning = () => {
+  const { targets } = pageData();
+  const API = "/admin/api/provisioning";
+  let offset = 0;
+  $("targets").replaceChildren(...targets.map((t) => el("div", { className: "tile" },
+    el("span", { className: "muted small", textContent: t.type === "google-workspace" ? "Google Workspace" : "SCIM app" }),
+    el("strong", { textContent: t.id }),
+    el("span", { className: "muted small", textContent: t.where }),
+    el("span", {}, pill(t.groups ? "groups on" : "users only", t.groups ? "info" : "")))));
+
+  async function act(body, after) {
+    try { const r = await call(API, body); toast(r.ok || "Done."); if (after) after(r); setTimeout(load, 800); } catch (e) { toast(e.message, "err"); }
+  }
+  function appState(u, t) {
+    const link = u.links[t.id], job = u.jobs[t.id];
+    const cell = el("div", { className: "targets-cell" });
+    const state = !link ? pill("not provisioned", "") : link.pending ? pill("pending", "info") : link.active ? pill("provisioned", "ok") : pill("deactivated", "warn");
+    cell.append(el("span", {}, el("span", { className: "muted small", textContent: t.id + " " }), state));
+    if (job) {
+      cell.append(job.failed ? pill("failed", "bad") : pill(job.attempts ? "retrying (attempt " + job.attempts + ")" : "queued", "info"));
+      if (job.lastError) cell.append(el("span", { className: "err", textContent: job.lastError }));
+    }
+    return cell;
+  }
+  function row(u) {
+    const status = el("td", {}, u.verified ? pill("verified", "ok") : pill("unverified", "warn"), " ", u.banned ? pill("banned", "bad") : "", " ", u.you ? pill("you", "info") : "");
+    const apps = el("td", {}, el("div", { className: "stack" }, ...targets.map((t) => appState(u, t))));
+    const actions = el("div", { className: "actions" });
+    const btn = (label, fn, cls) => actions.append(el("button", { type: "button", className: (cls || "ghost") + " small", textContent: label, onclick: fn }));
+    btn("Rename", () => { const name = prompt("New name for " + u.email, u.name); if (name) act({ action: "rename", userId: u.id, name }); });
+    btn("Email", () => { const email = prompt("New email for " + u.name, u.email); if (email && email !== u.email) act({ action: "email", userId: u.id, email }); });
+    if (!u.you) btn(u.banned ? "Unban" : "Ban", () => act({ action: u.banned ? "unban" : "ban", userId: u.id }), u.banned ? "ghost" : "danger");
+    btn("Set password", () => { const password = prompt("A password for " + u.email + " (12 characters or more), so they can sign in through the IdP"); if (password) act({ action: "password", userId: u.id, password }); });
+    btn("Re-sync", () => act({ action: "resync", userId: u.id }));
+    if (!u.you) btn("Delete", () => confirm("Delete " + u.email + "? They're deprovisioned at every app.") && act({ action: "delete", userId: u.id }), "danger");
+    return el("tr", {}, el("td", {}, el("strong", { textContent: u.name }), el("div", { className: "muted small", textContent: u.email })), status, apps, el("td", {}, actions));
+  }
+  async function load() {
+    try {
+      const d = await call(API + "?offset=" + offset);
+      $("users").replaceChildren(...(d.users.length ? d.users.map(row) : [emptyRow(4, "No users yet. Add a test user below.")]));
+      $("usersNote").textContent = d.users.length ? "Users " + (d.offset + 1) + "–" + (d.offset + d.users.length) : "";
+      $("prev").disabled = d.offset === 0; $("next").disabled = !d.more;
+      $("queueNote").textContent = d.queue.queued + " queued, " + d.queue.failed + " failed" + (d.queue.failed ? ": failed jobs wait for the user's next change, a Re-sync, or a reconcile." : ".");
+      $("groups").replaceChildren(...(d.groups.length ? d.groups.map((g) => el("tr", {}, el("td", { textContent: g.displayName }), el("td", { textContent: g.targetId }), el("td", {}, pill(g.kind === "group" ? "organization" : g.kind, "info")), el("td", {}, el("code", { textContent: g.remoteId || "pending" })))) : [emptyRow(4, "No groups yet.")]));
+    } catch (e) { $("users").replaceChildren(emptyRow(4, e.message, "bad")); }
+  }
+  $("refresh").onclick = load;
+  $("prev").onclick = () => { offset = Math.max(0, offset - 25); load(); };
+  $("next").onclick = () => { offset += 25; load(); };
+  $("create").onclick = () => act({ action: "create", email: $("newEmail").value, name: $("newName").value }, () => { $("newEmail").value = ""; $("newName").value = ""; });
+  $("run").onclick = () => act({ action: "run" });
+  $("reconcile").onclick = () => act({ action: "reconcile", after: $("cursor").value.trim() }, (r) => { $("cursor").value = r.next || ""; });
+  load();
+};
+
 const run = pages[document.body.dataset.page];
 if (run) run();
 `;

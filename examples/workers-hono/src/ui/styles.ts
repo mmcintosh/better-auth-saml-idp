@@ -173,4 +173,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); fon
 .brand { color: var(--text); text-decoration: none; }
 .brand small { color: var(--muted); }
 .tile .button, .tile button { justify-self: start; }
+.table-wrap { overflow-x: auto; }
+.targets-cell { display: grid; gap: 0.25rem; }
+.targets-cell .err { font-size: 0.8rem; color: var(--bad); max-width: 28rem; }
 `;

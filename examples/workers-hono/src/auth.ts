@@ -3,6 +3,7 @@ import { betterAuth } from "better-auth";
 import { admin, organization } from "better-auth/plugins";
 import { withCloudflare } from "better-auth-cloudflare";
 import { samlIdp, type ServiceProviderConfig } from "better-auth-saml-idp";
+import { scimProvisioning, type Target } from "better-auth-scim-provisioning";
 import { drizzle } from "drizzle-orm/d1";
 import { schema } from "./schema";
 
@@ -30,7 +31,55 @@ export interface Env {
    * measures the IdP rather than the per-IP limit (scripts/bench). Never set this in production.
    */
   RATE_LIMIT?: string;
+  /** This Worker's public origin, for runs without a request (the Cron Trigger's provisioning run). */
+  PUBLIC_ORIGIN?: string;
+  // Provisioning (better-auth-scim-provisioning), optional: set a target to turn it on, and apply
+  // migration 0011 first. Only listed users are provisioned, so a demo never pushes strangers out.
+  /** A SCIM 2.0 app (Cloudflare Access, AWS IAM Identity Center, …): its endpoint and token. */
+  SCIM_URL?: string;
+  SCIM_TOKEN?: string;
+  /** Who goes to the SCIM app: comma-separated emails or "@domain" suffixes. Empty: nobody. */
+  SCIM_ALLOWED_EMAILS?: string;
+  /** "true": organizations as groups at the SCIM app. */
+  SCIM_GROUPS?: string;
+  /** Google Workspace: a service account with domain-wide delegation, acting as an admin. */
+  GOOGLE_CLIENT_EMAIL?: string;
+  GOOGLE_PRIVATE_KEY?: string;
+  GOOGLE_ADMIN_EMAIL?: string;
+  /** Where new Workspace users go, e.g. "/Provisioned". */
+  GOOGLE_ORG_UNIT?: string;
+  /** Who goes to Workspace: comma-separated emails or "@domain" suffixes. Empty: nobody. */
+  GOOGLE_ALLOWED_EMAILS?: string;
+  /** "true": organizations as Google Groups (delegation must also allow the group scope). */
+  GOOGLE_GROUPS?: string;
 }
+
+/** A matcher for comma-separated emails or "@domain" suffixes; an empty list matches nobody. */
+function allowList(list: string | undefined) {
+  const allowed = (list ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  return (email: string) => allowed.some((a) => (a.startsWith("@") ? email.toLowerCase().endsWith(a) : email.toLowerCase() === a));
+}
+
+/** The provisioning targets the settings describe; none means provisioning is off. */
+export function provisioningTargets(env: Env): Target[] {
+  const targets: Target[] = [];
+  if (env.SCIM_URL && env.SCIM_TOKEN) {
+    const allowed = allowList(env.SCIM_ALLOWED_EMAILS);
+    targets.push({ id: "scim", url: env.SCIM_URL, token: env.SCIM_TOKEN, include: (u) => allowed(u.email), groups: env.SCIM_GROUPS === "true" });
+  }
+  if (env.GOOGLE_CLIENT_EMAIL && env.GOOGLE_PRIVATE_KEY && env.GOOGLE_ADMIN_EMAIL) {
+    const allowed = allowList(env.GOOGLE_ALLOWED_EMAILS);
+    targets.push({
+      id: "google-workspace",
+      type: "google-workspace",
+      include: (u) => allowed(u.email),
+      groups: env.GOOGLE_GROUPS === "true",
+      google: { clientEmail: env.GOOGLE_CLIENT_EMAIL, privateKey: env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"), adminEmail: env.GOOGLE_ADMIN_EMAIL, orgUnitPath: env.GOOGLE_ORG_UNIT || undefined },
+    });
+  }
+  return targets;
+}
+export const hasProvisioning = (env: Env) => provisioningTargets(env).length > 0;
 
 /** DEV_MAILBOX: the latest verification link per email address (per isolate). */
 export const devMailbox = new Map<string, string>();
@@ -159,6 +208,9 @@ function buildAuth(env: Env, origin: string) {
           // public deployment doesn't collect strangers' organizations (tenants are host-made anyway).
           organization({ allowUserToCreateOrganization: (user) => isRegistryAdmin(env, user) }),
           samlPlugin(env, origin),
+          // Only with a target: Better Auth checks the schema (validateSchema), so the provisioning
+          // tables are needed only once it's turned on.
+          ...(hasProvisioning(env) ? [scimProvisioning({ targets: provisioningTargets(env) })] : []),
         ],
       },
     ),

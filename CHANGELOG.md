@@ -6,6 +6,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ### Examples
 
+- The Workers example can also provision (better-auth-scim-provisioning, optional): set a SCIM app or Google Workspace target, apply migration 0011, and a **Users and apps** page shows each user's account at each app, the queue and the groups, with actions (add a test user, ban, re-sync, reconcile, …). A Cron Trigger, if added, delivers retries.
 - The Workers example's pages are redesigned: one layout with a sidebar (the IdP's sections for admins, your apps for everyone), separate Overview, Service providers, Tenants and Activity pages, a matching sign-in page, light and dark themes, and user emails in the activity log. The styles and code are same-origin files, so the pages' CSP allows no inline code at all.
 
 ### Documentation
