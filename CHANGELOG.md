@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Project
+
+- Releases are one merge: `pnpm release patch|minor|major` opens the release PR, and merging it tags the version and starts the release run (`tag-release.yml`). Publishing still waits for the two approvals.
+
 ### Examples
 
 - The Workers example can also provision (better-auth-scim-provisioning, optional): set a SCIM app or Google Workspace target, apply migration 0011, and a **Users and apps** page shows each user's account at each app, the queue and the groups, with actions (add a test user, ban, re-sync, reconcile, …). A Cron Trigger, if added, delivers retries.

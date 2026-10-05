@@ -74,7 +74,7 @@ CI runs the full matrix, including the adapter matrix, e2e, CodeQL and a depende
 
 ## Releasing (maintainers)
 
-Releases come only from CI ([release.yml](.github/workflows/release.yml)), so every npm version carries provenance and the tested tarball is the published one.
+Releases come only from CI ([release.yml](.github/workflows/release.yml)), so every npm version carries provenance, built from the same commit the tests ran on.
 
 One-time setup (done 2026-09-27):
 
@@ -85,7 +85,8 @@ One-time setup (done 2026-09-27):
 
 Each release:
 
-1. Move `[Unreleased]` in CHANGELOG.md to `## [X.Y.Z] - YYYY-MM-DD`, set `version` in package.json (and remove `"private": true` for the first release), and commit.
-2. Optionally, run **Actions → Release → Run workflow** for a dry run: it tests, packs, and builds the SBOM without publishing.
-3. `git tag vX.Y.Z && git push origin vX.Y.Z`. The workflow checks that the tag matches package.json and that its commit is on `main`, tests and packs. After your approval in the `npm` environment, it **stages** the tested tarball with provenance and creates the GitHub release with its CycloneDX SBOM.
-4. Approve the staged version on npmjs.com (Staged packages, with your security key) or with `npm stage approve <id>`. Only then is it installable; npm's malware scan must finish first.
+1. Keep CHANGELOG.md's `[Unreleased]` section up to date as changes land.
+2. On an up-to-date, clean `main`: `pnpm release patch|minor|major ["One sentence for the top of the section."]`. It bumps `version` in package.json, dates the `[Unreleased]` section as `## [X.Y.Z] - YYYY-MM-DD`, and opens the **Release X.Y.Z** pull request (it refuses an empty `[Unreleased]`).
+3. Optionally, run **Actions → Release → Run workflow** on `main` for a dry run: it tests, packs, and builds the SBOM without publishing.
+4. **Merge the release PR when CI is green: that's the go-ahead.** [tag-release.yml](.github/workflows/tag-release.yml) sees the new version on `main`, tags `vX.Y.Z` there, and starts the release run on the tag. It checks the tag matches package.json and its commit is on `main`, tests and packs. After your approval in the `npm` environment, it **stages** the tested tarball with provenance and creates the GitHub release with its CycloneDX SBOM. (Pushing a `vX.Y.Z` tag by hand still works too.)
+5. Approve the staged version on npmjs.com (Staged packages, with your security key) or with `npm stage approve <id>`. Only then is it installable; npm's malware scan must finish first.
