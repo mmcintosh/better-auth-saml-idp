@@ -23,8 +23,10 @@ export function precheckXml(xml: string, maxBytes: number): string[] {
 }
 
 export interface Libxml2ValidatorOptions {
-  /** Reject documents larger than this before parsing. Default 128 KiB. */
+  /** Reject protocol messages larger than this before parsing. Default 128 KiB. */
   maxBytes?: number;
+  /** Reject SP metadata larger than this before parsing. Default 1 MiB, the metadata fetch's limit. */
+  maxMetadataBytes?: number;
   /**
    * The compiled `xsd.wasm` (a `WebAssembly.Module`) or its bytes. By default it is
    * loaded from this package: a bundled module on Workers, read from disk on Node.
@@ -39,6 +41,7 @@ export interface Libxml2ValidatorOptions {
  */
 export function libxml2Validator(options: Libxml2ValidatorOptions = {}): SchemaValidator {
   const maxBytes = options.maxBytes ?? 128 * 1024;
+  const maxMetadataBytes = options.maxMetadataBytes ?? 1024 * 1024;
   let inner: Promise<SchemaValidator> | undefined;
   const load = () =>
     (inner ??= (async () => {
@@ -54,7 +57,7 @@ export function libxml2Validator(options: Libxml2ValidatorOptions = {}): SchemaV
 
   return {
     async validate(xml, kind) {
-      const pre = precheckXml(xml, maxBytes);
+      const pre = precheckXml(xml, kind === "metadata" ? maxMetadataBytes : maxBytes);
       if (pre.length) return { valid: false, errors: pre };
       return (await load()).validate(xml, kind);
     },

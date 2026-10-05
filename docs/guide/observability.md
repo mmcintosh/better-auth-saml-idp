@@ -28,7 +28,7 @@ samlIdp({
 | `onTenantChanged` | With [tenants](multi-tenant.md): an administrator created, enabled, disabled or deleted a tenant, or rotated, activated or retired one of its keys. |
 | `onServiceProviderChanged` | A stored SP was created, updated, enabled, disabled or deleted through the [registry API](service-providers.md#registry-api), by your managers or a tenant's administrator (`delegated`). |
 
-Every event has `type`, `at` (a `Date`), and when available `ipAddress` and `userAgent`. The IP is read the way Better Auth reads it: from `advanced.ipAddress.ipAddressHeaders`, which `withCloudflare` sets to `cf-connecting-ip`. It's absent with `disableIpTracking`.
+Every event has `type`, `at` (a `Date`), and when available `ipAddress` and `userAgent`. The IP is read the way Better Auth reads it: from `advanced.ipAddress.ipAddressHeaders` (which `withCloudflare` sets to `cf-connecting-ip`), a valid IP only, and from a multi-value header such as `X-Forwarded-For` only through `advanced.ipAddress.trustedProxies`, since its left-most entry is whatever the client sent. It's absent with `disableIpTracking`.
 
 <details><summary>Event fields</summary>
 
@@ -107,7 +107,7 @@ This records the same events in the [`samlIdpAuditEvent`](schema.md#samlidpaudit
 
 Create the table with your migrations: `npx auth migrate` or `generate`, or D1 migration `0005`.
 
-- **Only denials for a signed-in user are stored.** Any other refusal (a malformed request, an unknown issuer, or a SAML error Response to a known SP, whose entity ID anyone can put in a request) goes to `onDenied` but not the table, so an attacker can't grow it at will. SAML error Responses are also logged as warnings, such as `[saml-idp] SAML status Responder/InvalidNameIDPolicy for SP google-workspace: …`: when an SP only says "couldn't sign you in", that line says why.
+- **Only denials for a signed-in user are stored.** Any other refusal (a malformed request, an unknown issuer, or a SAML error Response to a known SP, whose entity ID anyone can put in a request) goes to `onDenied` but not the table, so an attacker can't grow it at will. "Signed in" includes users whose email isn't verified yet: with open sign-up, one registration gets past this, so keep Better Auth's rate limits on. SAML error Responses are also logged as warnings, such as `[saml-idp] SAML status Responder/InvalidNameIDPolicy for SP google-workspace: …`: when an SP only says "couldn't sign you in", that line says why.
 - **Retention:** rows expire after `retentionDays` and are swept automatically, like the plugin's other expiring rows.
 - **Best effort:** rows are written in the background. A failed write is logged; it never fails the sign-in. If you need every event durably, forward from the callbacks to a store that guarantees it.
 - **Personal data:** `details` holds the NameID (often an email) and the IP. Set `retentionDays` to what your privacy policy allows. The session-participant table (with Single Logout or `onSessionEnded`) also holds each SP's NameID; its rows expire with the session, and are removed at once when the user is deleted.

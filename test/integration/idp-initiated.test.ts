@@ -38,12 +38,13 @@ describe("IdP-initiated SSO: refusals", () => {
     expect(await pageCode(res)).toBe("IDP_INITIATED_NOT_ALLOWED");
   });
 
-  it("unknown or missing sp → 400, nothing reflected", async () => {
+  it("unknown or missing sp → 400 (as for an SP that hasn't opted in), nothing reflected", async () => {
     const { browser } = await host();
     await browser.signUp();
     const unknown = await browser.fetch(init({ sp: "evil<script>" }));
     expect(unknown.status).toBe(400);
-    expect(await pageCode(unknown)).toBe("UNKNOWN_SERVICE_PROVIDER");
+    // The same answer as a known SP that hasn't opted in, so SP ids can't be listed (D-065).
+    expect(await pageCode(unknown)).toBe("IDP_INITIATED_NOT_ALLOWED");
     expect(await unknown.clone().text()).not.toContain("evil");
     expect(await hasAssertion(unknown)).toBe(false);
     const missing = await browser.fetch(INIT_URL);

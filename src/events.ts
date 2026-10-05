@@ -5,6 +5,7 @@
  * `waitUntil` on Workers), so they never delay a response. A handler that throws or rejects is
  * logged, and the flow it observed is unaffected.
  */
+import { getIPFromHeader } from "@better-auth/core/utils/ip";
 import type { GenericEndpointContext } from "better-auth";
 import type { SamlIdpErrorCode } from "./errors";
 import { logSafe } from "./saml/request";
@@ -164,15 +165,21 @@ export const AUDIT_MODEL = "samlIdpAuditEvent";
 
 type Emitter = { events?: SamlIdpEventHandlers | undefined; auditLog?: { retentionDays: number } | undefined; tenants?: unknown };
 
-/** The request's client IP, as Better Auth reads it. */
+/**
+ * The request's client IP, as Better Auth reads it (its getIPFromHeader): a multi-value header only
+ * through `trustedProxies`, and only a valid IP. The left-most X-Forwarded-For entry is whatever the
+ * client sent (D-065). Unlike Better Auth's getIP, no localhost stand-in in development.
+ */
 function clientIp(ctx: GenericEndpointContext): string | undefined {
-  const opts = ctx.context.options as { advanced?: { ipAddress?: { disableIpTracking?: boolean; ipAddressHeaders?: string[] } } };
+  const opts = ctx.context.options as { advanced?: { ipAddress?: { disableIpTracking?: boolean; ipAddressHeaders?: string[]; ipv6Subnet?: number; trustedProxies?: string[] } } };
   const ip = opts.advanced?.ipAddress;
   if (ip?.disableIpTracking) return undefined;
   const headers = ctx.request?.headers ?? ctx.headers;
   for (const name of ip?.ipAddressHeaders ?? ["x-forwarded-for"]) {
-    const value = headers?.get(name)?.split(",")[0]?.trim();
-    if (value) return logSafe(value, 64);
+    const value = headers?.get(name);
+    if (!value) continue;
+    const found = getIPFromHeader(value, { ...(ip?.ipv6Subnet !== undefined ? { ipv6Subnet: ip.ipv6Subnet } : {}), ...(ip?.trustedProxies ? { trustedProxies: ip.trustedProxies } : {}) });
+    if (found) return logSafe(found, 64);
   }
   return undefined;
 }

@@ -77,15 +77,23 @@ When an SP sends a signed-out user to the IdP, the IdP stores the request and re
 After a successful sign-in, **send the browser to `callbackURL`**. The IdP then checks the user and posts the assertion to the SP. With Better Auth's client:
 
 ```ts
-const callbackURL = new URLSearchParams(location.search).get("callbackURL") ?? "/";
-await authClient.signIn.email({ email, password, callbackURL });
+await authClient.signIn.email({ email, password, callbackURL: safeCallback() }); // safeCallback: below
 ```
 
-`callbackURL` is always an absolute URL on your IdP's own origin, and the resume link only works in the browser that started the sign-in. Users who are already signed in skip the page entirely, **unless the SP demanded a fresh sign-in (ForceAuthn)**: then the URL also carries `prompt=login`, and your page must ask for credentials even if the user is signed in. A session older than the request is refused with `REAUTHENTICATION_REQUIRED`. With [step-up levels](flows.md#requestedauthncontext), the URL may also carry `acr_values=<class>`: ask for what that class means (for example the second factor).
+When the IdP sends a user to your page, `callbackURL` is an absolute URL on your IdP's own origin, and the resume link only works in the browser that started the sign-in. But anyone can open your page with a `callbackURL` of their own (`javascript:…`, or another site), so **only follow one on your own origin**, as `safeCallback` below does. Users who are already signed in skip the page entirely, **unless the SP demanded a fresh sign-in (ForceAuthn)**: then the URL also carries `prompt=login`, and your page must ask for credentials even if the user is signed in. A session older than the request is refused with `REAUTHENTICATION_REQUIRED`. With [step-up levels](flows.md#requestedauthncontext), the URL may also carry `acr_values=<class>`: ask for what that class means (for example the second factor).
 
 ```ts
 const params = new URLSearchParams(location.search);
-if (session && params.get("prompt") !== "login") location.assign(params.get("callbackURL")!); // skip only without prompt=login
+// Only a URL on this origin: never javascript:, never another site.
+function safeCallback() {
+  try {
+    const u = new URL(params.get("callbackURL") ?? "/", location.origin);
+    return u.origin === location.origin ? u.href : "/";
+  } catch {
+    return "/";
+  }
+}
+if (session && params.get("prompt") !== "login") location.assign(safeCallback()); // skip only without prompt=login
 ```
 
 The [Next.js example](../../examples/nextjs/src/app/sign-in/page.tsx) has a complete sign-in page that does all of this.

@@ -1939,3 +1939,21 @@ Measured with scripts/bench against the Workers example, deployed as its own Wor
 - **The limit is D1's query rate, not CPU.** `get-session` (two reads, 4 ms CPU) leveled off at about 110 a second, and metadata (no queries) reached 750 a second at flat latency. That's a ceiling of about 200 queries a second per database, against about 7 queries per sign-in, while D1 query insights put each query at only 0.25–0.5 ms of SQL.
 - **Not changed:** the user and session re-reads, which review findings proved load-bearing, and the participant write. The participant write is one insert on a session's first sign-in to an SP. It takes three queries only when the same session signs in to the same SP again, as in the benchmark, and changing that would make the common case slower. The page instead explains that turning off `auditLog` and Single Logout saves writes, and that heavier loads need more than one database.
 - **Example change:** `RATE_LIMIT` ("off" turns Better Auth's rate limit off), documented as benchmark-only.
+
+## D-065: External review of 1.1.2 (2026-10-05)
+
+An outside reviewer read all of src/ at e79f168 (identical to v1.1.2's code) and found nothing critical or high: no wrong-user assertion, no off-list ACS, no cross-tenant or account-policy bypass. One medium (in the docs) and five low findings were all proven with scripts, and about ten docs/code mismatches were listed. Each code fix has a failing-first test in test/regression/.
+
+- **Guide snippet (medium):** getting-started's "skip if signed in" did `location.assign(callbackURL)` unchecked. It's now `safeCallback()` (same-origin only), and the claim that callbackURL is always on the IdP's origin is corrected. Both shipped examples already did this.
+- **Event IP (low):** `clientIp` took `split(",")[0]` unvalidated. It now uses `getIPFromHeader` from `@better-auth/core/utils/ip` over `ipAddressHeaders`, with `trustedProxies` and `ipv6Subnet`, without getIP's localhost fallback (test/regression/event-ip-trusted.test.ts).
+- **Tenant key activation (low):** with no active key, an existing "previous" now means an activation was cut short. The retry just moves next to active, and nothing is retired or added; only "no active, no previous" is a tenant's first own key, which gets the shared previous (tenant-activation-resume.test.ts).
+- **/init enumeration (low):** an unknown sp and a not-opted-in one both answer IDP_INITIATED_NOT_ALLOWED (the detail in logs and onDenied); a missing sp stays UNKNOWN_SERVICE_PROVIDER. Opted-in SPs are observable by design, now documented (init-no-enumeration.test.ts; idp-initiated.test.ts updated).
+- **RelayState (low):** post-form had used escapeXml, which drops non-XML characters and rewrites line endings. It now has its own HTML escaper (named entities, as before), and checkRelayState refuses C0 controls and DEL as INVALID_SAML_REQUEST: a browser's form submission rewrites CR/LF anyway, so exact round-trips of controls are impossible (relay-state-unchanged.test.ts).
+- **Metadata size (low):** the validator's 128 KiB cap applied to metadata too, so the 512 KiB parser cap and the 1 MiB fetch cap were never reached. Now `maxMetadataBytes` (default 1 MiB) is used for kind "metadata", and the parser cap is 1 MiB (metadata-size-limit.test.ts).
+- **Info items:**
+  - Unverified signed-in users' denials are stored: documented, with rate limits recommended.
+  - ForceAuthn means "a session newer than the request" (credential-less session flows count): documented.
+  - A resume link is consumed before the binding check, so a leaked link can be spent but not used: documented. Not changed, because peeking first would add a DB read to every resume, for a denial-only effect.
+  - release.yml's verify checkout now sets persist-credentials: false.
+  - Any merged version bump starts a release run (behind both approvals), as CONTRIBUTING says.
+- **Docs fixed:** the replay key (UNIQUE `key` column), better-auth-cloudflare 0.3.1 with two settings, the registry API also mounted with tenant delegation, ProtocolBinding Redirect as no preference, Redirect-bound XML signatures not evaluated, InvalidNameIDPolicy as Responder, tenant metadata's own certificate, the flow diagram's order, and the IP wording.

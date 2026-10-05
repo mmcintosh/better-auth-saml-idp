@@ -6,7 +6,8 @@ const NS_MD = "urn:oasis:names:tc:SAML:2.0:metadata";
 const NS_DS = "http://www.w3.org/2000/09/xmldsig#";
 const SAML2_PROTOCOL = "urn:oasis:names:tc:SAML:2.0:protocol";
 const BINDING_POST = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
-const MAX_METADATA_BYTES = 512 * 1024;
+/** The same as the metadata fetch's (sp-metadata-refresh.ts) and the validator's metadata cap (D-065). */
+const MAX_METADATA_BYTES = 1024 * 1024;
 const SUPPORTED_NAMEID = new Set<string>(Object.values(NAMEID_FORMAT));
 
 /** Most signing (and encryption) certificates taken from one SP's metadata. */
