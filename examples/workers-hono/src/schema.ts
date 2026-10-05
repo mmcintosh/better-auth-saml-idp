@@ -236,4 +236,60 @@ export const samlIdpAuditEvents = sqliteTable(
   ],
 );
 
-export const schema = { users, sessions, accounts, verifications, rateLimits, organizations, members, invitations, samlIdpSeenRequests, samlIdpServiceProviders, samlIdpSessionParticipants, samlIdpAuditEvents, samlIdpTenants, samlIdpRetiredTenantKeys, samlIdpTenantKeys };
+/** better-auth-scim-provisioning (migration 0011; only with a provisioning target): the outbox and the links. */
+export const scimProvisioningJobs = sqliteTable(
+  "scim_provisioning_jobs",
+  {
+    id: text("id").primaryKey(),
+    key: text("key").notNull().unique(),
+    targetId: text("target_id").notNull(),
+    userId: text("user_id").notNull(),
+    version: integer("version").notNull(),
+    attempts: integer("attempts").notNull(),
+    nextAttemptAt: integer("next_attempt_at", { mode: "timestamp_ms" }).notNull(),
+    lockedUntil: integer("locked_until", { mode: "timestamp_ms" }).notNull(),
+    failed: integer("failed", { mode: "boolean" }).notNull(),
+    lastError: text("last_error"),
+    lastStatus: integer("last_status"),
+    kind: text("kind"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [index("scim_provisioning_jobs_user_idx").on(t.userId), index("scim_provisioning_jobs_next_idx").on(t.nextAttemptAt)],
+);
+
+export const scimProvisioningLinks = sqliteTable(
+  "scim_provisioning_links",
+  {
+    id: text("id").primaryKey(),
+    key: text("key").notNull().unique(),
+    targetId: text("target_id").notNull(),
+    userId: text("user_id").notNull(),
+    remoteId: text("remote_id").notNull(),
+    userName: text("user_name").notNull(),
+    externalId: text("external_id"),
+    active: integer("active", { mode: "boolean" }).notNull(),
+    syncedAt: integer("synced_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [
+    index("scim_provisioning_links_target_idx").on(t.targetId),
+    index("scim_provisioning_links_user_idx").on(t.userId),
+    index("scim_provisioning_links_remote_idx").on(t.remoteId),
+  ],
+);
+
+export const scimProvisioningGroupLinks = sqliteTable(
+  "scim_provisioning_group_links",
+  {
+    id: text("id").primaryKey(),
+    key: text("key").notNull().unique(),
+    targetId: text("target_id").notNull(),
+    organizationId: text("organization_id").notNull(),
+    remoteId: text("remote_id").notNull(),
+    displayName: text("display_name").notNull(),
+    syncedAt: integer("synced_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [index("scim_provisioning_group_links_target_idx").on(t.targetId), index("scim_provisioning_group_links_remote_idx").on(t.remoteId)],
+);
+
+export const schema = { scimProvisioningJobs, scimProvisioningLinks, scimProvisioningGroupLinks, users, sessions, accounts, verifications, rateLimits, organizations, members, invitations, samlIdpSeenRequests, samlIdpServiceProviders, samlIdpSessionParticipants, samlIdpAuditEvents, samlIdpTenants, samlIdpRetiredTenantKeys, samlIdpTenantKeys };

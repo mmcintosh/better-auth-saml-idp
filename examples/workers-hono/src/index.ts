@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { devMailbox, getAuth, idpInitiatedApps, isRegistryAdmin, requestCf, requestWaitUntil, type Env } from "./auth";
+import { devMailbox, getAuth, hasProvisioning, idpInitiatedApps, isRegistryAdmin, requestCf, requestWaitUntil, type Env } from "./auth";
 import { registerAdmin } from "./admin";
 import { signInPage } from "./sign-in";
 import { JS } from "./ui/client";
@@ -75,7 +75,7 @@ app.get("/", (c) =>
           : "") +
         (viewer.admin ? card("Administration", `<p>Manage service providers, tenants and keys, and see activity.</p><div class="row top"><a class="button" href="/admin">Open the admin</a></div>`) : "");
     }
-    return htmlResponse(page({ title: viewer ? "My apps" : "Home", active: "/", viewer, content }));
+    return htmlResponse(page({ title: viewer ? "My apps" : "Home", active: "/", viewer, content, provisioning: hasProvisioning(c.env) }));
   }),
 );
 
@@ -83,4 +83,19 @@ export function escapeHtml(s: string) {
   return s.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
 }
 
-export default app;
+export default {
+  fetch: app.fetch,
+  /**
+   * The Cron Trigger, if you add one (README): with provisioning on, deliver what's due, retries
+   * included. Background work it starts runs under this event's waitUntil.
+   */
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    if (!hasProvisioning(env) || !env.PUBLIC_ORIGIN) return;
+    const auth = getAuth(env, env.PUBLIC_ORIGIN) as unknown as { api: { scimProvisioningRun(o: { body: object }): Promise<unknown> } };
+    const run = requestWaitUntil.run(
+      (p) => ctx.waitUntil(p),
+      () => auth.api.scimProvisioningRun({ body: {} }),
+    );
+    ctx.waitUntil(run.then((r) => console.log(`[scim] scheduled run ${JSON.stringify(r)}`)));
+  },
+} satisfies ExportedHandler<Env>;
