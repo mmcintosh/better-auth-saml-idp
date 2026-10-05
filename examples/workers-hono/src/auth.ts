@@ -247,7 +247,17 @@ export function idpInitiatedApps(env: Env): string[] {
   }
 }
 
-/** Split concatenated PEM certificates into individual blocks. */
+/** Split concatenated PEM certificates into individual blocks (a linear scan, no backtracking regex). */
 function pemBlocks(text: string | undefined): string[] {
-  return (text ?? "").match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) ?? [];
+  const BEGIN = "-----BEGIN CERTIFICATE-----";
+  const END = "-----END CERTIFICATE-----";
+  const s = text ?? "";
+  const blocks: string[] = [];
+  for (let at = s.indexOf(BEGIN); at >= 0; at = s.indexOf(BEGIN, at)) {
+    const end = s.indexOf(END, at + BEGIN.length + 1);
+    if (end < 0) break;
+    blocks.push(s.slice(at, end + END.length));
+    at = end + END.length;
+  }
+  return blocks;
 }
