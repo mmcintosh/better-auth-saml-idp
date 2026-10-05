@@ -6,6 +6,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ### Documentation
 
+- A guide to using this plugin with better-auth-scim-provisioning, so your app both signs people in to its apps and keeps their accounts in step there (`docs/guide/provisioning.md`).
 - A benchmark of sign-ins on Workers and D1, with the scripts to rerun it (`docs/benchmark.md`, `scripts/bench`). The Workers example gains a benchmark-only `RATE_LIMIT=off`.
 
 ## [1.1.2] - 2026-10-04

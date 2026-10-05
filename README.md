@@ -290,6 +290,8 @@ Unauthenticated users are sent to `loginPage?callbackURL=<absolute resume URL>`.
 
 Give the SP your metadata URL, `https://auth.example.com/api/auth/saml2/idp/metadata`. Take its entity ID and ACS URL, or its metadata, and add an entry to `serviceProviders`, or store it at runtime with the [registry](#managing-sps-at-runtime-registry). Step-by-step guides: [Cloudflare Access](docs/sp-cloudflare-access.md) · [Google Workspace](docs/sp-google-workspace.md) · [HubSpot](docs/hubspot.md) · [AWS IAM Identity Center](docs/sp-aws-iam-identity-center.md) · [testing with other SPs](docs/testing-with-sps.md).
 
+To also create, update and switch off the accounts at those apps, pair it with [better-auth-scim-provisioning](https://www.npmjs.com/package/better-auth-scim-provisioning): see [Sign-in and provisioning](docs/guide/provisioning.md). Verified live together with Cloudflare Access, Google Workspace and AWS IAM Identity Center.
+
 ### 6. Check it
 
 ```bash
