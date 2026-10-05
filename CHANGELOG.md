@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-10-05
+
+Fixes from an external review of 1.1.2: nothing critical or high, but upgrade if you log client IPs, use tenant key rotation, or pass RelayState with line breaks. No API changes.
+
 ### Fixed
 
 From an external review of 1.1.2 (nothing critical or high; D-065):
