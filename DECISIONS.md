@@ -1966,3 +1966,11 @@ An outside reviewer read all of src/ at e79f168 (identical to v1.1.2's code) and
 - Examples move to better-auth-saml-idp ^1.1.3 (versions below 1.1.2 are deprecated).
 - When CharDB publishes a release for Better Auth 1.7, the examples move to it and `vendor/chardb-*` goes away.
 
+## D-067: Upstream watch (2026-10-05)
+
+- Dependabot covers registry dependencies, and the canary covers Better Auth's releases. Nothing covered the vendored builds (better-auth-cloudflare dbe08c51b, CharDB e6cf5c9: CharDB's main had moved four PRs past our build before anyone looked) or the updates held back in dependabot.yml, whose reasons lived only in comments.
+- `scripts/upstream-watch.mjs`, weekly (`upstream-watch.yml`), configured in `.github/upstream-watch.json`: Better Auth's latest against the peer range's upper bound; for each `vendor/*.tgz`, commits upstream since the pinned one and npm's latest; each held update's newest version and its condition. One open issue, "Upstream watch": the body is rewritten each run, and a comment is posted only when an item's state changed (state kept in a hidden comment in the body), so notifications mean something changed. A `vendor/` build missing from the config fails the job.
+- The same script runs in better-auth-scim-provisioning.
+- http-cache-semantics (bundled in the release job's npm, no patched version) joins the ignored npm-cli dependencies; its alert is dismissed as tolerable risk like the others (2026-10-02).
+- Release step 6: redeploy the public demo.
+

@@ -90,3 +90,6 @@ Each release:
 3. Optionally, run **Actions → Release → Run workflow** on `main` for a dry run: it tests, packs, and builds the SBOM without publishing.
 4. **Merge the release PR when CI is green: that's the go-ahead.** [tag-release.yml](.github/workflows/tag-release.yml) sees the new version on `main`, tags `vX.Y.Z` there, and starts the release run on the tag. It checks the tag matches package.json and its commit is on `main`, tests and packs. After your approval in the `npm` environment, it **stages** the tested tarball with provenance and creates the GitHub release with its CycloneDX SBOM. (Pushing a `vX.Y.Z` tag by hand still works too.)
 5. Approve the staged version on npmjs.com (Staged packages, with your security key) or with `npm stage approve <id>`. Only then is it installable; npm's malware scan must finish first.
+6. Redeploy the public demo ([examples/workers-hono](examples/workers-hono/README.md)) so it runs the release.
+
+What Dependabot doesn't cover (Better Auth against the peer range, the vendored builds in `vendor/`, updates held back on purpose) is listed weekly in the **Upstream watch** issue ([upstream-watch.yml](.github/workflows/upstream-watch.yml), configured in `.github/upstream-watch.json`). A new `vendor/` build must be added there, or the job fails.

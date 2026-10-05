@@ -1,0 +1,51 @@
+{
+  "vendored": [
+    {
+      "name": "better-auth-cloudflare",
+      "repo": "zpg6/better-auth-cloudflare",
+      "vendorPrefix": "better-auth-cloudflare-",
+      "npm": "better-auth-cloudflare",
+      "releasedWhenVendored": "0.3.1",
+      "replaceWhen": "Replace the build with the npm release once one includes the vendored commit (DECISIONS D-010 names the settings the tests need)."
+    },
+    {
+      "name": "CharDB",
+      "repo": "zpg6/chardb",
+      "vendorPrefix": "chardb-core-",
+      "npm": "@chardb/core",
+      "releasedWhenVendored": "0.1.0",
+      "replaceWhen": "Move the CharDB examples to the npm release once its better-auth peer range includes 1.7 (D-066); until then, refresh the build when upstream has fixes worth having, and check an existing database through the upgrade."
+    },
+    {
+      "name": "CharDB React",
+      "repo": "zpg6/chardb",
+      "vendorPrefix": "chardb-react-",
+      "npm": "@chardb/react",
+      "releasedWhenVendored": "0.1.0",
+      "replaceWhen": "Moves together with @chardb/core."
+    }
+  ],
+  "held": [
+    {
+      "name": "Prisma 7 (adapter tests only)",
+      "npm": "prisma",
+      "because": "Prisma 7 pulls in mysql2 3.15.3, with GHSA-3f6p-5ww8-9rcr (high) and GHSA-rgwj-5xj2-c3m3, and changes its setup.",
+      "takeWhen": "a Prisma 7 release depends on a patched mysql2 (then drop the ignore in .github/dependabot.yml)."
+    },
+    {
+      "name": "TypeScript 7 in the CharDB examples",
+      "npm": "typescript",
+      "because": "CharDB's Vite plugin uses the TypeScript JS API (ts.ScriptTarget), which TypeScript 7's native compiler doesn't ship.",
+      "takeWhen": "CharDB's Vite plugin no longer needs it, or TypeScript 7 ships the JS API."
+    },
+    {
+      "name": "npm's bundled dependencies (release job)",
+      "npm": "npm",
+      "because": "they're bundled inside npm, so they can't be updated alone; their alerts are dismissed as tolerable risk.",
+      "takeWhen": "Dependabot proposes the newer npm (it does on its own); check its alerts close."
+    }
+  ],
+  "monthly": [
+    "Is the public demo (examples/workers-hono) running the latest release? Redeploy it if not (its README has the command)."
+  ]
+}
