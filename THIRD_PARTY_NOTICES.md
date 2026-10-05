@@ -52,3 +52,7 @@ The files in `schemas/` are unmodified and keep their original notices. **Change
 ## better-auth-cloudflare, in `vendor/` (development and tests only; not shipped)
 
 `vendor/better-auth-cloudflare-0.3.1-main-dbe08c51b.tgz` is a build of https://github.com/zpg6/better-auth-cloudflare at commit `dbe08c51b`, which is unreleased at the time of writing. MIT License, Copyright (c) 2025 Zach Grimaldi; the license is included inside the tarball.
+
+## CharDB, in `vendor/` (the CharDB examples only; not shipped)
+
+`vendor/chardb-core-0.1.0-main-e6cf5c9.tgz` and `vendor/chardb-react-0.1.0-main-e6cf5c9.tgz` are builds of https://github.com/zpg6/chardb at commit `e6cf5c9`, which is unreleased at the time of writing (`bun pm pack`). MIT License, Copyright (c) 2026 Zach Grimaldi; the license is included inside the core tarball (the React package has no license file of its own).
