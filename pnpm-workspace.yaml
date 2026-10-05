@@ -1,5 +1,7 @@
 packages:
-  - "examples/*"
-  # A Bun project (CharDB's scaffold), outside the pnpm workspace: it installs with bun.
-  - "!examples/chardb"
-  - "!examples/chardb-astro"
+  # The examples in the pnpm workspace, listed by name rather than "examples/*" with exclusions:
+  # Dependabot read the glob but not the exclusions, and updated the CharDB examples' package.json
+  # against pnpm's lockfile. CharDB's two examples are Bun projects (CharDB's scaffold), outside the
+  # workspace, with their own bun.lock and their own Dependabot entry.
+  - "examples/nextjs"
+  - "examples/workers-hono"
