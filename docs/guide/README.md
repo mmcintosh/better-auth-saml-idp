@@ -14,6 +14,7 @@ Everything about running Better Auth as a SAML 2.0 Identity Provider. New here? 
 | [Single Logout](single-logout.md) | SP- and IdP-initiated logout, how it's authenticated, its limits |
 | [Multi-tenant IdP](multi-tenant.md) | An IdP identity per organization: creating tenants, their URLs and SPs, how they're kept apart, the shared key, migrating a registry |
 | [Observability](observability.md) | Event callbacks for audit trails and SIEM, the audit-log table, logs |
+| [Sign-in and provisioning](provisioning.md) | With better-auth-scim-provisioning: accounts created, kept in step and switched off at the apps your IdP signs people in to; the shared identifier, setup order, offboarding |
 | [Using with `@better-auth/sso`](better-auth-sso.md) | Better Auth on both sides, and using both plugins as an identity broker |
 | [Databases](databases.md) | Which databases CI proves, creating tables, MongoDB notes |
 | [Cloudflare Workers](cloudflare-workers.md) | Requirements, `withCloudflare`, `waitUntil`, secrets, D1 migrations |
