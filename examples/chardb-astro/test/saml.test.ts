@@ -129,7 +129,7 @@ describe("better-auth-saml-idp on CharDB", () => {
     expect(await replay.text()).toContain("DUPLICATE_REQUEST_ID");
 
     // The sign-in reaches the tenant's audit log. It's written in the background, which on Workers
-    // needs waitUntil (src/background.ts): without it the row is dropped after the response.
+    // needs waitUntil: CharDB hands Better Auth the Worker's (since zpg6/chardb#40).
     let events: { type: string; spId: string | null }[] = [];
     for (let i = 0; i < 30 && !events.some((e) => e.type === "assertion.issued"); i++) {
       await new Promise((r) => setTimeout(r, 100));

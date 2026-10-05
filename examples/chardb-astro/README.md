@@ -2,7 +2,7 @@
 
 > **Experimental.** [CharDB](https://github.com/zpg6/chardb) is at 0.1: read its [Plan ahead](https://docs.chardb.dev/plan-ahead) before storing data you can't recreate. This example is outside better-auth-saml-idp's [versioning promises](../../docs/guide/versioning.md): it may change or break with any CharDB release. The plugin itself is not experimental here; CharDB is.
 >
-> **Tested with:** better-auth-saml-idp 1.1.0, Better Auth 1.7.6, and CharDB 0.1.0 built from [a Better Auth 1.7 branch](https://github.com/mmcintosh/chardb/tree/chore/better-auth-1.7) (commit `3329fa5`, in `../../vendor/`), proposed upstream in [zpg6/chardb#38](https://github.com/zpg6/chardb/pull/38). Published CharDB 0.1.0 requires Better Auth 1.6, and the plugin requires 1.7.5 or later. Once CharDB publishes a release for Better Auth 1.7, this example moves to it.
+> **Tested with:** better-auth-saml-idp 1.1.3, Better Auth 1.7.6, and CharDB 0.1.0 built from [CharDB's main branch](https://github.com/zpg6/chardb/commit/e6cf5c9) (commit `e6cf5c9`, in `../../vendor/`), which includes Better Auth 1.7 support. Published CharDB 0.1.0 requires Better Auth 1.6, and the plugin requires 1.7.5 or later. Once CharDB publishes a release for Better Auth 1.7, this example moves to it.
 
 The [CharDB example](../chardb/README.md) with an [Astro](https://astro.build) front end instead of a single-page React app. **The Worker is the same**: CharDB, the SAML plugin, the demo SP and the tests are identical files, and CI checks that they stay that way. What differs is the web app: Astro pages with real URLs (`/tenants`, `/service-providers`, …), a sidebar rendered to static HTML, and React islands for the interactive parts.
 
@@ -18,7 +18,6 @@ What was added to the generated app:
 | --- | --- |
 | `src/saml.ts` | The plugin's configuration: `tenants: { enabled: true, keys: "per-tenant", delegation: {} }`, the registry, Single Logout and the audit log |
 | `src/auth.ts` | Sign-in by verified email (the IdP only asserts verified addresses), organization invitations, a dev-only mailbox, Better Auth's base URL, and the plugin |
-| `src/background.ts` | Better Auth's background work (the plugin's events and audit rows) under the Worker's `waitUntil`; without it they're dropped after the response |
 | `src/demo.ts` | The UI's server routes, and a **demo SP** (`/demo-sp`) to try sign-ins in the browser |
 | `src/sign-in.ts`, `src/worker.ts` | The IdP's login page at `/sign-in`, and `/dev/mailbox` |
 | `src/pages/`, `src/layouts/Shell.astro` | Astro pages and the static page frame |
@@ -90,10 +89,9 @@ Don't edit files under `src/migrations` after deploying (CharDB's rule).
 - **Astro in development.** `bun run dev` starts `astro dev --ignore-lock`. Astro starts itself in the background when it detects an AI agent (on macOS and Linux), which the dev script would read as Astro exiting; `--ignore-lock` keeps it in the foreground, and the script owns and stops it anyway.
 - **Astro builds a static site** into `public/`, the Worker's assets directory (`wrangler.toml`), so CharDB's Worker serves the pages; there's no Astro server or adapter. A small build hook keeps the committed `public/.gitkeep`, which Astro's build would delete.
 
-- **Background work needs `waitUntil`.** The plugin writes its events and audit rows in the background (Better Auth's `backgroundTasks`). On Workers that must run under `waitUntil`, or the runtime drops it once the response is sent; CharDB doesn't set it, so `src/background.ts` does. `test/saml.test.ts` fails without it.
+- **Background work runs under `waitUntil`.** The plugin writes its events and audit rows in the background (Better Auth's `backgroundTasks`). On Workers that must run under `waitUntil`, or the runtime drops it once the response is sent; CharDB sets it for Better Auth (since [zpg6/chardb#40](https://github.com/zpg6/chardb/pull/40)). `test/saml.test.ts` checks that the audit row arrives.
 - **Better Auth's base URL** is set to `BETTER_AUTH_URL` too, so its own links (verification, invitations) use the app's origin rather than the Worker's behind the dev proxy.
 - **Configuration comes from the Worker's variables and secrets** (`process.env` under `nodejs_compat`): `BETTER_AUTH_URL` (this Worker's origin; it pins the entity IDs, never a Host header), `SAML_IDP_PRIVATE_KEY`, `SAML_IDP_CERT` and `SAML_REGISTRY_ADMINS`. The Worker refuses to start without the first three.
 - **Replay protection** (single-use AuthnRequest IDs and pending requests) is a UNIQUE insert through CharDB's Catalog Durable Object. It relies on Durable Object RPC being delivered at most once, which is the platform's default for these calls (CharDB doesn't mark them retryable). A retried insert would see its own first write and refuse a genuine request as a replay: it fails closed.
-- **A log line during the tests:** `uncaught exception … UNIQUE constraint failed: samlIdpSeenRequest.key`. That is the replay test's duplicate insert: CharDB's Catalog passes the SQLite error on unwrapped, and workerd logs any error leaving a Durable Object call. The plugin catches it and answers `DUPLICATE_REQUEST_ID`, which the test checks.
 - **Wrangler's configuration:** the scripts pass `--config wrangler.toml`, because inside this repository Wrangler would otherwise find the root's `wrangler.jsonc` first.
 - **Deploying isn't covered yet.** CharDB's `deploy:bootstrap` uploads only its own two secrets, and this Worker needs the SAML values before it starts. The rest of CharDB's generated README (deployment, recovery) is in the [CharDB docs](https://docs.chardb.dev).

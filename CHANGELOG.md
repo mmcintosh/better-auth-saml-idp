@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Examples
+
+- The CharDB examples run on CharDB's main branch (`e6cf5c9`) and better-auth-saml-idp 1.1.3. CharDB now keeps Better Auth's background work alive itself, so the examples' `src/background.ts` workaround is gone, and a replayed request no longer logs an uncaught SQLite error. Checked on a database created with the previous build: sessions, tenants, keys, SPs, used request IDs and audit rows carry over.
+
 ## [1.1.3] - 2026-10-05
 
 Fixes from an external review of 1.1.2: nothing critical or high, but upgrade if you log client IPs, use tenant key rotation, or pass RelayState with line breaks. No API changes.

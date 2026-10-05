@@ -25,14 +25,14 @@
   },
   "dependencies": {
     "better-auth": "1.7.6",
-    "@chardb/core": "file:../../vendor/chardb-core-0.1.0-ba17-3329fa5.tgz",
-    "@chardb/react": "file:../../vendor/chardb-react-0.1.0-ba17-3329fa5.tgz",
+    "@chardb/core": "file:../../vendor/chardb-core-0.1.0-main-e6cf5c9.tgz",
+    "@chardb/react": "file:../../vendor/chardb-react-0.1.0-main-e6cf5c9.tgz",
     "drizzle-orm": "0.45.2",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "uuidv7": "1.2.1",
     "zod": "4.6.5",
-    "better-auth-saml-idp": "^1.1.0",
+    "better-auth-saml-idp": "^1.1.3",
     "astro": "7.3.5",
     "@astrojs/react": "7.0.0"
   },

@@ -1,11 +1,9 @@
-import * as workers from "cloudflare:workers";
 import { client } from "@chardb/core";
 import { FileId } from "@chardb/core/files";
 import { chardb } from "@chardb/core/server";
 import { desc, eq } from "drizzle-orm";
 import * as api from "./api.ts";
 import { auth, devMailbox } from "./auth.ts";
-import { setWaitUntil } from "./background.ts";
 import { migrations } from "./migrations.ts";
 import * as queries from "./queries.ts";
 import * as domain from "./schema.ts";
@@ -30,9 +28,6 @@ app.get("/health", (c) => c.json({
   schemaVersion: migrations.version,
   schemaDigest: migrations.digest,
 }));
-// Better Auth's background work runs under this Worker's waitUntil (src/background.ts). Read when
-// used: CharDB's CLI and Vite plugin load this file with a stand-in module that has no waitUntil.
-setWaitUntil((promise) => workers.waitUntil(promise));
 // The demo UI's server routes (/api/demo/*) and the built-in demo SP (/demo-sp/*).
 registerDemo(app);
 // The IdP's login page (samlIdp loginPage): signs in by email, then returns to callbackURL.

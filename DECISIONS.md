@@ -1957,3 +1957,12 @@ An outside reviewer read all of src/ at e79f168 (identical to v1.1.2's code) and
   - release.yml's verify checkout now sets persist-credentials: false.
   - Any merged version bump starts a release run (behind both approvals), as CONTRIBUTING says.
 - **Docs fixed:** the replay key (UNIQUE `key` column), better-auth-cloudflare 0.3.1 with two settings, the registry API also mounted with tenant delegation, ProtocolBinding Redirect as no preference, Redirect-bound XML signatures not evaluated, InvalidNameIDPolicy as Responder, tenant metadata's own certificate, the flow diagram's order, and the IP wording.
+
+## D-066: CharDB examples on CharDB main (2026-10-05)
+
+- CharDB has had no npm release since 0.1.0 (Better Auth 1.6), but its main now has our Better Auth 1.7 move (#38), background work under waitUntil (#40) and typed uniqueness conflicts (#42, #44). The examples vendored a build of our pre-merge branch (3329fa5); they now vendor upstream main (e6cf5c9), built with `bun pm pack`.
+- `src/background.ts` is removed: CharDB's default runtime passes waitUntil to Better Auth, and `test/saml.test.ts`'s audit-row check passes without it. The "uncaught exception … UNIQUE" log line during the replay test is gone.
+- Upgrade checked on an existing database, not only fresh ones (the #38 lesson): a `wrangler dev` state built with 3329fa5 (schema v2, admin, tenant with own key, SP, one sign-in), then reopened with e6cf5c9: old session valid, tenant key unchanged, sign-in works, the old AuthnRequest ID is still refused as a replay, new sign-ups work, audit rows from both builds.
+- Examples move to better-auth-saml-idp ^1.1.3 (versions below 1.1.2 are deprecated).
+- When CharDB publishes a release for Better Auth 1.7, the examples move to it and `vendor/chardb-*` goes away.
+

@@ -2,7 +2,6 @@ import { anonymous } from "better-auth/plugins/anonymous";
 import { jwt } from "better-auth/plugins/jwt";
 import { organization } from "better-auth/plugins/organization";
 import { defineAuth } from "@chardb/core/server";
-import { runInBackground } from "./background.ts";
 import { samlIdpPlugin } from "./saml.ts";
 
 function trustedDevelopmentOrigins(request?: Request): string[] {
@@ -44,8 +43,6 @@ export const auth = defineAuth({
       console.error("[example] email sending is not configured; set up sendVerificationEmail");
     },
   },
-  // Keep background work (the SAML plugin's events and audit rows) alive after the response.
-  advanced: { backgroundTasks: { handler: runInBackground } },
   plugins: [
     anonymous(),
     organization({
