@@ -4,16 +4,19 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-10-06
+
+Requires xml-crypto 6.3.3, which fixes several canonicalization cases in signed XML; upgrade to pick it up if your lockfile still has 6.3.2. No API changes.
+
 ### Changed
 
 - **xml-crypto 6.3.3 or later.** It fixes several canonicalization cases in signed XML (inherited namespace context, namespace values, processing instructions). Fresh installs already got it through `^6.3.2`; the minimum now makes sure. Every test, including the SP interop suite, passes on it.
 
 ### Project
 
-- The adapter matrix runs **Prisma 7** (7.10, with `@prisma/adapter-pg` and the `prisma-client` generator, as `npx auth generate` writes it for Prisma 7) instead of Prisma 6. Prisma 7's CLI pins mysql2 3.15.3 (GHSA-3f6p-5ww8-9rcr, GHSA-rgwj-5xj2-c3m3), so a development-only override lifts it to 3.24.5.
-- The Upstream watch also lists each pnpm override with whether the package that needs it still does.
-
 - A weekly **Upstream watch** issue lists what Dependabot doesn't cover: Better Auth against the peer range, the vendored builds of unreleased upstream code, and updates held back on purpose (`upstream-watch.yml`).
+- The adapter matrix runs **Prisma 7** (7.10, with `@prisma/adapter-pg` and the `prisma-client` generator, as `npx auth generate` writes it for Prisma 7) instead of Prisma 6. Prisma 7's CLI pins mysql2 3.15.3 (GHSA-3f6p-5ww8-9rcr, GHSA-rgwj-5xj2-c3m3), so a development-only override lifts it to 3.24.5. The Databases guide now says Prisma 7.
+- The Upstream watch also lists each pnpm override with whether the package that needs it still does.
 
 ### Examples
 
