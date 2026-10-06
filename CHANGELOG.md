@@ -7,6 +7,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 ### Documentation
 
 - Assertion exchange (1.2.0) in the README (features, options, a usage section), the security page, the errors page (each `AssertionExchangeError` code and whether it uses the assertion up), the schema page, and the threat model.
+- Each release now checks the docs against the changelog: a step in CONTRIBUTING.md's release list, and a checklist in the release pull request `pnpm release` opens.
 
 ## [1.2.0] - 2026-10-06
 
