@@ -37,6 +37,7 @@ updates:
       - dependency-name: brace-expansion
       - dependency-name: ip-address
       - dependency-name: http-cache-semantics
+      - dependency-name: postcss-selector-parser
   # e2e container images, pinned by digest (R4-L10).
   - package-ecosystem: docker-compose
     directory: /e2e
