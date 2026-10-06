@@ -62,6 +62,21 @@ The codes are exported as `SAML_IDP_ERROR_CODES` (and appear on the plugin's `$E
 
 With tenants, `INVALID_SERVICE_PROVIDER` also covers an SP naming a `tenant` that doesn't exist, a change of `tenant` on update, and an `organization` rule on a tenant SP other than `{ id: <its tenant>, roles? }`. A request at an unknown or disabled tenant's URL, or naming an SP of another tenant, is the sign-in error `UNKNOWN_SERVICE_PROVIDER`; a tenant's metadata URL answers a plain `404 Not Found`.
 
+## Assertion exchange errors
+
+Thrown as `AssertionExchangeError` (`code`, and a message for your logs) by `verifyIssuedAssertion` to the authorization server that calls it ([Exchanging assertions for OAuth tokens](token-exchange.md)). Never shown to users. The calling server should answer the client with one generic error for all of them except the time codes, so a client can't tell `WRONG_CLIENT` or `ALREADY_EXCHANGED` apart from a forgery.
+
+| Code | When it happens | Uses up the assertion? |
+|---|---|---|
+| `MALFORMED` | Not a lone, schema-valid `<saml:Assertion>` within 64 KiB, or not exactly the shape this IdP issues (a Response, an EncryptedAssertion, a DOCTYPE, an extra condition…). | No |
+| `NOT_OURS` | The Issuer isn't this IdP or an enabled tenant, or the tenant's own key can't be used; or the assertion doesn't match what was recorded when it was issued. | No; yes for a record mismatch |
+| `BAD_SIGNATURE` | Unsigned, signed by another key, or failing the XML signature rules (wrapping, algorithms, references). | No |
+| `NOT_YET_VALID` / `EXPIRED` | Outside `NotBefore` and `NotOnOrAfter`, with `clockSkewSeconds`. Checked only after the signature. | No |
+| `NOT_EXCHANGEABLE` | The audience SP is unknown, disabled, in another tenant, or has no `tokenExchange`. | No |
+| `WRONG_CLIENT` | The SP's `tokenExchange.clientId` is a different client. | No |
+| `ALREADY_EXCHANGED` | No record: exchanged before, expired, issued before the SP opted in, or its record couldn't be written at sign-in (logged as an error then). | (already gone) |
+| `ACCOUNT_INACTIVE` | The user was deleted or banned, the email isn't verified (with `requireEmailVerified`), the user is anonymous or the session impersonated (unless allowed), the session ended, or the user left the SP's organization or tenant. | Yes |
+
 ## SAML status Responses
 
 When a request is valid and the SP and ACS URL are trusted, a request that can't be satisfied gets a **signed SAML Response with an error status** instead of an error page, posted to the SP as usual. No assertion is included.

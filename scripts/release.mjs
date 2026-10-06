@@ -46,5 +46,13 @@ const branch = `release/${next}`;
 run("git", ["checkout", "-b", branch]);
 run("git", ["commit", "-am", `Release ${next}`]);
 run("git", ["push", "-u", "origin", branch], { stdio: ["ignore", "ignore", "inherit"] });
-const url = run("gh", ["pr", "create", "--draft", "--base", "main", "--title", `Release ${next}`, "--body", `Version ${next} in package.json and its dated CHANGELOG section.\n\n**Merging this releases it:** tag-release.yml tags v${next} on main and starts the release run. Then approve the \`npm\` environment in GitHub, and the staged publish on npmjs.com.`]);
-console.log(`${current} → ${next}: ${url}\nWhen CI is green, mark it ready and merge it to release.`);
+// The README is packed into the tarball, so the npm page shows it as it is now until the next release.
+const docsCheck = [
+  "**Before merging: do the docs cover everything in this section?**",
+  "- [ ] README: features, both option tables, the events row, the table of contents, and a usage section for anything new",
+  "- [ ] Reference pages: options, errors, security, schema, observability (docs/guide/), and the threat model (docs/security.md)",
+  "- [ ] A guide page for a new feature, linked from docs/guide/README.md",
+  "- [ ] `pnpm docs:check` passes",
+].join("\n");
+const url = run("gh", ["pr", "create", "--draft", "--base", "main", "--title", `Release ${next}`, "--body", `Version ${next} in package.json and its dated CHANGELOG section.\n\n${docsCheck}\n\n**Merging this releases it:** tag-release.yml tags v${next} on main and starts the release run. Then approve the \`npm\` environment in GitHub, and the staged publish on npmjs.com.`]);
+console.log(`${current} → ${next}: ${url}\nCheck the docs against the release (the checklist in the PR); the npm page shows this README until the next release.\nWhen CI is green, mark it ready and merge it to release.`);
