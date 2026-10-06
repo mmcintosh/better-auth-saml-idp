@@ -6,6 +6,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ### Project
 
+- The workerd tests run on `@cloudflare/vitest-plugin` 1.3.6, which replaces `@cloudflare/vitest-pool-workers` (0.22.0, last published 2026-09-18). It brings the current miniflare and wrangler, so the development-only `sharp` and `undici` overrides are gone. Vitest 5 waits for the plugin to support it.
 - The release job stages with npm 12.2.0 (was 11.20.0).
 
 ## [1.1.4] - 2026-10-06

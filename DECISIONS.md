@@ -1985,6 +1985,13 @@ An outside reviewer read all of src/ at e79f168 (identical to v1.1.2's code) and
 - Also: @cloudflare/workers-types patch, and the Workers example on better-auth-scim-provisioning 0.3.1.
 - Dependency review flagged two licences Prisma 7 brings through Prisma Studio (inside its CLI): elkjs (EPL-2.0) and robust-predicates (public domain and Unlicense). Development only, never shipped or bundled: added to `allow-dependencies-licenses` next to caniuse-lite, by name, so the licence allow-list itself is unchanged.
 
+## D-069: @cloudflare/vitest-plugin; Vitest 5 held (2026-10-06)
+
+- Vitest 5 was next on the up-to-date list, but both Cloudflare test packages peer `vitest ^4.1.0`: @cloudflare/vitest-pool-workers 0.22.0 and @cloudflare/vitest-plugin 1.3.6. Support is in progress upstream (cloudflare/workers-sdk#15500, #15618). Held, and listed in the upstream watch.
+- @cloudflare/vitest-pool-workers hadn't been published since 2026-09-18 (wrangler 4.124, miniflare 5.20260815); @cloudflare/vitest-plugin is its successor (same `cloudflareTest`, `readD1Migrations`, `cloudflare:test` and `/types`), already used by the CharDB examples, on wrangler 4.147 and miniflare 5.20261001. Switched in vitest.config.ts, wasm-validator/vitest.config.ts and tsconfig.json.
+- With the newer miniflare, the `sharp@<0.35.4` and `undici@>=7.28.0 <7.29.1` overrides (D-068's "may go") are removed: `pnpm why` shows sharp 0.35.4/0.35.5 and undici 7.29.1 only, and `pnpm audit` is clean.
+- Checked: typecheck, lint, docs:check, `pnpm test` (1447 passed, node and workerd), test:wasm (83 passed), pack:check, the Workers example's typecheck.
+
 ## D-070: npm 12 for the release job (2026-10-06)
 
 - The release job's npm (.github/npm-cli, D-050) was pinned at 11.20.0; 12.0 shipped 2026-07-08 and 12.2.0 is current, and Dependabot never proposed it. npm 12's breaking changes (shrinkwrap, star/stars/unstar and adduser removed, no whichnode, Node ^22.22.2 || ^24.15.0 || >=26) don't touch the job, which runs on Node 24 (24.21.0 today). `npm stage` is unchanged; `npm stage publish <tgz> --dry-run --access public --tag …` works with 12.2.0.
