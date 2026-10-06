@@ -41,7 +41,8 @@ try {
     `SAML_IDP_CERT="${readFileSync(cert, "utf8").trim()}"`,
     `SAML_SERVICE_PROVIDERS='${JSON.stringify(sps)}'`,
   ];
-  writeFileSync(".env.local", `${lines.join("\n")}\n`, { mode: 0o600 });
+  // "wx" without --force: never replace a file that appeared since the check above.
+  writeFileSync(".env.local", `${lines.join("\n")}\n`, { mode: 0o600, flag: force ? "w" : "wx" });
   console.log("wrote .env.local (dev-only key pair, secret, test SP)");
 } finally {
   rmSync(dir, { recursive: true, force: true });

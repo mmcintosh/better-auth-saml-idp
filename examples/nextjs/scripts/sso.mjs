@@ -38,7 +38,8 @@ async function browse(url, init = {}) {
 }
 const postJSON = (path, body) =>
   browse(`${base}/api/auth${path}`, { method: "POST", headers: { "content-type": "application/json", origin: base }, body: JSON.stringify(body) });
-const unescapeHtml = (s) => s.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/&amp;/g, "&").replace(/&quot;/g, '"');
+// One pass, so a decoded "&" is never decoded again ("&#38;amp;" is "&amp;", not "&").
+const unescapeHtml = (s) => s.replace(/&(?:#(\d+)|amp|quot);/g, (m, n) => (n !== undefined ? String.fromCharCode(Number(n)) : m === "&amp;" ? "&" : '"'));
 
 // The SP trusts the certificate the IdP publishes.
 const metadata = await (await fetch(`${base}/api/auth/saml2/idp/metadata`)).text();

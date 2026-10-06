@@ -1,0 +1,8 @@
+# OSV-Scanner (and OpenSSF Scorecard, which reads this file) ignores these advisories in this example.
+# The example is a development demo, never part of the published package. Each entry expires, so it
+# is looked at again.
+
+[[IgnoredVulns]]
+id = "GHSA-ch52-4w7c-c8xp"
+ignoreUntil = 2027-01-06T00:00:00Z
+reason = "http-cache-semantics 4.2.0 through Astro (its image cache); no fixed release yet. Example only: take the fix when http-cache-semantics releases one"
