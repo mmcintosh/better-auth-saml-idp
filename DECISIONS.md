@@ -1984,3 +1984,10 @@ An outside reviewer read all of src/ at e79f168 (identical to v1.1.2's code) and
 - xml-crypto 6.3.3 (2026-10-05: canonicalization fixes for inherited namespace context, namespace values, processing instructions, InclusiveNamespaces). The range was `^6.3.2`, so fresh installs already resolved 6.3.3; the floor is now `^6.3.3`. Full suite (1447 tests, SP interop included), test:wasm and pack:check pass on it. This is a change to the published package, so it ships in the next release.
 - Also: @cloudflare/workers-types patch, and the Workers example on better-auth-scim-provisioning 0.3.1.
 - Dependency review flagged two licences Prisma 7 brings through Prisma Studio (inside its CLI): elkjs (EPL-2.0) and robust-predicates (public domain and Unlicense). Development only, never shipped or bundled: added to `allow-dependencies-licenses` next to caniuse-lite, by name, so the licence allow-list itself is unchanged.
+
+## D-070: npm 12 for the release job (2026-10-06)
+
+- The release job's npm (.github/npm-cli, D-050) was pinned at 11.20.0; 12.0 shipped 2026-07-08 and 12.2.0 is current, and Dependabot never proposed it. npm 12's breaking changes (shrinkwrap, star/stars/unstar and adduser removed, no whichnode, Node ^22.22.2 || ^24.15.0 || >=26) don't touch the job, which runs on Node 24 (24.21.0 today). `npm stage` is unchanged; `npm stage publish <tgz> --dry-run --access public --tag …` works with 12.2.0.
+- npm 12 refuses to install from the old lockfile (EALLOWREMOTE on its resolved tarball URL), so the lockfile was regenerated with npm 11, which is what the job's `npm ci --prefix .github/npm-cli` runs; that install yields npm 12.2.0. Same four bundled-dependency alert classes as before (all ignored/dismissed as tolerable risk).
+- The first real check is the next release's publish job.
+
