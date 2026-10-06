@@ -307,3 +307,18 @@ describe("review 7: delegation boundaries (D-060)", () => {
     expect([toTenant.status, toPlain.status, toNothing.status]).toEqual([403, 403, 403]);
   });
 });
+
+describe("delegation and tokenExchange (D-071): which client may exchange a tenant's assertions is the host's call", () => {
+  it("a tenant's administrator can't set it or change it, may keep or remove what the host set; the host can set it", async () => {
+    const w = await world({ tokenExchange: { enabled: true } });
+    const exchange = { tokenExchange: { clientId: "agent" } };
+    const create = await w.ownerA("/service-providers/create", w.sp("tx", w.A, exchange));
+    expect(create.status).toBe(400);
+    expect(JSON.stringify(await body(create))).toMatch(/tokenExchange: only the host's administrators/);
+    expect((await w.asHost("/service-providers/update", { id: w.ids.a, ...w.sp("sp-a", w.A, exchange) })).status).toBe(200);
+    expect((await w.ownerA("/service-providers/update", { id: w.ids.a, ...w.sp("sp-a", w.A, exchange) })).status).toBe(200);
+    expect((await w.ownerA("/service-providers/update", { id: w.ids.a, ...w.sp("sp-a", w.A, { tokenExchange: { clientId: "mine" } }) })).status).toBe(400);
+    expect((await w.ownerA("/service-providers/update", { id: w.ids.a, ...w.sp("sp-a", w.A) })).status).toBe(200);
+    expect((await w.ownerA("/service-providers/update", { id: w.ids.a, ...w.sp("sp-a", w.A, exchange) })).status).toBe(400);
+  });
+});

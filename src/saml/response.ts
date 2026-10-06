@@ -60,7 +60,7 @@ export function newSamlId(): string {
   return `_${Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")}`;
 }
 
-const instant = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, "Z");
+export const instant = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, "Z");
 
 export interface BuildResponseInput {
   /** The AuthnRequest ID; undefined for an unsolicited (IdP-initiated) Response: no InResponseTo. */
@@ -130,7 +130,8 @@ export function buildResponseXml(options: ResolvedSamlIdpOptions, identity: IdpI
     attributeStatement(input.attributes) +
     `</saml:Assertion>` +
     `</samlp:Response>`;
-  return { xml, responseId, assertionId };
+  // As written in the XML (whole seconds), for the exchange record (D-071).
+  return { xml, responseId, assertionId, notOnOrAfter, authnInstant: instant(input.authnInstant), authnContextClassRef: input.authnContextClassRef ?? options.authnContextClassRef };
 }
 
 type Signing = { keyObject: KeyObject; certificate: string; signatureAlgorithm: SignatureAlgorithm; digestAlgorithm: DigestAlgorithm };

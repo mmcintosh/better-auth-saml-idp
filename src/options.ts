@@ -137,6 +137,7 @@ const serviceProviderShape = z.object({
       .strict()
       .optional(),
     tenant: z.string().min(1).max(256).optional(),
+    tokenExchange: z.object({ clientId: z.string().min(1).max(255) }).strict().optional(),
 });
 
 type SpRefinable = Pick<
@@ -340,6 +341,7 @@ const optionsSchema = z
     events: z
       .object({
         onAssertionIssued: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onAssertionIssued"]>>().optional(),
+        onAssertionExchanged: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onAssertionExchanged"]>>().optional(),
         onDenied: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onDenied"]>>().optional(),
         onLogout: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onLogout"]>>().optional(),
         onSessionEnded: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onSessionEnded"]>>().optional(),
@@ -383,6 +385,7 @@ const optionsSchema = z
         { message: "must be an object with a validate(xml, kind) method" },
       )
       .optional(),
+    tokenExchange: z.object({ enabled: z.boolean() }).strict().optional(),
   })
   .strict();
 
@@ -482,6 +485,8 @@ interface SpDefaults {
   authorize?: ResolvedServiceProvider["authorize"] | undefined;
   /** `tenants.enabled` (D-052). */
   tenants: boolean;
+  /** Stored SPs only: `tokenExchange.enabled` (D-071). Undefined for SPs in code, which turn it on themselves. */
+  storedTokenExchange?: boolean;
 }
 
 /**
@@ -558,6 +563,11 @@ function resolveServiceProvider(sp: ParsedServiceProvider, path: string, d: SpDe
     }
   }
 
+  // Exchange (D-071) verifies the Assertion's own signature: an unsigned one could never be exchanged.
+  if (sp.tokenExchange && (sp.sign ?? d.sign) === "response")
+    issues.push(`${path}.tokenExchange: needs a signed assertion; set sign to "both" or "assertion"`);
+  if (sp.tokenExchange && d.storedTokenExchange === false) issues.push(`${path}.tokenExchange: requires tokenExchange.enabled`);
+
   const attributes = sp.attributes;
   return {
     id: sp.id,
@@ -598,6 +608,7 @@ function resolveServiceProvider(sp: ParsedServiceProvider, path: string, d: SpDe
     sessionNotOnOrAfter: sp.sessionNotOnOrAfter ?? d.sessionNotOnOrAfter,
     ...(encryption ? { encryption } : {}),
     tenantId: sp.tenant,
+    ...(sp.tokenExchange ? { tokenExchange: { clientId: sp.tokenExchange.clientId } } : {}),
   };
 }
 
@@ -617,7 +628,14 @@ export function resolveStoredServiceProvider(
   const serviceProvider = resolveServiceProvider(
     parsed.data,
     "serviceProvider",
-    { sign: options.signing.sign, sessionNotOnOrAfter: options.sessionNotOnOrAfter, relayStateMaxBytes: options.relayStateMaxBytes, authorize, tenants: options.tenants !== undefined },
+    {
+      sign: options.signing.sign,
+      sessionNotOnOrAfter: options.sessionNotOnOrAfter,
+      relayStateMaxBytes: options.relayStateMaxBytes,
+      authorize,
+      tenants: options.tenants !== undefined,
+      storedTokenExchange: options.tokenExchange,
+    },
     issues,
     warnings,
   );
@@ -740,6 +758,7 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
             : undefined,
         }
       : undefined,
+    tokenExchange: o.tokenExchange?.enabled === true || serviceProviders.some((sp) => sp.tokenExchange !== undefined),
     warnings,
   };
 }

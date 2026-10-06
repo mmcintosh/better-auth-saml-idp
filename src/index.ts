@@ -25,11 +25,14 @@ import { consumeEndingBySlo, endParticipants, extendParticipants, forgetUserPart
 import { emitWithoutRequest } from "./events";
 import { listSessionParticipantsEndpoint } from "./endpoints/participants";
 import type { SamlIdpOptions } from "./types";
+import { createExchange } from "./exchange";
 import { trimSlashes } from "./url";
 
 export { SAML_IDP_ERROR_CODES } from "./errors";
 export { NAMEID_FORMAT } from "./types";
 export { SamlIdpConfigError } from "./options";
+export { AssertionExchangeError, getSamlIdpExchange, MAX_ASSERTION_BYTES } from "./exchange";
+export type { AssertionExchangeErrorCode, SamlIdpExchange, VerifiedAssertion } from "./exchange";
 export { libxml2Validator } from "./saml/validator";
 export { serviceProviderFromMetadata, SpMetadataError } from "./saml/sp-metadata";
 export { samlIdpStatements, type SamlServiceProviderAction, type SamlTenantAction } from "./access";
@@ -66,10 +69,11 @@ export type {
   SignatureAlgorithm,
   SignedParts,
   SigningConfig,
+  TokenExchangeConfig,
 } from "./types";
 export type { SamlIdpErrorCode } from "./errors";
 export type { StoredServiceProviderConfig } from "./options";
-export type { AssertionIssuedEvent, AuditLogOptions, DeniedEvent, LogoutEvent, SamlIdpEvent, SamlIdpEventHandlers, ServiceProviderChangedEvent, SessionEndedEvent, TenantChangedEvent } from "./events";
+export type { AssertionExchangedEvent, AssertionIssuedEvent, AuditLogOptions, DeniedEvent, LogoutEvent, SamlIdpEvent, SamlIdpEventHandlers, ServiceProviderChangedEvent, SessionEndedEvent, TenantChangedEvent } from "./events";
 
 export const samlIdp = (options: SamlIdpOptions) => {
   const resolved = resolveOptions(options);
@@ -80,6 +84,7 @@ export const samlIdp = (options: SamlIdpOptions) => {
   const managed = resolved.registry !== undefined && (resolved.registry.canManage !== undefined || resolved.registry.permissions || resolved.tenants?.delegation !== undefined);
   const tenantKeys = resolved.tenants?.perTenantKeys ? new TenantKeyStore(resolved.tenants.cacheMs) : undefined;
   const state = { options: resolved, directory, metadata: new SpMetadataCache(resolved.schemaValidator), tenants, tenantKeys };
+  const exchangeApi = resolved.tokenExchange ? createExchange(state) : undefined;
 
   return {
     id: "saml-idp",
@@ -187,10 +192,13 @@ export const samlIdp = (options: SamlIdpOptions) => {
       // Typed so the empty branch is `{}`, not `{ options?: undefined }`, which hosts compiling with
       // exactOptionalPropertyTypes can't assign to BetterAuthPlugin.
       const extra: { options?: NonNullable<typeof options> } = options ? { options } : {};
-      if (existing === true) return extra;
+      // Assertion exchange (D-071): on the context only when on, read with getSamlIdpExchange().
+      // Added untyped: a typed key changes the type Better Auth infers for every host's $context.
+      const publish = <T extends object>(context: T): T => (exchangeApi ? Object.assign(context, { samlIdpExchange: exchangeApi }) : context);
+      if (existing === true) return exchangeApi ? { context: publish({}), ...extra } : extra;
       // /slo too: SPs POST LogoutRequests and LogoutResponses cross-origin (D-028).
       return {
-        context: { skipOriginCheck: [...(Array.isArray(existing) ? existing : []), SSO_PATH, ...(resolved.singleLogout ? [SLO_PATH] : [])] },
+        context: publish({ skipOriginCheck: [...(Array.isArray(existing) ? existing : []), SSO_PATH, ...(resolved.singleLogout ? [SLO_PATH] : [])] }),
         ...extra,
       };
     },

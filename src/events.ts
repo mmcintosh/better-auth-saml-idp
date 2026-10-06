@@ -41,6 +41,22 @@ export interface AssertionIssuedEvent extends EventBase {
 }
 
 /**
+ * An OAuth client exchanged an assertion this IdP issued (D-071), through an
+ * authorization server on the same instance: the assertion was verified, and its record consumed, so it can't be exchanged again.
+ */
+export interface AssertionExchangedEvent extends EventBase {
+  type: "assertion.exchanged";
+  spId: string;
+  entityId: string;
+  userId: string;
+  assertionId: string;
+  /** The OAuth client that presented it. */
+  clientId: string;
+  /** The SP's tenant (an organization id, D-052); absent for the root IdP. */
+  tenantId?: string | undefined;
+}
+
+/**
  * The IdP refused something: an error page (`code`), or a SAML error Response to the SP
  * (`code: "SAML_STATUS"` with `status`). Includes unauthenticated protocol errors, which is
  * what a SIEM wants to see, and what an attacker can generate at will.
@@ -138,10 +154,12 @@ export interface ServiceProviderChangedEvent extends EventBase {
   delegated: boolean;
 }
 
-export type SamlIdpEvent = AssertionIssuedEvent | DeniedEvent | LogoutEvent | SessionEndedEvent | TenantChangedEvent | ServiceProviderChangedEvent;
+export type SamlIdpEvent = AssertionIssuedEvent | AssertionExchangedEvent | DeniedEvent | LogoutEvent | SessionEndedEvent | TenantChangedEvent | ServiceProviderChangedEvent;
 
 export interface SamlIdpEventHandlers {
   onAssertionIssued?: ((event: AssertionIssuedEvent) => void | Promise<void>) | undefined;
+  /** An assertion was exchanged for OAuth tokens (D-071). */
+  onAssertionExchanged?: ((event: AssertionExchangedEvent) => void | Promise<void>) | undefined;
   onDenied?: ((event: DeniedEvent) => void | Promise<void>) | undefined;
   onLogout?: ((event: LogoutEvent) => void | Promise<void>) | undefined;
   /**
@@ -186,6 +204,7 @@ function clientIp(ctx: GenericEndpointContext): string | undefined {
 
 type EventInput =
   | Omit<AssertionIssuedEvent, keyof EventBase>
+  | Omit<AssertionExchangedEvent, keyof EventBase>
   | Omit<DeniedEvent, keyof EventBase>
   | Omit<LogoutEvent, keyof EventBase>
   | Omit<SessionEndedEvent, keyof EventBase>
@@ -194,6 +213,7 @@ type EventInput =
 
 const HANDLER = {
   "assertion.issued": "onAssertionIssued",
+  "assertion.exchanged": "onAssertionExchanged",
   denied: "onDenied",
   logout: "onLogout",
   "session.ended": "onSessionEnded",
