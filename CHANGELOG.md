@@ -14,7 +14,8 @@ Adds assertion exchange: an SP can let one OAuth client trade its assertions for
 
 ### Project
 
-- The workerd tests run on `@cloudflare/vitest-plugin` 1.3.6, which replaces `@cloudflare/vitest-pool-workers` (0.22.0, last published 2026-09-18). It brings the current miniflare and wrangler, so the development-only `sharp` and `undici` overrides are gone. Vitest 5 waits for the plugin to support it.
+- The workerd tests run on `@cloudflare/vitest-plugin` 1.3.6, which replaces `@cloudflare/vitest-pool-workers` (0.22.0, last published 2026-09-18). It brings the current miniflare and wrangler, so the development-only `undici` override is gone. Vitest 5 waits for the plugin to support it.
+- `sharp` 0.35.5 is forced (GHSA-wq5f-xc86-pv6w, high), at the root and in the CharDB examples. It comes with Miniflare, so it affects development and the examples only; nothing in the published package uses it.
 - The release job stages with npm 12.2.0 (was 11.20.0).
 
 ## [1.1.4] - 2026-10-06
