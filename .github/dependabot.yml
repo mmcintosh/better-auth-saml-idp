@@ -12,12 +12,6 @@ updates:
     ignore:
       - dependency-name: better-auth
       - dependency-name: "@better-auth/*"
-      # Prisma 7 (adapter tests only) pulls in mysql2 3.15.3, with GHSA-3f6p-5ww8-9rcr (high) and
-      # GHSA-rgwj-5xj2-c3m3, and changes its setup; revisit when it depends on a patched mysql2.
-      - dependency-name: prisma
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "@prisma/client"
-        update-types: ["version-update:semver-major"]
   # The CharDB examples: Bun projects outside the pnpm workspace, so Dependabot keeps their bun.lock
   # in step itself. They stay on TypeScript 5: CharDB's Vite plugin uses the TypeScript JS API
   # (ts.ScriptTarget), which TypeScript 7's native compiler doesn't ship (2026-10-04). Better Auth is

@@ -160,8 +160,11 @@ async function withPrisma(raw: Db, tenants = false): Promise<Db> {
   const { prismaSchema } = await import("./orm-schemas");
   writeFileSync(join(dir, "schema.prisma"), prismaSchema(optionsFor(null, tenants) as any, join(dir, "client")));
   execFileSync(join(process.cwd(), "node_modules/.bin/prisma"), ["generate", "--schema", join(dir, "schema.prisma")], { stdio: "pipe" });
-  const { PrismaClient } = (await import(pathToFileURL(join(dir, "client/index.js")).href)) as any;
-  const prisma = new PrismaClient({ datasources: { db: { url: raw.url } } });
+  // The prisma-client generator writes TypeScript (client.ts), which Vitest loads directly.
+  const { PrismaClient } = (await import(pathToFileURL(join(dir, "client/client.ts")).href)) as any;
+  // Prisma 7 connects through a driver adapter, not a URL in the schema.
+  const { PrismaPg } = await import("@prisma/adapter-pg");
+  const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: raw.url }) });
   const { prismaAdapter } = await import("better-auth/adapters/prisma");
   return {
     database: prismaAdapter(prisma, { provider: "postgresql" }),

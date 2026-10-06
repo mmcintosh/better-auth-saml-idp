@@ -24,7 +24,7 @@ The database-dependent behaviours run against a real server in CI (`test/adapter
 | MongoDB 8.2 (replica set) | `mongodbAdapter` | created by the adapter | ✅ CI |
 | PostgreSQL 17 | Drizzle (`drizzle-orm/node-postgres`) | `npx auth generate`, then your migration | ✅ CI as the query layer; tables from Better Auth's migrator ([below](#drizzle-and-prisma)) |
 | MySQL 8.4 | Drizzle (`drizzle-orm/mysql2`) | `npx auth generate`, then your migration | ✅ CI as the query layer; tables from Better Auth's migrator |
-| PostgreSQL 17 | Prisma 6 | `npx auth generate`, then `prisma migrate` | ✅ CI as the query layer; tables from Better Auth's migrator |
+| PostgreSQL 17 | Prisma 7 (`@prisma/adapter-pg`) | `npx auth generate`, then `prisma migrate` | ✅ CI as the query layer; tables from Better Auth's migrator |
 | [CharDB](https://github.com/zpg6/chardb) 0.1 (Durable Objects) | CharDB's own | `chardb migrations generate` ([example](../../examples/chardb/README.md)) | 🧪 experimental: the example's flow (tenants, per-tenant keys, replay protection) in workerd, weekly in CI; not the whole suite |
 | Any | Better Auth's memory adapter | | ❌ doesn't enforce uniqueness: development only |
 

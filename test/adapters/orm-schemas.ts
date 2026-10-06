@@ -60,8 +60,10 @@ export async function drizzleMysqlSchema(options: BetterAuthOptions) {
  */
 export function prismaSchema(options: BetterAuthOptions, clientOutput: string): string {
   const lines = [
-    `generator client {\n  provider = "prisma-client-js"\n  output   = "${clientOutput}"\n}`,
-    `datasource db {\n  provider = "postgresql"\n  url      = env("PRISMA_DATABASE_URL")\n}`,
+    // Prisma 7's generator, as Better Auth's CLI (`npx auth generate`) writes it for Prisma 7.
+    `generator client {\n  provider = "prisma-client"\n  output   = "${clientOutput}"\n}`,
+    // Prisma 7: no url here; the client connects through its driver adapter (@prisma/adapter-pg).
+    `datasource db {\n  provider = "postgresql"\n}`,
   ];
   for (const table of Object.values(getAuthTables(options))) {
     const body = ["  id String @id"];
