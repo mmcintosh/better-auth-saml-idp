@@ -1990,4 +1990,4 @@ An outside reviewer read all of src/ at e79f168 (identical to v1.1.2's code) and
 - The release job's npm (.github/npm-cli, D-050) was pinned at 11.20.0; 12.0 shipped 2026-07-08 and 12.2.0 is current, and Dependabot never proposed it. npm 12's breaking changes (shrinkwrap, star/stars/unstar and adduser removed, no whichnode, Node ^22.22.2 || ^24.15.0 || >=26) don't touch the job, which runs on Node 24 (24.21.0 today). `npm stage` is unchanged; `npm stage publish <tgz> --dry-run --access public --tag …` works with 12.2.0.
 - npm 12 refuses to install from the old lockfile (EALLOWREMOTE on its resolved tarball URL), so the lockfile was regenerated with npm 11, which is what the job's `npm ci --prefix .github/npm-cli` runs; that install yields npm 12.2.0. Same four bundled-dependency alert classes as before (all ignored/dismissed as tolerable risk).
 - The first real check is the next release's publish job.
-
+- Dependency review flagged npm itself (Artistic-2.0, as always; seen now because the PR changes its version): allowed by name, as the release job's CLI that is never shipped.

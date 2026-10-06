@@ -47,7 +47,8 @@ jobs:
           # Next.js example's build tools; nothing the package ships depends on it.
           # elkjs (EPL-2.0, graph layout) and robust-predicates (public domain and Unlicense) come
           # with Prisma Studio, inside the Prisma 7 CLI the adapter tests use (D-068); development only.
-          allow-dependencies-licenses: pkg:npm/caniuse-lite, pkg:npm/elkjs, pkg:npm/robust-predicates
+          # npm itself (Artistic-2.0) is the release job's CLI (.github/npm-cli), run in CI, never shipped.
+          allow-dependencies-licenses: pkg:npm/caniuse-lite, pkg:npm/elkjs, pkg:npm/robust-predicates, pkg:npm/npm
           comment-summary-in-pr: never
 
   osv:
