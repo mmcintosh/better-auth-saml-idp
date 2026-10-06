@@ -4,6 +4,11 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Project
+
+- OSV-Scanner and Scorecard report no open vulnerabilities. The CharDB examples force `source-map-js` 1.2.2 (GHSA-68fv-2mgg-jv7q). `osv-scanner.toml` files record, with reasons and a re-check date, the advisories that have no update: npm's bundled dependencies in the release job (`.github/npm-cli`), and `http-cache-semantics` through Astro in the CharDB Astro example. None reach the published package.
+- Next.js example scripts: `dev-keys.mjs` never replaces a `.env.local` that appeared after its check, and `sso.mjs` decodes HTML entities in one pass.
+
 ### Documentation
 
 - Assertion exchange (1.2.0) in the README (features, options, a usage section), the security page, the errors page (each `AssertionExchangeError` code and whether it uses the assertion up), the schema page, and the threat model.

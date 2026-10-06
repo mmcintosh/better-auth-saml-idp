@@ -4,7 +4,7 @@
 // variables there. Usage: node scripts/dev-keys.mjs [--force] [--url http://localhost:3000]
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -12,11 +12,6 @@ const args = process.argv.slice(2);
 const force = args.includes("--force");
 const urlIndex = args.indexOf("--url");
 const baseURL = urlIndex >= 0 ? args[urlIndex + 1] : "http://localhost:3000";
-
-if (existsSync(".env.local") && !force) {
-  console.error(".env.local exists; pass --force to replace it (the old key pair is lost)");
-  process.exit(1);
-}
 
 // The plugin's CLI, from the installed package (a workspace link in this repo).
 const cli = join("node_modules", "better-auth-saml-idp", "dist", "cli", "bin.js");
@@ -41,8 +36,16 @@ try {
     `SAML_IDP_CERT="${readFileSync(cert, "utf8").trim()}"`,
     `SAML_SERVICE_PROVIDERS='${JSON.stringify(sps)}'`,
   ];
-  writeFileSync(".env.local", `${lines.join("\n")}\n`, { mode: 0o600 });
-  console.log("wrote .env.local (dev-only key pair, secret, test SP)");
+  // Without --force, "wx" refuses an existing .env.local in the same step that writes it (no
+  // separate check, so nothing can appear in between).
+  try {
+    writeFileSync(".env.local", `${lines.join("\n")}\n`, { mode: 0o600, flag: force ? "w" : "wx" });
+    console.log("wrote .env.local (dev-only key pair, secret, test SP)");
+  } catch (error) {
+    if (error?.code !== "EEXIST") throw error;
+    console.error(".env.local exists; pass --force to replace it (the old key pair is lost)");
+    process.exitCode = 1;
+  }
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }
