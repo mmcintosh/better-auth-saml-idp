@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { samlIdp } from "../../src/index";
 import { baseOptions } from "../support/config";
 
-// vitest-pool-workers loads "samlify" and "samlify/build/src/api" as two separate module
+// The Workers test runner (@cloudflare/vitest-plugin) loads "samlify" and "samlify/build/src/api" as two separate module
 // instances, so this identity check can't be made there. Node and real wrangler/esbuild
 // bundles share one instance; the bundle case was checked by a Phase 0 spike (DECISIONS.md D-006).
 const isWorkerd = typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers";

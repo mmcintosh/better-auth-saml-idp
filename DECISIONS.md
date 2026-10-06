@@ -1984,3 +1984,11 @@ An outside reviewer read all of src/ at e79f168 (identical to v1.1.2's code) and
 - xml-crypto 6.3.3 (2026-10-05: canonicalization fixes for inherited namespace context, namespace values, processing instructions, InclusiveNamespaces). The range was `^6.3.2`, so fresh installs already resolved 6.3.3; the floor is now `^6.3.3`. Full suite (1447 tests, SP interop included), test:wasm and pack:check pass on it. This is a change to the published package, so it ships in the next release.
 - Also: @cloudflare/workers-types patch, and the Workers example on better-auth-scim-provisioning 0.3.1.
 - Dependency review flagged two licences Prisma 7 brings through Prisma Studio (inside its CLI): elkjs (EPL-2.0) and robust-predicates (public domain and Unlicense). Development only, never shipped or bundled: added to `allow-dependencies-licenses` next to caniuse-lite, by name, so the licence allow-list itself is unchanged.
+
+## D-069: @cloudflare/vitest-plugin; Vitest 5 held (2026-10-06)
+
+- Vitest 5 was next on the up-to-date list, but both Cloudflare test packages peer `vitest ^4.1.0`: @cloudflare/vitest-pool-workers 0.22.0 and @cloudflare/vitest-plugin 1.3.6. Support is in progress upstream (cloudflare/workers-sdk#15500, #15618). Held, and listed in the upstream watch.
+- @cloudflare/vitest-pool-workers hadn't been published since 2026-09-18 (wrangler 4.124, miniflare 5.20260815); @cloudflare/vitest-plugin is its successor (same `cloudflareTest`, `readD1Migrations`, `cloudflare:test` and `/types`), already used by the CharDB examples, on wrangler 4.147 and miniflare 5.20261001. Switched in vitest.config.ts, wasm-validator/vitest.config.ts and tsconfig.json.
+- With the newer miniflare, the `sharp@<0.35.4` and `undici@>=7.28.0 <7.29.1` overrides (D-068's "may go") are removed: `pnpm why` shows sharp 0.35.4/0.35.5 and undici 7.29.1 only, and `pnpm audit` is clean.
+- Checked: typecheck, lint, docs:check, `pnpm test` (1447 passed, node and workerd), test:wasm (83 passed), pack:check, the Workers example's typecheck.
+
