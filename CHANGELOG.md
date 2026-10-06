@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Project
+
+- The workerd tests run on `@cloudflare/vitest-plugin` 1.3.6, which replaces `@cloudflare/vitest-pool-workers` (0.22.0, last published 2026-09-18). It brings the current miniflare and wrangler, so the development-only `sharp` and `undici` overrides are gone. Vitest 5 waits for the plugin to support it.
+
 ## [1.1.4] - 2026-10-06
 
 Requires xml-crypto 6.3.3, which fixes several canonicalization cases in signed XML; upgrade to pick it up if your lockfile still has 6.3.2. No API changes.
