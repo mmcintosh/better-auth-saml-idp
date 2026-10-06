@@ -2040,3 +2040,19 @@ An agent that signed a person in through this IdP holds an Assertion, and draft-
 - **Mutation proof** (each guard re-broken on Node, the tests run, then restored):
   - 21 mutations, 18 caught: skipping the signature check, the client comparison, the opt-in check, the record comparison, the ban, email, session and membership checks, the expiry and not-before checks, the Conditions shape check; consuming before the signature; find-then-delete in place of consume (the 5-instance concurrency test fails); accepting a disabled tenant; failing SSO when the record write fails; dropping the delegation guard, the `sign: "response"` refusal and the stored-SP `enabled` requirement.
   - 3 survived, each a second layer over one that is tested: the explicit "no Signature element" branch (`sig.valid !== true` refuses an unsigned assertion too); the SP-tenant equality after the lookup (the directory already finds SPs only in the issuing identity's tenant, D-052); the root-element check (the schema and the exact shape check refuse anything else). Kept as defence in depth.
+
+## D-072: CI required before anything reaches main (2026-10-06)
+
+The `protect-main` ruleset (2026-09-27) only blocked deleting `main` and force-pushing to it. A pull request could be merged with red CI, and a commit could be pushed to `main` directly. Every merge so far had been green, but that was care, not a rule. Scorecard's Branch-Protection check scored 3/10 ("no status checks found to merge onto branch main").
+
+- **Rules now on `main`** (ruleset 24084053, applied by the maintainer):
+  - no deletion; no force push (as before);
+  - a pull request is required. **0 approvals**: there is one maintainer, and GitHub doesn't let authors approve their own PRs, so requiring one would block every change. The maintainer reviews the diff before each merge instead (the agreed practice since 2026-10-06);
+  - **19 required checks**, all from GitHub Actions (integration 15368, so another app can't post a passing status under the same name):
+    - CI: `test` (Better Auth 1.7.5 on Node 22 and 24, latest-1.7 on Node 24), `adapters` (postgres, mysql, drizzle-postgres, drizzle-mysql, prisma-postgres, mongodb), `e2e`, `nextjs`, `runtimes` (bun, deno), `secrets`;
+    - CodeQL: `analyze` (javascript-typescript, actions);
+    - Dependencies: `runtime-audit`, `examples-audit`, `review` (dependency review).
+- **Not required, on purpose:** jobs that don't run on every pull request would leave such a PR waiting forever: the CharDB examples and the reproducible WASM build (path filters), and `osv` (main and schedule only). They still run when their files change. The CodeQL alert check from GitHub Advanced Security isn't listed either; it fails a PR that adds an alert anyway.
+- **Not strict** (a branch doesn't have to be up to date with `main` before merging): with one maintainer, PRs rarely overlap, and `main` runs CI again after every merge.
+- **No bypass, for anyone, administrators included.** A flaky test means re-running it, not merging past it.
+- **Keep it in step:** renaming a job, or changing the CI matrix (a Better Auth or Node version, an adapter entry), changes a check's name. The ruleset must be updated in the same change, or every PR waits for a check that no longer runs.
