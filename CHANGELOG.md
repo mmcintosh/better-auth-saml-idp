@@ -4,13 +4,18 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-06
+
+Adds assertion exchange: an SP can let one OAuth client trade its assertions for tokens, once each (draft ID-JAG §4.5, MCP's Enterprise-Managed Authorization). Nothing changes for SPs that don't opt in.
+
 ### Added
 
 - **Assertion exchange** (D-071): an SP can let one OAuth client exchange its assertions for tokens, once each. This is RFC 8693 token exchange with a SAML 2.0 subject token, the flow in draft-ietf-oauth-identity-assertion-authz-grant §4.5 that MCP's Enterprise-Managed Authorization uses. Set `tokenExchange: { clientId }` on the SP; stored SPs also need the new server option `tokenExchange: { enabled: true }`. Each assertion to such an SP is recorded at sign-in. An authorization server on the same Better Auth instance (an ID-JAG issuer) checks it with `getSamlIdpExchange(ctx).verifyIssuedAssertion(ctx, assertionXml, { clientId })`. That checks the signature (XSW-hardened, the identity's own key), the issuer and tenant, the validity window, the SP's client, single use across instances, and the user, session and membership as they are now. Failures throw `AssertionExchangeError` with a code. A new `assertion.exchanged` event (`events.onAssertionExchanged`, audit log) records each exchange. A tenant's administrator can't set or change `tokenExchange`. Nothing changes for SPs that don't opt in. See [Exchanging assertions for OAuth tokens](docs/guide/token-exchange.md).
 
 ### Project
 
-- The workerd tests run on `@cloudflare/vitest-plugin` 1.3.6, which replaces `@cloudflare/vitest-pool-workers` (0.22.0, last published 2026-09-18). It brings the current miniflare and wrangler, so the development-only `sharp` and `undici` overrides are gone. Vitest 5 waits for the plugin to support it.
+- The workerd tests run on `@cloudflare/vitest-plugin` 1.3.6, which replaces `@cloudflare/vitest-pool-workers` (0.22.0, last published 2026-09-18). It brings the current miniflare and wrangler, so the development-only `undici` override is gone. Vitest 5 waits for the plugin to support it.
+- `sharp` 0.35.5 is forced (GHSA-wq5f-xc86-pv6w, high), at the root and in the CharDB examples. It comes with Miniflare, so it affects development and the examples only; nothing in the published package uses it.
 - The release job stages with npm 12.2.0 (was 11.20.0).
 
 ## [1.1.4] - 2026-10-06
