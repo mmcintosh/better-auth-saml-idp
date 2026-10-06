@@ -22,6 +22,7 @@ samlIdp({
 | Callback | When |
 |---|---|
 | `onAssertionIssued` | An assertion was signed and handed to the browser for the SP's ACS. Covers SP- and IdP-initiated sign-in. |
+| `onAssertionExchanged` | An OAuth client exchanged an assertion this IdP issued (`clientId`, `assertionId`, the SP and user). See [Exchanging assertions for OAuth tokens](token-exchange.md). |
 | `onDenied` | The IdP refused something, either with an error page (`code` is one of the [error codes](errors.md)), or with a SAML error Response to the SP (`code: "SAML_STATUS"` with `status`, e.g. `NoPassive`). |
 | `onLogout` | Single Logout ended an IdP session, started by an SP or by your app's sign-out-everywhere. |
 | `onSessionEnded` | A session ended *without* Single Logout (revoked, disabled, `/sign-out`, expired), with the SPs that weren't told. Fires outside requests too, so it has no IP or user agent. See [When the session ends without the browser](single-logout.md#when-the-session-ends-without-the-browser). |

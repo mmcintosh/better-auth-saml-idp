@@ -15,6 +15,7 @@ import type { TenantDirectory } from "../saml/tenant-directory";
 import { type KeySecret, TenantKeyError, type TenantKeyStore } from "../saml/tenant-keys";
 import { hasOrganizationPlugin, loadMemberships, matchOrganization, warnClaimableOrganizations } from "../organizations";
 import { recordParticipant, sessionIndexOf } from "../storage/participants";
+import { recordExchangeable } from "../storage/exchange-record";
 import { base64url, type ValidatedRequest } from "../storage/pending";
 import { type AuthorizeResult, NAMEID_FORMAT, type OrganizationMembership, type ResolvedSamlIdpOptions, type ResolvedServiceProvider, type SamlIdpUser, type ServiceProviderInfo } from "../types";
 // A cycle (sso imports this module), fine for functions used at call time.
@@ -406,6 +407,26 @@ export async function issueResponse(
   ctx.context.logger.info(
     `[saml-idp] issued ${signed.encrypted ? "encrypted " : ""}assertion ${signed.assertionId} for SP ${sp.id} (user ${user.id})`,
   );
+  if (sp.tokenExchange && state.options.tokenExchange) {
+    // The SP opted in to exchange (D-071). If the record can't be written, SSO still works; this
+    // assertion just can't be exchanged (the maintainer's decision: an opt-in extra mustn't fail it).
+    try {
+      await recordExchangeable(ctx.context.internalAdapter, signed.assertionId, {
+        spId: sp.id,
+        tenantId: identity.tenantId,
+        userId: user.id,
+        sessionId: session.session.id,
+        nameId,
+        nameIdFormat: sp.nameIdFormat,
+        issuer: identity.entityId,
+        notOnOrAfter: signed.notOnOrAfter,
+        authnInstant: signed.authnInstant,
+        acr: signed.authnContextClassRef,
+      }, state.options.clockSkewSeconds);
+    } catch (e) {
+      ctx.context.logger.error(`[saml-idp] could not record assertion ${signed.assertionId} for SP ${sp.id} as exchangeable; it can't be exchanged`, e);
+    }
+  }
   if (state.options.sessionTracking) {
     // Logout must be able to reach this SP later (D-028), and a session that ends without it
     // must be able to name it (D-043). If it can't be recorded, don't issue: a later logout

@@ -323,6 +323,22 @@ export interface ServiceProviderConfig {
    * only narrow that with `roles` (`{ id: <this tenant>, roles }`). Omit for the root IdP.
    */
   tenant?: string | undefined;
+  /**
+   * Let an OAuth client exchange this SP's assertions for tokens (D-071): RFC 8693 token exchange
+   * with a SAML 2.0 subject token, as draft-ietf-oauth-identity-assertion-authz-grant §4.5 and
+   * MCP's Enterprise-Managed Authorization use it. `clientId` is the OAuth client allowed to
+   * present them, at the authorization server on this Better Auth instance. Each
+   * assertion is recorded when issued and can be exchanged once, before it expires. The assertion
+   * must be signed (`sign` "both" or "assertion"). Stored SPs need the top-level
+   * `tokenExchange.enabled`; a tenant's administrator can't set or change it.
+   */
+  tokenExchange?: TokenExchangeConfig | undefined;
+}
+
+/** See `ServiceProviderConfig.tokenExchange`. */
+export interface TokenExchangeConfig {
+  /** The OAuth client id that may exchange this SP's assertions. */
+  clientId: string;
 }
 
 export interface ServiceProviderEncryptionConfig {
@@ -546,6 +562,12 @@ export interface SamlIdpOptions {
    * multi-tenant guide.
    */
   tenants?: TenantOptions | undefined;
+  /**
+   * Assertion exchange (D-071) for SPs stored in the registry: with `enabled`, a stored SP may
+   * carry `tokenExchange`. An SP in code with `tokenExchange` turns it on by itself. When on, the
+   * plugin offers `getSamlIdpExchange(ctx)` to an authorization server on the same instance.
+   */
+  tokenExchange?: { enabled: boolean } | undefined;
 }
 
 /** A service provider after option validation, with defaults applied. */
@@ -583,6 +605,8 @@ export interface ResolvedServiceProvider {
   sessionNotOnOrAfter: SessionLimit;
   /** The tenant's organization id (D-052); undefined for an SP of the root IdP. */
   tenantId: string | undefined;
+  /** Assertion exchange (D-071); undefined when this SP's assertions can't be exchanged. */
+  tokenExchange?: TokenExchangeConfig | undefined;
 }
 
 export interface ResolvedSamlIdpOptions {
@@ -623,6 +647,8 @@ export interface ResolvedSamlIdpOptions {
         delegation: { roles: string[]; userFields: string[]; allowMetadataUrl: boolean } | undefined;
       }
     | undefined;
+  /** Assertion exchange (D-071): on when some SP in code has `tokenExchange`, or `tokenExchange.enabled`. */
+  tokenExchange: boolean;
   /** Non-fatal configuration warnings, logged once at startup. */
   warnings: string[];
 }

@@ -37,7 +37,8 @@ Every option `samlIdp()` accepts. Options are validated when `samlIdp()` is call
 | `registry` | `object` | off | The database-backed SP registry and its API. See [`registry`](#registry). |
 | `singleLogout` | `object` | off | SAML Single Logout. See [`singleLogout`](#singlelogout). |
 | `tenants` | `object` | off | An IdP identity per organization (multi-tenant IdP). See [`tenants`](#tenants). |
-| `events` | `object` | none | `{ onAssertionIssued?, onDenied?, onLogout?, onSessionEnded? }` callbacks. They run in the background and can't affect the flow. See [Observability](observability.md). |
+| `tokenExchange` | `{ enabled: boolean }` | off | Lets stored SPs carry `tokenExchange`. Exchange is on when this is set or when an SP in code has `tokenExchange`. See [Exchanging assertions for OAuth tokens](token-exchange.md). |
+| `events` | `object` | none | `{ onAssertionIssued?, onAssertionExchanged?, onDenied?, onLogout?, onSessionEnded?, onTenantChanged?, onServiceProviderChanged? }` callbacks. They run in the background and can't affect the flow. See [Observability](observability.md). |
 | `auditLog` | `object` | off | `{ enabled, retentionDays? }`: also record events in the `samlIdpAuditEvent` table. See [`auditLog`](#auditlog). |
 | `sessionNotOnOrAfter` | `false \| "idp-session" \| { maxSeconds }` | `false` | `SessionNotOnOrAfter` on assertions: when the SP should end its session. `"idp-session"`: the IdP session's expiry. `{ maxSeconds }` (60 to 30 days): that long after issuance, never past the IdP session. Each SP can override it. See [Single Logout](single-logout.md#when-the-session-ends-without-the-browser). |
 | `signMetadata` | `boolean` | `false` | Sign the IdP metadata document (enveloped signature with the active key). For SPs and federations that verify metadata. |
@@ -145,6 +146,7 @@ The same options apply to SPs in `serviceProviders` and to SPs stored in the reg
 | `idpInitiatedRelayState` | `string` | none | RelayState sent with IdP-initiated Responses. Needs `allowIdpInitiated`. |
 | `allowedRelayStates` | `string[]` | `[]` | RelayState values a caller of `/init` may choose, matched exactly. Anything else is replaced by `idpInitiatedRelayState`. Needs `allowIdpInitiated`. |
 | `singleLogoutService` | `{ url, binding?, responseUrl? }` | none | Where the SP receives logout messages. `binding`: `"redirect"` (default) or `"post"`. `responseUrl`: where LogoutResponses go, if not `url` (metadata's `ResponseLocation`). See [Single Logout](single-logout.md). |
+| `tokenExchange` | `{ clientId: string }` | none | Let this OAuth client exchange this SP's assertions for tokens, once each. Needs a signed assertion (`sign` not `"response"`); stored SPs also need the server option `tokenExchange.enabled`; a tenant's administrator can't set or change it. See [Exchanging assertions for OAuth tokens](token-exchange.md). |
 | `tenant` | `string` | none (root IdP) | With [`tenants`](#tenants): the organization id of the tenant this SP belongs to. It's then found only through that tenant's URLs, gets the tenant's identity, and only the organization's members may sign in (`organization` may only add `roles`). Can't change on a stored SP. `entityId` is unique per tenant. See [Multi-tenant IdP](multi-tenant.md#add-sps-to-a-tenant). |
 
 ## `encryption`

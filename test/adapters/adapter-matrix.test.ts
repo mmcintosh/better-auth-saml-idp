@@ -8,7 +8,7 @@
 import { betterAuth } from "better-auth";
 import { admin, organization } from "better-auth/plugins";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { samlIdp } from "../../src";
+import { AssertionExchangeError, getSamlIdpExchange, samlIdp } from "../../src";
 import { listParticipants } from "../../src/storage/participants";
 import { recordRequestId } from "../../src/storage/seen";
 import { resetSweepThrottle, sweepExpired } from "../../src/storage/sweep";
@@ -113,7 +113,11 @@ const optionsFor = (database: unknown, tenants = false) => ({
       organization(),
       samlIdp(
         baseOptions({
-          serviceProviders: [{ id: "test-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], singleLogoutService: { url: "https://sp.test/slo" } }],
+          serviceProviders: [
+            { id: "test-sp", entityId: SP_ENTITY_ID, acsUrls: [SP_ACS], singleLogoutService: { url: "https://sp.test/slo" } },
+            // Assertion exchange (D-071): its record goes through the verification table.
+            { id: "x-sp", entityId: "https://x.test/sp", acsUrls: ["https://x.test/acs"], allowIdpInitiated: true, tokenExchange: { clientId: "agent" } },
+          ],
           registry: { enabled: true, canManage: ({ user }) => user.role === "admin", cacheSeconds: 0 },
           singleLogout: { enabled: true },
           auditLog: { enabled: true },
@@ -216,6 +220,25 @@ describe.skipIf(!KIND)(`adapter matrix: ${KIND}`, { timeout: 60_000 }, () => {
     const form = await readAutoPost(await browser.fetch(resume));
     expect(form.xml).toContain("status:Success");
     expect(await code(await browser.fetch(resume))).toBe("PENDING_REQUEST_NOT_FOUND"); // single use
+  });
+
+  it("assertion exchange (D-071): recorded at sign-in, and of 10 concurrent exchanges exactly one is accepted", async () => {
+    const browser = new Browser(auth);
+    await browser.signUp();
+    const form = await readAutoPost(await browser.fetch(`${AUTH_BASE}/saml2/idp/init?sp=x-sp`));
+    const assertion = /<saml:Assertion [\s\S]*<\/saml:Assertion>/.exec(form.xml)![0].replace("<saml:Assertion ", '<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ');
+    const c = await ctx();
+    const exchange = getSamlIdpExchange({ context: c })!;
+    const codes = await Promise.all(
+      Array.from({ length: 10 }, () =>
+        exchange.verifyIssuedAssertion({ context: c } as any, assertion, { clientId: "agent" }).then(
+          () => "OK",
+          (e) => (e instanceof AssertionExchangeError ? e.code : String(e)),
+        ),
+      ),
+    );
+    expect(codes.filter((x) => x === "OK")).toHaveLength(1);
+    expect(codes.filter((x) => x === "ALREADY_EXCHANGED")).toHaveLength(9);
   });
 
   it("replay protection holds under concurrency: 10 identical requests, exactly one accepted", async () => {

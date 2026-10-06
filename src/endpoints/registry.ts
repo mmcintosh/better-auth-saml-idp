@@ -117,7 +117,12 @@ export const inScope = (actor: Actor, tenantId: string | null | undefined) => ac
  * fields only from `tenants.delegation.userFields` (attributes and NameID), and no `metadata.url`
  * unless allowed: it makes the server fetch that URL (D-026, D-029).
  */
-function delegatedIssues(config: StoredServiceProviderConfig, actor: Actor, delegation: { userFields: string[]; allowMetadataUrl: boolean }): string[] {
+function delegatedIssues(
+  config: StoredServiceProviderConfig,
+  actor: Actor,
+  delegation: { userFields: string[]; allowMetadataUrl: boolean },
+  previous?: Pick<StoredServiceProviderConfig, "tokenExchange">,
+): string[] {
   const issues: string[] = [];
   if (config.tenant === undefined || !actor.tenants?.has(config.tenant)) issues.push("serviceProvider.tenant: must be a tenant you administer");
   const allowed = new Set(delegation.userFields);
@@ -131,7 +136,21 @@ function delegatedIssues(config: StoredServiceProviderConfig, actor: Actor, dele
   }
   if (config.nameId !== undefined && !allowed.has(config.nameId.field)) issues.push(`serviceProvider.nameId.field: "${config.nameId.field}" isn't one a tenant's administrator may send`);
   if (config.metadata !== undefined && !delegation.allowMetadataUrl) issues.push("serviceProvider.metadata: a tenant's administrator can't set a metadata URL (the server would fetch it)");
+  // Which OAuth client may turn the tenant's members' assertions into tokens (D-071) is the
+  // host's call: kept as the host set it, or removed, never set or changed by the tenant.
+  if (config.tokenExchange !== undefined && config.tokenExchange.clientId !== previous?.tokenExchange?.clientId)
+    issues.push("serviceProvider.tokenExchange: only the host's administrators can set or change it");
   return issues;
+}
+
+/** The stored row's `tokenExchange`, for the delegation check; none when the JSON doesn't parse. */
+function storedTokenExchange(row: StoredSpRow): Pick<StoredServiceProviderConfig, "tokenExchange"> {
+  try {
+    const te = (JSON.parse(row.config) as { tokenExchange?: { clientId?: unknown } }).tokenExchange;
+    return typeof te?.clientId === "string" ? { tokenExchange: { clientId: te.clientId } } : {};
+  } catch {
+    return {};
+  }
 }
 
 /** `tenantId` in records only with tenants (D-052), so records are unchanged without them. */
@@ -282,10 +301,10 @@ export function registryEndpoints(state: PluginState) {
       throw fail("FORBIDDEN", "REGISTRY_NOT_ALLOWED", { issues: ["serviceProvider.tenant: must be a tenant you administer"] });
   };
   /** A delegated administrator's SP config: 403 outside its tenants, 400 for fields it may not set. */
-  const checkDelegated = (actor: Actor, config: StoredServiceProviderConfig) => {
+  const checkDelegated = (actor: Actor, config: StoredServiceProviderConfig, previous?: StoredSpRow) => {
     const delegation = state.options.tenants?.delegation;
     if (!actor.tenants || !delegation) return;
-    const issues = delegatedIssues(config, actor, delegation);
+    const issues = delegatedIssues(config, actor, delegation, previous ? storedTokenExchange(previous) : undefined);
     if (issues.some((i) => i.startsWith("serviceProvider.tenant:"))) throw fail("FORBIDDEN", "REGISTRY_NOT_ALLOWED", { issues });
     if (issues.length) throw fail("BAD_REQUEST", "INVALID_SERVICE_PROVIDER", { issues });
   };
@@ -406,7 +425,7 @@ export function registryEndpoints(state: PluginState) {
           throw fail("BAD_REQUEST", "INVALID_SERVICE_PROVIDER", { issues: ["serviceProvider.tenant: can't be changed (delete and re-create instead)"] });
         scopeFirst(actor, ctx.body.serviceProvider);
         const { config } = await validate(ctx, state, ctx.body.serviceProvider);
-        checkDelegated(actor, config);
+        checkDelegated(actor, config, row);
         const keys = await keyColumns(state, config);
         const update = {
           ...keys,

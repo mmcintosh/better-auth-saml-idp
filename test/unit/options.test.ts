@@ -323,3 +323,35 @@ describe("resolveOptions: limits", () => {
     expect(issuesFor(baseOptions({ loginPage })).join()).toMatch(/^loginPage:/);
   });
 });
+
+describe("resolveOptions: tokenExchange (D-071)", () => {
+  it("an SP in code with tokenExchange turns exchange on; none and no tokenExchange.enabled leaves it off", () => {
+    expect(resolveOptions(baseOptions()).tokenExchange).toBe(false);
+    const on = resolveOptions(baseOptions({ serviceProviders: [sp({ tokenExchange: { clientId: "agent" } })] }));
+    expect(on.tokenExchange).toBe(true);
+    expect(on.serviceProviders[0]!.tokenExchange).toEqual({ clientId: "agent" });
+    expect(resolveOptions(baseOptions({ tokenExchange: { enabled: true } })).tokenExchange).toBe(true);
+  });
+
+  it("needs a signed assertion: sign \"response\" (per SP or global) is refused", () => {
+    expect(issuesFor(baseOptions({ serviceProviders: [sp({ tokenExchange: { clientId: "agent" }, sign: "response" })] })).join()).toMatch(/tokenExchange: needs a signed assertion/);
+    const global = baseOptions({ serviceProviders: [sp({ tokenExchange: { clientId: "agent" } })] });
+    global.signing = { ...global.signing, sign: "response" };
+    expect(issuesFor(global).join()).toMatch(/tokenExchange: needs a signed assertion/);
+    expect(() => resolveOptions(baseOptions({ serviceProviders: [sp({ tokenExchange: { clientId: "agent" }, sign: "assertion" })] }))).not.toThrow();
+  });
+
+  it("clientId must be a non-empty string; no other keys", () => {
+    expect(issuesFor(baseOptions({ serviceProviders: [sp({ tokenExchange: { clientId: "" } })] })).join()).toMatch(/tokenExchange\.clientId/);
+    expect(issuesFor(baseOptions({ serviceProviders: [sp({ tokenExchange: { clientId: "a", scope: "x" } as any })] })).join()).toMatch(/tokenExchange/);
+  });
+
+  it("a stored SP may carry tokenExchange only with tokenExchange.enabled", async () => {
+    const { resolveStoredServiceProvider } = await import("../../src/options");
+    const stored = { id: "s", entityId: "https://s.test/sp", acsUrls: ["https://s.test/acs"], tokenExchange: { clientId: "agent" } };
+    const off = resolveOptions(baseOptions({ registry: { enabled: true } }));
+    expect(resolveStoredServiceProvider(stored, off).issues.join()).toMatch(/requires tokenExchange\.enabled/);
+    const on = resolveOptions(baseOptions({ registry: { enabled: true }, tokenExchange: { enabled: true } }));
+    expect(resolveStoredServiceProvider(stored, on).serviceProvider?.tokenExchange).toEqual({ clientId: "agent" });
+  });
+});
