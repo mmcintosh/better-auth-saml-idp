@@ -134,6 +134,21 @@ Each rule has a test that fails when the rule is removed. Without rule 2, the si
 
 **Errors.** `ACCOUNT_INACTIVE`, `EMAIL_NOT_VERIFIED`, `SESSION_NOT_ALLOWED`, `ACCESS_DENIED`.
 
+## Assertion exchange
+
+**How it works.** Off unless an SP has `tokenExchange` ([Exchanging assertions for OAuth tokens](token-exchange.md)). For such an SP, each assertion is recorded at sign-in as a single-use Better Auth verification value, keyed by a hash of the assertion ID, that expires with the assertion. When an authorization server on the same instance presents the assertion, it must pass, in order:
+- the [size and DOCTYPE limits](#size-limits) (64 KiB), the strict parser and the XSD schema, with a lone `<saml:Assertion>` root (not a Response);
+- an Issuer that is this IdP or an enabled tenant;
+- an enveloped signature on the Assertion itself, under the [XML signature rules](#xml-signature-verification), with that identity's own current key only;
+- exactly the shape this IdP issues, and the validity window with `clockSkewSeconds`;
+- an audience that is an enabled SP of that identity, with `tokenExchange` naming the presenting client;
+- an atomic consume of its record (`consumeVerificationValue`), only after the signature verified, whose fields must all match the assertion;
+- the [account policy and fresh re-reads](#account-policy-and-fresh-re-reads) as they are now, the SP's organization or tenant membership, and, where sessions are in the database, the session it was issued in.
+
+No outbound request is made. A tenant's administrator can't set or change `tokenExchange`, and `sign: "response"` with it is refused at startup.
+
+**Errors.** `AssertionExchangeError` codes, thrown to the calling plugin, never shown to the client: see [Errors](errors.md#assertion-exchange-errors).
+
 ## Browser binding and the POST binding
 
 **How it works.**

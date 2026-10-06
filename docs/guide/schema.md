@@ -251,5 +251,5 @@ A tenant's signing keys, one row per key ([Per-tenant signing keys](multi-tenant
 
 ## Other storage
 
-- **`verification`** (Better Auth's table): pending sign-in requests (`resume` links), POST-binding continuations, and logout state. All are single-use (consumed atomically) and short-lived. With secondary storage such as KV configured, set `verification: { storeInDatabase: true }` so single-use consumption stays atomic.
+- **`verification`** (Better Auth's table): pending sign-in requests (`resume` links), POST-binding continuations, logout state, and, for SPs with `tokenExchange`, one record per assertion issued (`saml-idp:exchange:` plus a hash of the assertion ID, expiring with the assertion; see [Exchanging assertions](token-exchange.md)). All are single-use (consumed atomically) and short-lived. With secondary storage such as KV configured, set `verification: { storeInDatabase: true }` so single-use consumption stays atomic.
 - Expired rows of all of these are swept automatically, at most once a minute per isolate, when SAML requests arrive. On a very quiet IdP you can also delete rows with `expires_at < now` from a cron.
