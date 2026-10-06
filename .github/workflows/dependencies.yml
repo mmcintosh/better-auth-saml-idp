@@ -45,7 +45,9 @@ jobs:
           allow-licenses: MIT, ISC, Apache-2.0, BSD-2-Clause, BSD-3-Clause, 0BSD, BlueOak-1.0.0, CC0-1.0, Unlicense, Python-2.0
           # caniuse-lite is browser-support data (CC-BY-4.0, attribution only), pulled in by the
           # Next.js example's build tools; nothing the package ships depends on it.
-          allow-dependencies-licenses: pkg:npm/caniuse-lite
+          # elkjs (EPL-2.0, graph layout) and robust-predicates (public domain and Unlicense) come
+          # with Prisma Studio, inside the Prisma 7 CLI the adapter tests use (D-068); development only.
+          allow-dependencies-licenses: pkg:npm/caniuse-lite, pkg:npm/elkjs, pkg:npm/robust-predicates
           comment-summary-in-pr: never
 
   osv:
