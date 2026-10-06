@@ -68,6 +68,13 @@
       "dependency": "mysql2",
       "fixedIn": "3.23.1",
       "why": "GHSA-3f6p-5ww8-9rcr (high, fixed in 3.22.0) and GHSA-rgwj-5xj2-c3m3 (fixed in 3.23.1); Prisma 7's CLI pins mysql2 3.15.3 (development only)."
+    },
+    {
+      "selector": "sharp@<0.35.5",
+      "via": "miniflare",
+      "dependency": "sharp",
+      "fixedIn": "0.35.5",
+      "why": "GHSA-wq5f-xc86-pv6w (high), through Miniflare's image binding (development only)."
     }
   ]
 }
