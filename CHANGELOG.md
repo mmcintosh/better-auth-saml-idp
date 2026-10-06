@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-10-06
+
+Requires xml-crypto 6.3.3, which fixes several canonicalization cases in signed XML; upgrade to pick it up if your lockfile still has 6.3.2. No API changes.
+
 ### Changed
 
 - **xml-crypto 6.3.3 or later.** It fixes several canonicalization cases in signed XML (inherited namespace context, namespace values, processing instructions). Fresh installs already got it through `^6.3.2`; the minimum now makes sure. Every test, including the SP interop suite, passes on it.
