@@ -14,6 +14,9 @@ updates:
     ignore:
       - dependency-name: better-auth
       - dependency-name: "@better-auth/*"
+      # Vitest 5 waits for @cloudflare/vitest-plugin to support it (listed in the upstream watch).
+      - dependency-name: vitest
+        update-types: ["version-update:semver-major"]
   # The CharDB examples: Bun projects outside the pnpm workspace, so Dependabot keeps their bun.lock
   # in step itself. They stay on TypeScript 5: CharDB's Vite plugin uses the TypeScript JS API
   # (ts.ScriptTarget), which TypeScript 7's native compiler doesn't ship (2026-10-04). Better Auth is
@@ -24,10 +27,16 @@ updates:
     cooldown: { default-days: 3 }
     groups:
       chardb-examples: { patterns: ["*"], update-types: [minor, patch] }
+      # React's packages move together: react-dom 19 with react 18 is a broken pair that still
+      # builds (2026-10-07, #53).
+      react: { patterns: ["react", "react-dom", "@types/react", "@types/react-dom"] }
     ignore:
       - dependency-name: better-auth
       - dependency-name: "@better-auth/*"
       - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # Vitest 5 waits for @cloudflare/vitest-plugin to support it (as at the root; upstream watch).
+      - dependency-name: vitest
         update-types: ["version-update:semver-major"]
   # The npm CLI the release job stages with (pinned by integrity; npm stage needs >= 11.15).
   # Only npm itself: its dependencies are bundled inside it, so updating one alone always fails.
