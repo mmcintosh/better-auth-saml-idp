@@ -7,7 +7,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 ### Project
 
 - OSV-Scanner and Scorecard report no open vulnerabilities. The CharDB examples force `source-map-js` 1.2.2 (GHSA-68fv-2mgg-jv7q). `osv-scanner.toml` files record, with reasons and a re-check date, the advisories that have no update: npm's bundled dependencies in the release job (`.github/npm-cli`), and `http-cache-semantics` through Astro in the CharDB Astro example. None reach the published package.
-- Every dependency install in CI goes through Socket Firewall, which blocks confirmed malware before it downloads (the release job included). pnpm 10.34.6 won't resolve a version less than 3 days old (`minimumReleaseAge`, Better Auth exempt), and Dependabot waits as long (D-073). The README shows Socket's package badge.
+- Every dependency install in CI goes through Socket Firewall, which blocks confirmed malware before it downloads (the release job included). pnpm 10.34.6 won't resolve a version less than a day old (`minimumReleaseAge`, Better Auth exempt), and Dependabot waits 3 days (D-073). The README shows Socket's package badge.
 - `main` requires a pull request and 19 passing checks (the CI, CodeQL and dependency jobs) before anything merges, with no bypass (D-072).
 - Next.js example scripts: `dev-keys.mjs` never replaces a `.env.local` that appeared after its check, and `sso.mjs` decodes HTML entities in one pass.
 

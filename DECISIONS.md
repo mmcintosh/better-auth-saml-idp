@@ -2057,7 +2057,7 @@ The `protect-main` ruleset (2026-09-27) only blocked deleting `main` and force-p
 - **No bypass, for anyone, administrators included.** A flaky test means re-running it, not merging past it.
 - **Keep it in step:** renaming a job, or changing the CI matrix (a Better Auth or Node version, an adapter entry), changes a check's name. The ruleset must be updated in the same change, or every PR waits for a check that no longer runs.
 
-## D-073: Socket Firewall, and a 3-day wait for new versions (2026-10-06)
+## D-073: Socket Firewall, and a wait before taking new versions (2026-10-06)
 
 npm malware is usually caught and pulled within hours to a few days of being published. Two cheap layers make that window ours instead of the attacker's.
 
@@ -2066,9 +2066,10 @@ npm malware is usually caught and pulled within hours to a few days of being pub
   - pnpm 10 already refuses dependencies' install scripts unless allow-listed, which covers most postinstall attacks. Malware also runs when a test or the build imports it; `sfw` stops the download itself.
   - Not covered: the CharDB examples' `bun install` (the free edition lists npm, pnpm and yarn), and installs on a developer's machine (`sfw pnpm install` works there too).
   - Risk accepted: the install steps are now in required checks (D-072), so a Socket outage or a false positive blocks merges until it's resolved.
-- **A 3-day minimum release age.**
-  - pnpm 10.34.6 (was 10.10.0) with `minimumReleaseAge: 4320` (minutes) in pnpm-workspace.yaml: pnpm won't resolve a version published less than 3 days ago. Installs from the lockfile are unchanged; it applies when versions are resolved (`pnpm add`, `pnpm update`, Dependabot).
+- **A minimum release age: 1 day in pnpm, 3 days in Dependabot.**
+  - pnpm 10.34.6 (was 10.10.0) with `minimumReleaseAge: 1440` (minutes) in pnpm-workspace.yaml: pnpm won't resolve a version published less than a day ago. Installs from the lockfile are unchanged; it applies when versions are resolved (`pnpm add`, `pnpm update`, Dependabot).
   - **Exempt: `better-auth` and `@better-auth/*`.** The upstream canary and CI's latest-1.7 row exist to try Better Auth's newest releases at once, and Better Auth is already kept out of Dependabot (ADDENDUM-01 R4). Socket Firewall still checks them.
-  - Dependabot `cooldown: { default-days: 3 }` on every update entry, so its pull requests propose the same versions pnpm will accept. Security updates aren't delayed by a cooldown.
+  - Dependabot `cooldown: { default-days: 3 }` on every update entry. Security updates aren't delayed by a cooldown.
+  - **Why pnpm waits less than Dependabot.** pnpm's check also applies when a test re-resolves (CI's version swap runs `pnpm add`), and then every dependency's *specifier* must have a version old enough. With 3 days, the first CI run failed: the Next.js example already required `@cloudflare/workers-types` 5.20261005.1, published 47 hours earlier by a routine update, so no matching version qualified (`ERR_PNPM_NO_MATURE_MATCHING_VERSION`). One day still covers the hours in which most malware is caught, and Dependabot's 3 days mean it never proposes a version pnpm would reject. A version bumped by hand to something less than a day old fails the same way: wait, or add it to `minimumReleaseAgeExclude` for that change.
 - **README:** Socket's package badge (its supply-chain score for the published package) next to Scorecard and Best Practices.
-- **Checked:** `pnpm install --frozen-lockfile` with pnpm 10.34.6 leaves the lockfile unchanged; `pnpm config get minimumReleaseAge` reads 4320 and the exclusions; the workflows and dependabot.yml parse. CI on the pull request is the first run of `sfw`.
+- **Checked:** `pnpm install --frozen-lockfile` with pnpm 10.34.6 leaves the lockfile unchanged; `pnpm config get minimumReleaseAge` reads the value and the exclusions; the workflows and dependabot.yml parse. CI on the pull request is the first run of `sfw`.
