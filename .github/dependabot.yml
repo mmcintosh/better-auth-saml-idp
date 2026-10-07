@@ -1,10 +1,12 @@
-# Weekly, grouped updates. Better Auth itself is excluded: the peer range is deliberate
+# Weekly, grouped updates, each version at least 3 days old (cooldown, D-073: most npm malware is
+# found and pulled within days). Security updates aren't delayed. Better Auth itself is excluded: the peer range is deliberate
 # (ADDENDUM-01 R4) and new minors are tried by the upstream canary instead.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
     schedule: { interval: weekly }
+    cooldown: { default-days: 3 }
     open-pull-requests-limit: 5
     groups:
       dev: { dependency-type: development, update-types: [minor, patch] }
@@ -19,6 +21,7 @@ updates:
   - package-ecosystem: bun
     directories: ["/examples/chardb", "/examples/chardb-astro"]
     schedule: { interval: weekly }
+    cooldown: { default-days: 3 }
     groups:
       chardb-examples: { patterns: ["*"], update-types: [minor, patch] }
     ignore:
@@ -32,6 +35,7 @@ updates:
   - package-ecosystem: npm
     directory: /.github/npm-cli
     schedule: { interval: weekly }
+    cooldown: { default-days: 3 }
     ignore:
       - dependency-name: undici
       - dependency-name: brace-expansion
@@ -42,8 +46,10 @@ updates:
   - package-ecosystem: docker-compose
     directory: /e2e
     schedule: { interval: weekly }
+    cooldown: { default-days: 3 }
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+    cooldown: { default-days: 3 }
     groups:
       actions: { patterns: ["*"] }
