@@ -8,6 +8,7 @@ Turn your [Better Auth](https://www.better-auth.com) server into a **SAML 2.0 Id
 [![Runs on](https://img.shields.io/badge/runs%20on-Workers%20%7C%20Node%2022%2B%20%7C%20Bun%20%7C%20Deno-f38020)](docs/guide/README.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/mmcintosh/better-auth-saml-idp/badge)](https://scorecard.dev/viewer/?uri=github.com/mmcintosh/better-auth-saml-idp)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15268/badge)](https://www.bestpractices.dev/projects/15268)
 [![CodeQL](https://github.com/mmcintosh/better-auth-saml-idp/actions/workflows/codeql.yml/badge.svg)](https://github.com/mmcintosh/better-auth-saml-idp/actions/workflows/codeql.yml)
 
 📖 **[Read the guide](docs/guide/README.md)**: getting started, every option, every error code, security controls, schema, Single Logout, `@better-auth/sso` interop, Cloudflare Workers, the CLI and troubleshooting.
@@ -34,7 +35,7 @@ If it's useful to you, a ⭐ on [GitHub](https://github.com/mmcintosh/better-aut
 - 🔁 **Replay protection** you can check: a database unique key, tested under concurrency across separate instances.
 - 🗄️ **Your database**: proven in CI on PostgreSQL, MySQL, MongoDB, SQLite and Cloudflare D1, through Kysely, Drizzle and Prisma, and experimentally on [CharDB](https://github.com/zpg6/chardb) (Durable Objects) ([Databases](docs/guide/databases.md)).
 - 🎲 **Fuzz-tested**: property-based tests throw hostile input at every inbound parser (AuthnRequest, LogoutRequest, LogoutResponse, SP metadata, raw XML) and the signature verifier, and hostile user data at issuance ([D-036](DECISIONS.md)).
-- 📦 **Supply chain**: SHA-pinned actions, CodeQL, dependency audits, OpenSSF Scorecard, and a release workflow that publishes with npm provenance and an SBOM ([SECURITY.md](SECURITY.md)).
+- 📦 **Supply chain**: SHA-pinned actions, CodeQL, dependency audits, OpenSSF Scorecard, the [OpenSSF Best Practices](https://www.bestpractices.dev/projects/15268) passing badge, and a release workflow that publishes with npm provenance and an SBOM ([SECURITY.md](SECURITY.md)).
 - 👤 **Strict identity**: only verified emails get assertions; impersonated and anonymous sessions are refused; the user and session are re-read right before signing. The NameID can come from a user field (an employee number), but only from fields users can't change themselves.
 - 🪜 **Step-up authentication**: declare your levels (password, MFA…) and what each session achieved; when an SP asks for more, the user is sent back to sign in with `acr_values`, as Keycloak does with levels of authentication ([guide](docs/guide/flows.md#requestedauthncontext)).
 - 🚦 **Your access rules**: a per-SP `authorize` hook that can deny with a reason or send the user to sign in again (for example when their MFA is too old).
