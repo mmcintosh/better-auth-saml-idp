@@ -41,7 +41,7 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.3.6",
-    "@cloudflare/workers-types": "5.20261003.1",
+    "@cloudflare/workers-types": "5.20261004.1",
     "@msw/cloudflare": "0.2.0",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
