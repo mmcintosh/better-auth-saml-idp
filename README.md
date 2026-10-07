@@ -9,6 +9,7 @@ Turn your [Better Auth](https://www.better-auth.com) server into a **SAML 2.0 Id
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/mmcintosh/better-auth-saml-idp/badge)](https://scorecard.dev/viewer/?uri=github.com/mmcintosh/better-auth-saml-idp)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15268/badge)](https://www.bestpractices.dev/projects/15268)
+[![Socket](https://socket.dev/api/badge/npm/package/better-auth-saml-idp)](https://socket.dev/npm/package/better-auth-saml-idp)
 [![CodeQL](https://github.com/mmcintosh/better-auth-saml-idp/actions/workflows/codeql.yml/badge.svg)](https://github.com/mmcintosh/better-auth-saml-idp/actions/workflows/codeql.yml)
 
 📖 **[Read the guide](docs/guide/README.md)**: getting started, every option, every error code, security controls, schema, Single Logout, `@better-auth/sso` interop, Cloudflare Workers, the CLI and troubleshooting.
