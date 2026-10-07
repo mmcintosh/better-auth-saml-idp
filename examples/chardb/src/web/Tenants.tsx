@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, type ReactElement, useState } from "react";
 import type { Notify } from "./App.tsx";
 import { type Tenant, type TenantKey, useTenants } from "./data.ts";
 import { type Me, saml, shortDate, useAction } from "./lib.ts";
@@ -93,7 +93,7 @@ function TenantCard({ tenant: x, name, me, notify, reload }: { tenant: Tenant; n
         rows={[
           ["Entity ID", <Copy key="e" value={x.entityId} />],
           ["Single sign-on URL", <Copy key="s" value={x.ssoUrl} />],
-          ...(x.sloUrl ? [["Single logout URL", <Copy key="l" value={x.sloUrl} />] as [string, JSX.Element]] : []),
+          ...(x.sloUrl ? [["Single logout URL", <Copy key="l" value={x.sloUrl} />] as [string, ReactElement]] : []),
           ["Metadata", <Copy key="m" value={x.metadataUrl} href />],
         ]}
       />
