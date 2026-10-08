@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { betterAuth } from "better-auth";
-import { admin, organization } from "better-auth/plugins";
+import { admin, organization, twoFactor } from "better-auth/plugins";
 import { withCloudflare } from "better-auth-cloudflare";
 import { samlIdp, type ServiceProviderConfig } from "better-auth-saml-idp";
 import { scimProvisioning, type Target } from "better-auth-scim-provisioning";
@@ -110,6 +110,10 @@ const DEFAULT_ATTRIBUTES = {
   lastName: { field: "name", part: "last" },
 } as const;
 
+/** A password over TLS, and a password plus a second factor (Microsoft's MFA class URI). */
+const AUTHN_PASSWORD = "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport";
+const AUTHN_MFA = "http://schemas.microsoft.com/claims/multipleauthn";
+
 // Built once per isolate. Better Auth itself is created per request (to pass that request's
 // `cf` geolocation), but the SAML plugin holds the parsed keys and the compiled XSDs.
 let plugin: { key: string; value: ReturnType<typeof samlIdp> } | undefined;
@@ -144,6 +148,19 @@ function samlPlugin(env: Env, origin: string) {
     // through the registry API (delegation). The entity IDs are pinned by Better Auth's baseURL,
     // this Worker's own origin, never a Host header.
     tenants: { enabled: true, keys: "per-tenant", delegation: {} },
+    // Authentication levels (D-047): a password, or a password plus an authenticator-app code
+    // (two-step sign-in, above). The second is Microsoft's MFA class, so Microsoft 365, with its
+    // domain federation set to accept the IdP's MFA, doesn't ask again. A user who turns two-step
+    // sign-in on is signed out everywhere (home page), so no session from before counts as MFA.
+    // An admin impersonating a user never entered that user's code, so it is password level.
+    authnContext: {
+      levels: [AUTHN_PASSWORD, AUTHN_MFA],
+      current: ({ user, session }) =>
+        !(session as { impersonatedBy?: unknown }).impersonatedBy &&
+        [true, 1, "1"].includes((user as { twoFactorEnabled?: unknown }).twoFactorEnabled as never)
+          ? AUTHN_MFA
+          : AUTHN_PASSWORD,
+    },
   });
   plugin = { key, value };
   return value;
@@ -207,6 +224,10 @@ function buildAuth(env: Env, origin: string) {
           // Tenants are organizations. Only the registry admins create them in this example, so a
           // public deployment doesn't collect strangers' organizations (tenants are host-made anyway).
           organization({ allowUserToCreateOrganization: (user) => isRegistryAdmin(env, user) }),
+          // Two-step sign-in (migration 0012): a user turns it on from the home page; signing in then
+          // also takes an authenticator-app code. No "trust this device", so every session of such a
+          // user really passed the second step, which is what authnContext below asserts.
+          twoFactor({ issuer: "Better Auth IdP (demo)" }),
           samlPlugin(env, origin),
           // Only with a target: Better Auth checks the schema (validateSchema), so the provisioning
           // tables are needed only once it's turned on.

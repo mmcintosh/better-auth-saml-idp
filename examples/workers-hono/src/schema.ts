@@ -18,7 +18,26 @@ export const users = sqliteTable("users", {
   banned: integer("banned", { mode: "boolean" }).default(false),
   banReason: text("ban_reason"),
   banExpires: integer("ban_expires", { mode: "timestamp_ms" }),
+  // twoFactor plugin (migration 0012)
+  twoFactorEnabled: integer("two_factor_enabled", { mode: "boolean" }).default(false),
 });
+
+// twoFactor plugin (migration 0012): one row per user with an authenticator app.
+export const twoFactors = sqliteTable(
+  "two_factors",
+  {
+    id: text("id").primaryKey(),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    verified: integer("verified", { mode: "boolean" }).default(true),
+    failedVerificationCount: integer("failed_verification_count").default(0),
+    lockedUntil: integer("locked_until", { mode: "timestamp_ms" }),
+  },
+  (t) => [index("two_factors_secret_idx").on(t.secret), index("two_factors_user_id_idx").on(t.userId)],
+);
 
 export const sessions = sqliteTable(
   "sessions",
@@ -292,4 +311,4 @@ export const scimProvisioningGroupLinks = sqliteTable(
   (t) => [index("scim_provisioning_group_links_target_idx").on(t.targetId), index("scim_provisioning_group_links_remote_idx").on(t.remoteId)],
 );
 
-export const schema = { scimProvisioningJobs, scimProvisioningLinks, scimProvisioningGroupLinks, users, sessions, accounts, verifications, rateLimits, organizations, members, invitations, samlIdpSeenRequests, samlIdpServiceProviders, samlIdpSessionParticipants, samlIdpAuditEvents, samlIdpTenants, samlIdpRetiredTenantKeys, samlIdpTenantKeys };
+export const schema = { scimProvisioningJobs, scimProvisioningLinks, scimProvisioningGroupLinks, users, twoFactors, sessions, accounts, verifications, rateLimits, organizations, members, invitations, samlIdpSeenRequests, samlIdpServiceProviders, samlIdpSessionParticipants, samlIdpAuditEvents, samlIdpTenants, samlIdpRetiredTenantKeys, samlIdpTenantKeys };
