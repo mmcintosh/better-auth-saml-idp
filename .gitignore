@@ -14,3 +14,6 @@ __pycache__/
 examples/workers-hono/wrangler.bench.jsonc
 examples/workers-hono/wrangler.field.jsonc
 scripts/bench/.state/
+
+# Live-test credentials (hosted databases, real SPs): never committed.
+.env.live

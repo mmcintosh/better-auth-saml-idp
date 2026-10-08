@@ -20,6 +20,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 - Assertion exchange (1.2.0) in the README (features, options, a usage section), the security page, the errors page (each `AssertionExchangeError` code and whether it uses the assertion up), the schema page, and the threat model.
 - The README shows the OpenSSF Best Practices badge (passing, project 15268). Its answers are kept in `.bestpractices.json`, which the badge site reads to pre-fill them.
 - Each release now checks the docs against the changelog: a step in CONTRIBUTING.md's release list, and a checklist in the release pull request `pnpm release` opens.
+- Cloudflare Workers guide and security notes: turn off Hyperdrive's query cache for an auth database (`--caching-disabled`): it kept a revoked session valid for 62.5 s. Also: `validateSchema: false` when Better Auth is built per request; `cf` as a function needs better-auth-cloudflare 0.4 (0.3.1 stores no geolocation then); and 0.4's storage check fires when Better Auth initializes, on the first request, not at deploy time.
 
 ## [1.2.0] - 2026-10-06
 

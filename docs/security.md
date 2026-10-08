@@ -29,6 +29,7 @@ betterAuth({
   - Workers KV can't do atomic get-and-delete, compare-and-swap or counters, so KV must never hold single-use state.
 - **Don't use KV secondary storage for sessions, and leave `session.cookieCache` disabled.**
   - Better Auth checks secondary storage *before* the database, so a revoked session can stay valid for KV's propagation window, often 60 seconds or more (better-auth-cloudflare #61).
+- **Postgres through Hyperdrive: create the configuration with `--caching-disabled`.** Hyperdrive's default query cache serves Better Auth's session reads, and a revoked session stayed valid for 62.5 seconds in a 2026-10-07 test.
   - The plugin re-checks the user and session against the database before signing (below), but a stale session can still *reach* the resume endpoint.
 - **Pin the IdP's base URL**, via `samlIdp({ baseURL })` or Better Auth's `baseURL`. Otherwise the SSO URL in metadata, the `Destination` check and the resume links follow the request's `Host` header. That's bounded and never cached publicly, but it's still steerable.
 - **Verify email addresses.** The plugin refuses to assert unverified emails (see the account policy below), so the host needs a working verification flow.
