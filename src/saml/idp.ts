@@ -1,10 +1,9 @@
-import * as samlify from "samlify";
 import type { ResolvedSamlIdpOptions, ResolvedServiceProvider, SignatureAlgorithm } from "../types";
 import { type IdpIdentity, rootIdentity } from "./identity";
+import { buildIdpMetadata } from "./metadata";
 import { trimSlashes } from "../url";
 
-export const BINDING_REDIRECT = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect";
-export const BINDING_POST = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
+export { BINDING_POST, BINDING_REDIRECT } from "./metadata";
 
 export const SIGNATURE_ALGORITHM_URI: Record<SignatureAlgorithm, string> = {
   "rsa-sha256": "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
@@ -15,58 +14,18 @@ export const SIGNATURE_ALGORITHM_URI: Record<SignatureAlgorithm, string> = {
 export const SSO_PATH = "/saml2/idp/sso";
 export const METADATA_PATH = "/saml2/idp/metadata";
 
-export type Idp = ReturnType<typeof samlify.IdentityProvider>;
-
-/**
- * samlify warns on the console whenever an IdP has no SingleLogoutService. Without
- * `singleLogout` we deliberately advertise none, so that one message is noise for every host.
- * Construction is synchronous, so the filter can't swallow anyone else's warnings.
- */
-const SAMLIFY_NO_SLO = "missing endpoint of SingleLogoutService";
-function quietly<T>(build: () => T): T {
-  const warn = console.warn;
-  console.warn = (...args: unknown[]) => {
-    if (typeof args[0] === "string" && args[0].includes(SAMLIFY_NO_SLO)) return;
-    warn(...args);
-  };
-  try {
-    return build();
-  } finally {
-    console.warn = warn;
-  }
+/** One IdP identity's metadata, built once (D-074). */
+export interface Idp {
+  getMetadata(): string;
 }
 
 /**
- * Builds the samlify IdentityProvider for one IdP identity (the root, or a tenant's, D-052),
- * advertising the NameID formats of that identity's SPs in code.
+ * The metadata of one IdP identity (the root, or a tenant's, D-052), advertising the NameID
+ * formats of that identity's SPs in code. Built on first use, then kept with the cached Idp.
  */
 export function createIdp(options: ResolvedSamlIdpOptions, identity: IdpIdentity, serviceProviders: readonly ResolvedServiceProvider[]): Idp {
-  const nameIdFormats = [...new Set(serviceProviders.map((sp) => sp.nameIdFormat))];
-  return quietly(() => samlify.IdentityProvider({
-    entityID: identity.entityId,
-    privateKey: identity.signing.privateKey,
-    signingCert: [identity.signing.certificate, ...identity.signing.additionalCertificates],
-    isAssertionEncrypted: false,
-    // Per-SP enforcement happens in the sso endpoint; metadata advertises the strict
-    // setting only if every SP requires it.
-    // Only a promise we can keep: with a registry, SPs added later may not sign.
-    wantAuthnRequestsSigned:
-      options.registry === undefined && serviceProviders.length > 0 && serviceProviders.every((sp) => sp.requestSignatures === "require"),
-    requestSignatureAlgorithm: SIGNATURE_ALGORITHM_URI[identity.signing.signatureAlgorithm],
-    nameIDFormat: nameIdFormats,
-    singleSignOnService: [
-      { Binding: BINDING_REDIRECT, Location: identity.ssoUrl },
-      { Binding: BINDING_POST, Location: identity.ssoUrl },
-    ],
-    ...(options.singleLogout
-      ? {
-          singleLogoutService: [
-            { Binding: BINDING_REDIRECT, Location: identity.sloUrl },
-            { Binding: BINDING_POST, Location: identity.sloUrl },
-          ],
-        }
-      : {}),
-  }));
+  let xml: string | undefined;
+  return { getMetadata: () => (xml ??= buildIdpMetadata(options, identity, serviceProviders)) };
 }
 
 /**
@@ -89,7 +48,7 @@ export function idpBaseURL(options: ResolvedSamlIdpOptions, requestBaseURL: stri
 const MAX_CACHED_BASE_URLS = 32;
 
 /**
- * samlify IdP per base URL. With `options.baseURL` pinned there is exactly one. Otherwise the
+ * IdP per base URL. With `options.baseURL` pinned there is exactly one. Otherwise the
  * base URL follows the request's Host, so the cache is bounded (LRU) instead of growing with
  * every Host header a client sends (review finding #7).
  */
@@ -105,7 +64,7 @@ export function idpCache(options: ResolvedSamlIdpOptions) {
 
 const MAX_CACHED_TENANTS = 256;
 
-/** samlify IdP per tenant (D-052), bounded like the root's: tenants are unbounded in number. */
+/** IdP per tenant (D-052), bounded like the root's: tenants are unbounded in number. */
 export function tenantIdpCache(options: ResolvedSamlIdpOptions) {
   const cache = lru(MAX_CACHED_TENANTS);
   return (identity: IdpIdentity) =>
