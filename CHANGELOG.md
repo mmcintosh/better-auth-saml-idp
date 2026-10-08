@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-08
+
+Documentation release: no code changes. The package's README and docs catch up with 1.2.0's assertion exchange, the security notes gain a Hyperdrive warning, and two Workers-guide statements are corrected.
+
 ### Examples
 
 - The CharDB examples run on React 19 (react, react-dom and their types together; `JSX.Element` becomes `ReactElement`, since React 19's types have no global `JSX`). Dependabot now proposes React's packages as one update, and leaves Vitest's next major alone until the Workers test plugin supports it.
