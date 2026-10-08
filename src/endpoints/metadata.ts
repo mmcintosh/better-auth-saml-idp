@@ -4,33 +4,11 @@ import { type Idp, idpBaseURL, METADATA_PATH } from "../saml/idp";
 import { newSamlId, signElement } from "../saml/response";
 import { TenantKeyError } from "../saml/tenant-keys";
 import { type PluginState, routeIdentity } from "./issue";
-import { parseXmlStrict } from "../saml/xml";
 import type { ResolvedSamlIdpOptions } from "../types";
-import { XMLSerializer } from "@xmldom/xmldom";
 
 export { METADATA_PATH };
 
-const MD = "urn:oasis:names:tc:SAML:2.0:metadata";
-
-/**
- * samlify emits SingleLogoutService after SingleSignOnService, but the metadata schema
- * (SSODescriptorType) puts it before NameIDFormat, ahead of IDPSSODescriptor's own elements.
- * Move it there so SLO-enabled metadata validates (D-028; caught by `inspect` on the live IdP).
- */
-function schemaOrder(xml: string): string {
-  if (!xml.includes("SingleLogoutService")) return xml;
-  const doc = parseXmlStrict(xml);
-  const idp = doc.getElementsByTagNameNS(MD, "IDPSSODescriptor")[0];
-  if (!idp) return xml;
-  const kids = Array.from(idp.childNodes as ArrayLike<any>).filter((n: any) => n.nodeType === 1 && n.namespaceURI === MD);
-  const slo = kids.filter((n: any) => n.localName === "SingleLogoutService");
-  const anchor = kids.find((n: any) => n.localName === "ManageNameIDService" || n.localName === "NameIDFormat" || n.localName === "SingleSignOnService");
-  if (!slo.length || !anchor) return xml;
-  for (const n of slo) idp.insertBefore(n, anchor);
-  return new XMLSerializer().serializeToString(doc);
-}
-
-/** samlify rebuilds the XML on every call; an IdP's metadata never changes, so build it once. */
+/** The rendered (and, with signMetadata, signed) document per Idp: an IdP's metadata never changes. */
 const metadataXml = new WeakMap<Idp, string>();
 
 /**
@@ -38,7 +16,7 @@ const metadataXml = new WeakMap<Idp, string>();
  * the ds:Signature becomes its first child (SAML metadata schema: Signature precedes Extensions).
  */
 export function renderMetadata(idp: Idp, options: ResolvedSamlIdpOptions, identity: IdpIdentity): string {
-  const xml = schemaOrder(idp.getMetadata());
+  const xml = idp.getMetadata();
   if (!options.signMetadata) return xml;
   const withId = xml.replace(/<((?:\w+:)?EntityDescriptor)\b/, `<$1 ID="${newSamlId()}"`);
   return signElement(
