@@ -57,8 +57,50 @@ pages["sign-in"] = () => {
     const r = await fetch("/api/auth/" + (signUp ? "sign-up" : "sign-in") + "/email", { method: "POST", headers: { "content-type": "application/json" }, credentials: "include", body: JSON.stringify(body) });
     $("submit").disabled = false;
     if (r.ok && signUp) { f.hidden = true; $("sent").hidden = false; return; }
+    const j = await r.json().catch(() => ({}));
+    // Two-step sign-in: the password was right; now the authenticator-app code.
+    if (r.ok && j.twoFactorRedirect) { f.hidden = true; $("code").hidden = false; $("title").textContent = "Two-step sign-in"; $("otp").focus(); return; }
     if (r.ok) { location.assign(safeCallback()); return; }
-    const j = await r.json().catch(() => ({})); err.textContent = j.message || ("Failed (" + r.status + ")");
+    err.textContent = j.message || ("Failed (" + r.status + ")");
+  };
+  $("code").onsubmit = async (e) => {
+    e.preventDefault(); $("codeErr").textContent = ""; $("verify").disabled = true;
+    const r = await fetch("/api/auth/two-factor/verify-totp", { method: "POST", headers: { "content-type": "application/json" }, credentials: "include", body: JSON.stringify({ code: $("otp").value.trim() }) });
+    $("verify").disabled = false;
+    if (r.ok) { location.assign(safeCallback()); return; }
+    const j = await r.json().catch(() => ({})); $("codeErr").textContent = j.message || ("That code didn't work (" + r.status + ")");
+  };
+};
+
+// ---- Home: two-step sign-in ----
+pages.home = () => {
+  const err = $("tfaErr");
+  const fail = (e) => { err.textContent = e.message; };
+  const on = $("tfaOn");
+  if (on) on.onsubmit = async (e) => {
+    e.preventDefault(); err.textContent = "";
+    try {
+      const j = await call("/api/auth/two-factor/enable", { password: $("tfaPw").value });
+      const secret = new URL(j.totpURI).searchParams.get("secret") || "";
+      $("tfaSecret").textContent = secret; $("tfaCopy").dataset.copy = secret; $("tfaUri").href = j.totpURI;
+      $("tfaBackup").textContent = (j.backupCodes || []).join("  ");
+      on.hidden = true; $("tfaSetup").hidden = false; $("tfaCode").focus();
+    } catch (x) { fail(x); }
+  };
+  const verify = $("tfaVerify");
+  if (verify) verify.onsubmit = async (e) => {
+    e.preventDefault(); err.textContent = "";
+    try {
+      await call("/api/auth/two-factor/verify-totp", { code: $("tfaCode").value.trim() });
+      // Sign out everywhere, so every session from now on passed the second step.
+      await call("/api/auth/revoke-sessions", {});
+      location.assign("/sign-in");
+    } catch (x) { fail(x); }
+  };
+  const off = $("tfaOff");
+  if (off) off.onsubmit = async (e) => {
+    e.preventDefault(); err.textContent = "";
+    try { await call("/api/auth/two-factor/disable", { password: $("tfaOffPw").value }); location.reload(); } catch (x) { fail(x); }
   };
 };
 

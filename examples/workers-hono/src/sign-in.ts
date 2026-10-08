@@ -19,6 +19,12 @@ export function signInPage(url: string): Response {
 <button id="toggle" type="button" class="link">Create an account instead</button>
 <p id="err" class="error" role="alert"></p>
 </form>
+<form id="code" class="stack" hidden>
+<p>Enter the 6-digit code from your authenticator app.</p>
+<label class="field"><span>Code</span><input id="otp" name="otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></label>
+<button id="verify" type="submit">Verify</button>
+<p id="codeErr" class="error" role="alert"></p>
+</form>
 <div id="sent" class="notice" hidden><strong>Check your email</strong><span>We sent a verification link. Open it to finish signing in.</span></div>
 <p class="muted small"><a href="/">Back</a></p>
 </div></main><script src="/assets/app.js" defer></script></body></html>`);
