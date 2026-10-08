@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-08
+
+samlify is no longer a dependency: the plugin writes its metadata itself, byte for byte the same, so a user installs 6 packages instead of 13 and the bundled code roughly halves. No API or behaviour changes.
+
 ### Changed
 
 - **samlify is no longer a dependency** (D-074). It was only used to build the IdP's metadata document, which the plugin now writes itself, byte for byte the same (tested against samlify's output for every option that changes it). A user now installs 6 packages instead of 13: gone are samlify, `node-rsa`, `@authenio/xml-encryption`, `xpath` 0.0.34, `xml`, `xml-escape`, `asn1`, `safer-buffer` and `escape-html`. The plugin's bundled code roughly halves (minified 993 KB → 523 KB, gzip 269 KB → 143 KB). No API or behaviour changes.
