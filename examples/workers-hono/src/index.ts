@@ -87,7 +87,7 @@ app.get("/", (c) =>
           ? card("Tenants", `<ul class="list">${tenants.map((t) => `<li><code>${esc(t.tenantKey)}</code> · <a href="/api/auth/saml2/idp/metadata/${encodeURIComponent(t.tenantKey)}">metadata</a></li>`).join("")}</ul>`, { subtitle: "Each has its own entity ID, metadata and signing key." })
           : "") +
         twoStepCard(session?.user as { twoFactorEnabled?: unknown } | undefined) +
-        passkeysCard((await ctx.adapter.findMany({ model: "passkey", where: [{ field: "userId", value: session!.user.id }], sortBy: { field: "createdAt", direction: "asc" }, limit: 20 })) as Passkey[]) +
+        passkeysCard((await ctx.adapter.findMany({ model: "passkey", where: [{ field: "userId", value: session?.user.id ?? "" }], sortBy: { field: "createdAt", direction: "asc" }, limit: 20 })) as Passkey[]) +
         (viewer.admin ? card("Administration", `<p>Manage service providers, tenants and keys, and see activity.</p><div class="row top"><a class="button" href="/admin">Open the admin</a></div>`) : "");
     }
     return htmlResponse(page({ title: viewer ? "My apps" : "Home", active: "/", viewer, content, provisioning: hasProvisioning(c.env), ...(viewer ? { script: "home" } : {}) }));
