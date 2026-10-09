@@ -1,6 +1,6 @@
 // Step-up authentication (D-047): RequestedAuthnContext judged against the host's levels and the
 // class the current session achieved, sending the user back to sign in when more is needed.
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { resolveOptions, SamlIdpConfigError } from "../../src/options";
 import { satisfiesAuthnContext, stepUpTarget } from "../../src/saml/request";
 import { baseOptions } from "../support/config";
@@ -55,8 +55,12 @@ describe("level comparison (SAML Core §3.3.2.2.1)", () => {
 
 /** A host whose "second factor" is simulated by the user's `image` field: "mfa" means done. */
 async function host(current?: (ctx: any) => unknown) {
+  const issued: string[] = [];
   const { auth } = await createHost({
-    saml: { authnContext: { levels: LEVELS, current: (current ?? (({ user }: any) => (user.image === "mfa" ? MFA : PPT))) as any } },
+    saml: {
+      authnContext: { levels: LEVELS, current: (current ?? (({ user }: any) => (user.image === "mfa" ? MFA : PPT))) as any },
+      events: { onAssertionIssued: (e: any) => void issued.push(e.authnContextClassRef) },
+    },
   });
   const browser = new Browser(auth);
   const user = await browser.signUp();
@@ -68,7 +72,7 @@ async function host(current?: (ctx: any) => unknown) {
       headers: { "content-type": "application/json", origin: BASE_URL },
       body: JSON.stringify({ email: user.email, password: "correct-horse-battery" }),
     });
-  return { browser, user, completeMfa, signInAgain };
+  return { browser, user, completeMfa, signInAgain, issued };
 }
 
 describe("step-up, end to end", () => {
@@ -104,6 +108,14 @@ describe("step-up, end to end", () => {
     await completeMfa();
     const { xml } = await readAutoPost(await browser.fetch(await redirectUrl(authnRequestXml({ inner: rac("minimum", PPT) }).xml)));
     expect(classOf(xml)).toBe(MFA);
+  });
+
+  it("the assertion.issued event records the class sent, so the audit log shows which level an SP was told", async () => {
+    const { browser, completeMfa, issued } = await host();
+    await readAutoPost(await browser.fetch(await redirectUrl(authnRequestXml().xml)));
+    await completeMfa();
+    await readAutoPost(await browser.fetch(await redirectUrl(authnRequestXml().xml)));
+    await vi.waitFor(() => expect(issued).toEqual([PPT, MFA]));
   });
 
   it("loop guard: still not enough after signing in again → NoAuthnContext to the SP, not another round", async () => {

@@ -46,6 +46,7 @@ Every event has `type`, `at` (a `Date`), and when available `ipAddress` and `use
 | `nameIdFormat`, `nameId` | The NameID as sent. It may be an email address: personal data. |
 | `attributes` | The attribute **names** sent. Values are never included. |
 | `encrypted` | Whether the assertion was encrypted. |
+| `authnContextClassRef` | The `AuthnContextClassRef` sent: the level `authnContext.current()` reported ([RequestedAuthnContext](flows.md#requestedauthncontext)), or `authnContextClassRef`. Shows, for example, whether an SP was told the user did MFA. |
 
 **`denied`**
 
