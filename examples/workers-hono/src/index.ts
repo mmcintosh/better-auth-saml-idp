@@ -87,11 +87,28 @@ app.get("/", (c) =>
           ? card("Tenants", `<ul class="list">${tenants.map((t) => `<li><code>${esc(t.tenantKey)}</code> · <a href="/api/auth/saml2/idp/metadata/${encodeURIComponent(t.tenantKey)}">metadata</a></li>`).join("")}</ul>`, { subtitle: "Each has its own entity ID, metadata and signing key." })
           : "") +
         twoStepCard(session?.user as { twoFactorEnabled?: unknown } | undefined) +
+        passkeysCard((await ctx.adapter.findMany({ model: "passkey", where: [{ field: "userId", value: session!.user.id }], sortBy: { field: "createdAt", direction: "asc" }, limit: 20 })) as Passkey[]) +
         (viewer.admin ? card("Administration", `<p>Manage service providers, tenants and keys, and see activity.</p><div class="row top"><a class="button" href="/admin">Open the admin</a></div>`) : "");
     }
     return htmlResponse(page({ title: viewer ? "My apps" : "Home", active: "/", viewer, content, provisioning: hasProvisioning(c.env), ...(viewer ? { script: "home" } : {}) }));
   }),
 );
+
+type Passkey = { id: string; name?: string | null; createdAt?: Date | null; deviceType?: string };
+
+/** Passkeys (migration 0013): sign in with a fingerprint, face, PIN or security key instead of a password. */
+function passkeysCard(keys: Passkey[]): string {
+  const rows = keys
+    .map((k) => `<li><strong>${esc(k.name || "Passkey")}</strong> <span class="muted small">${k.deviceType === "multiDevice" ? "synced" : "this device only"}${k.createdAt ? ` · added ${esc(new Date(k.createdAt).toISOString().slice(0, 10))}` : ""}</span> <button class="ghost small" type="button" data-pk-delete="${esc(k.id)}">Remove</button></li>`)
+    .join("");
+  return card(
+    "Passkeys",
+    `<p>Sign in with your fingerprint, face, device PIN or a security key instead of a password. A passkey counts as MFA: apps that ask for it, such as Microsoft 365, are told a passkey sign-in was MFA.</p>
+${keys.length ? `<ul class="list">${rows}</ul>` : `<p class="muted">No passkeys yet.</p>`}
+<form id="pkAdd" class="row top"><input id="pkName" placeholder="Name, e.g. Pixel or YubiKey" maxlength="60"><button type="submit">Add a passkey</button></form>
+<p id="pkErr" class="error" role="alert"></p>`,
+  );
+}
 
 /** Two-step sign-in (migration 0012): turn it on with an authenticator app, or off. */
 function twoStepCard(user: { twoFactorEnabled?: unknown } | undefined): string {
@@ -99,10 +116,10 @@ function twoStepCard(user: { twoFactorEnabled?: unknown } | undefined): string {
   return card(
     "Two-step sign-in",
     enabled
-      ? `<p>On: signing in takes your password and a code from your authenticator app. Apps that ask for MFA, such as Microsoft 365, accept this sign-in as MFA.</p>
+      ? `<p>On: signing in takes your password and a code from your authenticator app. Apps that ask for MFA, such as Microsoft 365, are told this sign-in was MFA.</p>
 <form id="tfaOff" class="row top"><input id="tfaOffPw" type="password" placeholder="Password" autocomplete="current-password" required><button class="ghost" type="submit">Turn off</button></form>
 <p id="tfaErr" class="error" role="alert"></p>`
-      : `<p>Off. Turn it on to sign in with your password and a code from an authenticator app (Microsoft Authenticator, Google Authenticator, 1Password…). Apps that ask for MFA, such as Microsoft 365, then accept this sign-in as MFA.</p>
+      : `<p>Off. Turn it on to sign in with your password and a code from an authenticator app (Microsoft Authenticator, Google Authenticator, 1Password…). Apps that ask for MFA, such as Microsoft 365, are then told your sign-in was MFA.</p>
 <form id="tfaOn" class="row top"><input id="tfaPw" type="password" placeholder="Password" autocomplete="current-password" required><button type="submit">Turn on</button></form>
 <div id="tfaSetup" hidden>
 <p>Scan this QR code with your authenticator app (or type in the key below, time-based), then enter the 6-digit code it shows. You'll then be signed out everywhere, and sign in again with your code.</p>

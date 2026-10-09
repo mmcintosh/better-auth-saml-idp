@@ -17,6 +17,7 @@ export function signInPage(url: string): Response {
 <label class="field" id="nameField" hidden><span>Name</span><input id="name" name="name" autocomplete="name"></label>
 <button id="submit" type="submit">Sign in</button>
 <button id="toggle" type="button" class="link">Create an account instead</button>
+<button id="passkey" type="button" class="ghost">Sign in with a passkey</button>
 <p id="err" class="error" role="alert"></p>
 </form>
 <form id="code" class="stack" hidden>

@@ -49,6 +49,18 @@ pages["sign-in"] = () => {
     $("submit").textContent = signUp ? "Create account" : "Sign in";
     $("toggle").textContent = signUp ? "I already have an account" : "Create an account instead";
     $("title").textContent = signUp ? "Create an account" : "Sign in";
+    $("passkey").hidden = signUp;
+  };
+  // Passkey sign-in: the browser's own WebAuthn JSON helpers (Chrome 129+, Firefox 119+, Safari 18+).
+  $("passkey").onclick = async () => {
+    err.textContent = "";
+    if (!window.PublicKeyCredential || !PublicKeyCredential.parseRequestOptionsFromJSON) { err.textContent = "This browser can't use passkeys here. Sign in with your password."; return; }
+    try {
+      const opts = await call("/api/auth/passkey/generate-authenticate-options");
+      const cred = await navigator.credentials.get({ publicKey: PublicKeyCredential.parseRequestOptionsFromJSON(opts) });
+      await call("/api/auth/passkey/verify-authentication", { response: cred.toJSON() });
+      location.assign(safeCallback());
+    } catch (x) { err.textContent = x.name === "NotAllowedError" ? "Passkey sign-in was cancelled." : x.message; }
   };
   f.onsubmit = async (e) => {
     e.preventDefault(); err.textContent = ""; $("submit").disabled = true;
@@ -99,6 +111,22 @@ pages.home = () => {
       location.assign("/sign-in");
     } catch (x) { fail(x); }
   };
+  // Passkeys: add one (the browser asks for a fingerprint, face, PIN or security key), or remove one.
+  const pk = $("pkAdd"), pkErr = $("pkErr");
+  if (pk) pk.onsubmit = async (e) => {
+    e.preventDefault(); pkErr.textContent = "";
+    if (!window.PublicKeyCredential || !PublicKeyCredential.parseCreationOptionsFromJSON) { pkErr.textContent = "This browser can't create passkeys here."; return; }
+    try {
+      const opts = await call("/api/auth/passkey/generate-register-options");
+      const cred = await navigator.credentials.create({ publicKey: PublicKeyCredential.parseCreationOptionsFromJSON(opts) });
+      await call("/api/auth/passkey/verify-registration", { response: cred.toJSON(), name: $("pkName").value.trim() || undefined });
+      location.reload();
+    } catch (x) { pkErr.textContent = x.name === "NotAllowedError" ? "Cancelled." : x.name === "InvalidStateError" ? "This device already has a passkey for this account." : x.message; }
+  };
+  document.querySelectorAll("[data-pk-delete]").forEach((b) => { b.onclick = async () => {
+    pkErr.textContent = "";
+    try { await call("/api/auth/passkey/delete-passkey", { id: b.dataset.pkDelete }); location.reload(); } catch (x) { pkErr.textContent = x.message; }
+  }; });
   const off = $("tfaOff");
   if (off) off.onsubmit = async (e) => {
     e.preventDefault(); err.textContent = "";

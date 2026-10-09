@@ -4,6 +4,11 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Examples
+
+- **Passkeys in the Workers example** (Better Auth's `passkey` plugin, migration `0013`): add them on the home page, then "Sign in with a passkey", using the browser's own WebAuthn JSON helpers with no client library.
+- **The sign-in level now comes from how the session was signed in**, not from the user's two-step setting. A session field (`auth_method`), set when the session is created, records password, authenticator code, backup code, passkey or impersonation, and the MFA class is sent only for the code and passkey ones. The Microsoft 365 guide's MFA snippet follows it.
+
 ## [1.4.0] - 2026-10-09
 
 The audit log records the sign-in level sent to each service provider, and a new guide covers Microsoft 365 (Entra ID domain federation), verified live.
