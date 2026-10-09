@@ -63,8 +63,31 @@ export const sessions = sqliteTable(
     impersonatedBy: text("impersonated_by"),
     // organization plugin (migration 0010)
     activeOrganizationId: text("active_organization_id"),
+    // How the session was signed in (migration 0013; authMethodOf in auth.ts)
+    authMethod: text("auth_method"),
   },
   (t) => [index("sessions_userId_idx").on(t.userId)],
+);
+
+// passkey plugin (migration 0013): one row per passkey a user added.
+export const passkeys = sqliteTable(
+  "passkeys",
+  {
+    id: text("id").primaryKey(),
+    name: text("name"),
+    publicKey: text("public_key").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    credentialID: text("credential_id").notNull(),
+    counter: integer("counter").notNull(),
+    deviceType: text("device_type").notNull(),
+    backedUp: integer("backed_up", { mode: "boolean" }).notNull(),
+    transports: text("transports"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }),
+    aaguid: text("aaguid"),
+  },
+  (t) => [index("passkeys_user_id_idx").on(t.userId), index("passkeys_credential_id_idx").on(t.credentialID)],
 );
 
 export const accounts = sqliteTable(
@@ -311,4 +334,4 @@ export const scimProvisioningGroupLinks = sqliteTable(
   (t) => [index("scim_provisioning_group_links_target_idx").on(t.targetId), index("scim_provisioning_group_links_remote_idx").on(t.remoteId)],
 );
 
-export const schema = { scimProvisioningJobs, scimProvisioningLinks, scimProvisioningGroupLinks, users, twoFactors, sessions, accounts, verifications, rateLimits, organizations, members, invitations, samlIdpSeenRequests, samlIdpServiceProviders, samlIdpSessionParticipants, samlIdpAuditEvents, samlIdpTenants, samlIdpRetiredTenantKeys, samlIdpTenantKeys };
+export const schema = { scimProvisioningJobs, scimProvisioningLinks, scimProvisioningGroupLinks, users, twoFactors, passkeys, sessions, accounts, verifications, rateLimits, organizations, members, invitations, samlIdpSeenRequests, samlIdpServiceProviders, samlIdpSessionParticipants, samlIdpAuditEvents, samlIdpTenants, samlIdpRetiredTenantKeys, samlIdpTenantKeys };

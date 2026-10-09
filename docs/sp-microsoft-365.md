@@ -91,15 +91,15 @@ Microsoft can accept MFA done at your IdP instead of asking for its own. Two thi
          "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport",
          "http://schemas.microsoft.com/claims/multipleauthn",
        ],
-       current: ({ user, session }) =>
-         user.twoFactorEnabled && !session.impersonatedBy
+       current: ({ session }) =>
+         ["totp", "backup-code", "passkey"].includes(session.authMethod)
            ? "http://schemas.microsoft.com/claims/multipleauthn"
            : "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport",
      },
    });
    ```
 
-   This fits Better Auth's `twoFactor` plugin when every session of a user with two-step sign-in on has passed the second step. That's true when turning it on ends the user's other sessions and "trust this device" isn't used. The [Workers example](../examples/workers-hono/README.md#two-step-sign-in) does this. Since 1.4.0, the `assertion.issued` event and the audit log record the class sent (`authnContextClassRef`), so you can see what Microsoft was told.
+   Judge the **session**, not the user: a user with two-step sign-in on can still hold a session from before they turned it on, and an admin impersonating them never entered their code. The [Workers example](../examples/workers-hono/README.md#two-step-sign-in) stores how each session was signed in, in a session field set by a `databaseHooks.session.create.before` hook from the endpoint that created it (`/two-factor/verify-totp`, `/two-factor/verify-backup-code`, `/passkey/verify-authentication`, `/admin/impersonate-user`, anything else a password). Since 1.4.0, the `assertion.issued` event and the audit log record the class sent (`authnContextClassRef`), so you can see what Microsoft was told.
 
 2. **Microsoft accepts it**, for this domain only:
 
