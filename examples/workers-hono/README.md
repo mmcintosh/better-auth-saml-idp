@@ -29,7 +29,7 @@ The plugin only signs assertions for **verified** email addresses, so the exampl
 
 ## Two-step sign-in
 
-Signed-in users can turn on two-step sign-in (an authenticator-app code, Better Auth's `twoFactor` plugin; migration `0012_two_factor.sql`) on the home page. Turning it on signs them out everywhere, so every later session has passed the code. The SAML plugin then reports the stronger sign-in to service providers (`authnContext`, D-047): `PasswordProtectedTransport` for a password, Microsoft's `http://schemas.microsoft.com/claims/multipleauthn` for a password plus a code. A Microsoft 365 domain federated to this IdP with `federatedIdpMfaBehavior` set to `acceptIfMfaDoneByFederatedIdp` then accepts that as MFA and doesn't ask again. A session an admin opened by impersonating a user counts as password only.
+Signed-in users can turn on two-step sign-in (an authenticator-app code, Better Auth's `twoFactor` plugin; migration `0012_two_factor.sql`) on the home page, scanning a QR code (drawn by the Worker itself, `POST /two-step/qr`, so the key never goes to a QR service) or typing the key. Turning it on signs them out everywhere, so every later session has passed the code. The SAML plugin then reports the stronger sign-in to service providers (`authnContext`, D-047): `PasswordProtectedTransport` for a password, Microsoft's `http://schemas.microsoft.com/claims/multipleauthn` for a password plus a code. A Microsoft 365 domain federated to this IdP with `federatedIdpMfaBehavior` set to `acceptIfMfaDoneByFederatedIdp` then accepts that as MFA and doesn't ask again. A session an admin opened by impersonating a user counts as password only.
 
 ## Register service providers
 

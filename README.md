@@ -132,6 +132,7 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 - [x] SAMLtool: Response validation
 - [x] AWS IAM Identity Center: live (multi-Region instance), the access portal and the AWS console in an assigned permission set, SP stored in the D1 registry ([guide](docs/sp-aws-iam-identity-center.md))
 - [x] Google Workspace: live (an SSO profile assigned to one organizational unit), sign-in to Google through the IdP, with the users created and suspended by [better-auth-scim-provisioning](https://www.npmjs.com/package/better-auth-scim-provisioning) ([guide](docs/sp-google-workspace.md))
+- [x] Microsoft 365 (Entra ID domain federation): live (a spare domain federated with Graph PowerShell), sign-in to My Apps through the IdP with a persistent NameID matched to `onPremisesImmutableId`, and the IdP's MFA class (`multipleauthn`) sent; Microsoft relying on it is not yet verified ([guide](docs/sp-microsoft-365.md))
 - [ ] HubSpot: guide written ([HubSpot](docs/hubspot.md)), not yet run live
 
 **Databases, in CI:**
@@ -292,7 +293,7 @@ Unauthenticated users are sent to `loginPage?callbackURL=<absolute resume URL>`.
 
 ### 5. Register a service provider
 
-Give the SP your metadata URL, `https://auth.example.com/api/auth/saml2/idp/metadata`. Take its entity ID and ACS URL, or its metadata, and add an entry to `serviceProviders`, or store it at runtime with the [registry](#managing-sps-at-runtime-registry). Step-by-step guides: [Cloudflare Access](docs/sp-cloudflare-access.md) · [Google Workspace](docs/sp-google-workspace.md) · [HubSpot](docs/hubspot.md) · [AWS IAM Identity Center](docs/sp-aws-iam-identity-center.md) · [testing with other SPs](docs/testing-with-sps.md).
+Give the SP your metadata URL, `https://auth.example.com/api/auth/saml2/idp/metadata`. Take its entity ID and ACS URL, or its metadata, and add an entry to `serviceProviders`, or store it at runtime with the [registry](#managing-sps-at-runtime-registry). Step-by-step guides: [Cloudflare Access](docs/sp-cloudflare-access.md) · [Google Workspace](docs/sp-google-workspace.md) · [Microsoft 365](docs/sp-microsoft-365.md) · [HubSpot](docs/hubspot.md) · [AWS IAM Identity Center](docs/sp-aws-iam-identity-center.md) · [testing with other SPs](docs/testing-with-sps.md).
 
 To also create, update and switch off the accounts at those apps, pair it with [better-auth-scim-provisioning](https://www.npmjs.com/package/better-auth-scim-provisioning): see [Sign-in and provisioning](docs/guide/provisioning.md). Verified live together with Cloudflare Access, Google Workspace and AWS IAM Identity Center.
 

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { renderSVG } from "uqr";
 import { devMailbox, getAuth, hasProvisioning, idpInitiatedApps, isRegistryAdmin, requestCf, requestWaitUntil, type Env } from "./auth";
 import { registerAdmin } from "./admin";
 import { signInPage } from "./sign-in";
@@ -20,6 +21,18 @@ const withCf = <T>(c: Ctx, fn: () => T) =>
 app.all("/api/auth/*", (c) => withCf(c, () => authFor(c).handler(c.req.raw)));
 
 app.get("/sign-in", (c) => signInPage(c.req.url));
+
+// Two-step sign-in setup: the authenticator link as a QR code (SVG), drawn here so the key never
+// goes to a third-party QR service. Signed-in users only, and only otpauth://totp links.
+app.post("/two-step/qr", (c) =>
+  withCf(c, async () => {
+    const session = await authFor(c).api.getSession({ headers: c.req.raw.headers });
+    if (!session) return c.json({ message: "Sign in first" }, 401);
+    const { uri } = (await c.req.json().catch(() => ({}))) as { uri?: unknown };
+    if (typeof uri !== "string" || uri.length > 512 || !uri.startsWith("otpauth://totp/")) return c.json({ message: "Not an authenticator link" }, 400);
+    return new Response(renderSVG(uri, { border: 2 }), { headers: { "content-type": "image/svg+xml", "cache-control": "no-store" } });
+  }),
+);
 
 // The pages' stylesheet and code: same origin, so their CSP allows no inline code.
 const asset = (body: string, type: string) => () => new Response(body, { headers: { "content-type": `${type}; charset=utf-8`, "cache-control": "no-cache" } });
@@ -92,7 +105,8 @@ function twoStepCard(user: { twoFactorEnabled?: unknown } | undefined): string {
       : `<p>Off. Turn it on to sign in with your password and a code from an authenticator app (Microsoft Authenticator, Google Authenticator, 1Password…). Apps that ask for MFA, such as Microsoft 365, then accept this sign-in as MFA.</p>
 <form id="tfaOn" class="row top"><input id="tfaPw" type="password" placeholder="Password" autocomplete="current-password" required><button type="submit">Turn on</button></form>
 <div id="tfaSetup" hidden>
-<p>Add this account to your authenticator app with the key below (or open the link on your phone), then enter the 6-digit code it shows. You'll then be signed out everywhere, and sign in again with your code.</p>
+<p>Scan this QR code with your authenticator app (or type in the key below, time-based), then enter the 6-digit code it shows. You'll then be signed out everywhere, and sign in again with your code.</p>
+<p><img id="tfaQr" alt="QR code for your authenticator app" width="200" height="200" hidden></p>
 <p><code id="tfaSecret" class="break"></code> <button class="ghost small" type="button" id="tfaCopy">Copy key</button></p>
 <p class="small"><a id="tfaUri" href="#">Open in authenticator app</a></p>
 <form id="tfaVerify" class="row top"><input id="tfaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" required><button type="submit">Verify and turn on</button></form>

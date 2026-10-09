@@ -6,11 +6,16 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ### Added
 
-- **The `assertion.issued` event records the sign-in level sent** (`authnContextClassRef`): the class `authnContext.current()` reported, or `authnContextClassRef` when step-up isn't configured. It's in the audit log's details too, so the log shows, for example, whether Microsoft 365 was told the user did MFA.
+- **The `assertion.issued` event records the sign-in level sent** (`authnContextClassRef`, #65, D-075): the class `authnContext.current()` reported, or `authnContextClassRef` when step-up isn't configured. It's in the audit log's details too, so the log shows, for example, whether Microsoft 365 was told the user did MFA.
+
+### Documentation
+
+- **Microsoft 365 guide** ([docs/sp-microsoft-365.md](docs/sp-microsoft-365.md), D-075): Entra ID domain federation, verified live. It covers adding Microsoft by configuration (its metadata isn't schema-valid), linking users through `onPremisesImmutableId`, federating with Graph PowerShell, sending the `multipleauthn` class for MFA done at the IdP, and the security-defaults catch.
 
 ### Examples
 
 - **Two-step sign-in in the Workers example** (#64): authenticator-app codes (Better Auth's `twoFactor`, migration `0012`), reported to SPs through `authnContext`. A password is `PasswordProtectedTransport`, a password plus a code is Microsoft's `multipleauthn`, so a Microsoft 365 domain federated with `acceptIfMfaDoneByFederatedIdp` accepts it as MFA.
+- **A QR code for two-step sign-in setup** in the Workers example, drawn by the Worker (`uqr`), so the key never goes to a third-party QR service.
 
 ## [1.3.0] - 2026-10-08
 
