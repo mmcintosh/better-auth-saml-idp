@@ -84,6 +84,8 @@ pages.home = () => {
       const secret = new URL(j.totpURI).searchParams.get("secret") || "";
       $("tfaSecret").textContent = secret; $("tfaCopy").dataset.copy = secret; $("tfaUri").href = j.totpURI;
       $("tfaBackup").textContent = (j.backupCodes || []).join("  ");
+      const qr = await fetch("/two-step/qr", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ uri: j.totpURI }) });
+      if (qr.ok) { $("tfaQr").src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(await qr.text()); $("tfaQr").hidden = false; }
       on.hidden = true; $("tfaSetup").hidden = false; $("tfaCode").focus();
     } catch (x) { fail(x); }
   };

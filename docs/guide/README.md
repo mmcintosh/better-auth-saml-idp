@@ -34,7 +34,7 @@ Everything about running Better Auth as a SAML 2.0 Identity Provider. New here? 
 
 ## SP guides
 
-[Cloudflare Access](../sp-cloudflare-access.md) · [Okta](../sp-okta.md) · [Auth0](../sp-auth0.md) · [Salesforce](../sp-salesforce.md) · [HubSpot](../hubspot.md) · [AWS IAM Identity Center](../sp-aws-iam-identity-center.md) · [Testing with other SPs](../testing-with-sps.md)
+[Cloudflare Access](../sp-cloudflare-access.md) · [Okta](../sp-okta.md) · [Auth0](../sp-auth0.md) · [Salesforce](../sp-salesforce.md) · [Microsoft 365](../sp-microsoft-365.md) · [HubSpot](../hubspot.md) · [AWS IAM Identity Center](../sp-aws-iam-identity-center.md) · [Testing with other SPs](../testing-with-sps.md)
 
 ## Background
 

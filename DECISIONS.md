@@ -2090,3 +2090,14 @@ samlify had become a runtime dependency for exactly one thing: building the IdP'
 - samlify stays a **devDependency**: the comparison test, and the samlify SPs in the interop tests (test/support/sp.ts).
 - `createIdp()` keeps its shape (`{ getMetadata() }`), so the per-base-URL and per-tenant caches and the signed-metadata cache are unchanged.
 - Released as a minor version (1.3.0): the public API is unchanged, but the dependency set users install changes.
+
+## D-075: Microsoft 365 domain federation, live, and the class sent in the audit log (2026-10-08)
+
+A live test federated a spare custom domain in a Microsoft 365 tenant to the example Worker, with two test users who had no licences.
+
+- **Setup:** Microsoft as an SP by configuration (`urn:federation:MicrosoftOnline`, ACS `https://login.microsoftonline.com/login.srf`, persistent NameID from the Better Auth user id, attribute `IDPEmail` = email). Microsoft's SAML metadata doesn't validate against the metadata schema, so the metadata route refuses it; that's correct, and the guide says to add it by configuration. Each Entra user's `onPremisesImmutableId` was set to their Better Auth id while the domain was still managed, then `New-MgDomainFederationConfiguration` (Graph PowerShell 2.41) federated the domain. Realm discovery gave mixed answers for about 15 minutes, then settled.
+- **Verified live:** both users signed in at myapps.microsoft.com through the IdP (`assertion.issued` for `microsoft-365`, SP-initiated). No plugin changes were needed.
+- **MFA:** the example gained two-step sign-in (Better Auth `twoFactor`, #64) and `authnContext` levels reporting `http://schemas.microsoft.com/claims/multipleauthn` for users with it on. The domain was set to `acceptIfMfaDoneByFederatedIdp`. Not settled: the tenant had security defaults on. They forced Authenticator registration on a user who had two-step sign-in at the IdP but no Authenticator (interrupt 50072). For a user who had both, Microsoft required only single-factor authentication, so it never had to decide whether to count the IdP's MFA. Proving it needs Conditional Access in place of security defaults. That's a tenant-wide change, so it's left for a separate test tenant.
+- **Audit log:** while testing, the audit log showed that an assertion went to Microsoft, but not which class it stated. The only evidence was Microsoft's sign-in log, which lagged 15 to 30 minutes. `assertion.issued` now carries `authnContextClassRef`, the class sent (#65). It's always present (the default class when step-up isn't configured), so it's a new field, not a change to an existing one.
+- **Guide:** docs/sp-microsoft-365.md.
+
