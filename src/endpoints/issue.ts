@@ -452,6 +452,7 @@ export async function issueResponse(
     nameId,
     attributes: Object.keys(attributes),
     encrypted: signed.encrypted,
+    authnContextClassRef: signed.authnContextClassRef,
     ...tenantOf(sp),
   });
   return autoPostResponse(request.acsUrl, signed.base64, request.relayState);

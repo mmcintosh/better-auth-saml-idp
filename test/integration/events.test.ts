@@ -51,6 +51,7 @@ describe("events", () => {
       nameId: user.email,
       attributes: ["mail"],
       encrypted: false,
+      authnContextClassRef: "urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified",
     });
     expect(e.assertionId).toMatch(/^_/);
     expect(e.at).toBeInstanceOf(Date);
@@ -140,7 +141,7 @@ describe("audit log", () => {
     expect(denied).toMatchObject({ code: "EMAIL_NOT_VERIFIED", spId: "test-sp", userId: refused.id });
     expect(issued).toMatchObject({ spId: "test-sp", userId: user.id, code: null });
     expect(issued!.ipAddress).toMatch(/^10\./);
-    expect(JSON.parse(issued!.details)).toMatchObject({ nameId: user.email, attributes: ["mail"], initiatedBy: "sp" });
+    expect(JSON.parse(issued!.details)).toMatchObject({ nameId: user.email, attributes: ["mail"], initiatedBy: "sp", authnContextClassRef: "urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified" });
     expect(logout).toMatchObject({ userId: user.id });
     // Denials without a user were never stored, whether or not they named an SP.
     expect((await rows()).filter((r) => r.type === "denied" && r.userId === null)).toEqual([]);

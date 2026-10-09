@@ -36,6 +36,12 @@ export interface AssertionIssuedEvent extends EventBase {
   /** Names of the attributes sent (not their values). */
   attributes: string[];
   encrypted: boolean;
+  /**
+   * The `<AuthnContextClassRef>` sent: the level `authnContext.current()` reported (D-047), or
+   * `authnContextClassRef` when step-up isn't configured. Lets the audit log show, for example,
+   * whether an SP was told the user did MFA.
+   */
+  authnContextClassRef: string;
   /** The SP's tenant (an organization id, D-052); absent for the root IdP. */
   tenantId?: string | undefined;
 }

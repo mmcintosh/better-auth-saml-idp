@@ -4,6 +4,14 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- **The `assertion.issued` event records the sign-in level sent** (`authnContextClassRef`): the class `authnContext.current()` reported, or `authnContextClassRef` when step-up isn't configured. It's in the audit log's details too, so the log shows, for example, whether Microsoft 365 was told the user did MFA.
+
+### Examples
+
+- **Two-step sign-in in the Workers example** (#64): authenticator-app codes (Better Auth's `twoFactor`, migration `0012`), reported to SPs through `authnContext`. A password is `PasswordProtectedTransport`, a password plus a code is Microsoft's `multipleauthn`, so a Microsoft 365 domain federated with `acceptIfMfaDoneByFederatedIdp` accepts it as MFA.
+
 ## [1.3.0] - 2026-10-08
 
 samlify is no longer a dependency: the plugin writes its metadata itself, byte for byte the same, so a user installs 6 packages instead of 13 and the bundled code roughly halves. No API or behaviour changes.
