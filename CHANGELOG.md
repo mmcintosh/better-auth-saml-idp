@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-09
+
+The audit log records the sign-in level sent to each service provider, and a new guide covers Microsoft 365 (Entra ID domain federation), verified live.
+
 ### Added
 
 - **The `assertion.issued` event records the sign-in level sent** (`authnContextClassRef`, #65, D-075): the class `authnContext.current()` reported, or `authnContextClassRef` when step-up isn't configured. It's in the audit log's details too, so the log shows, for example, whether Microsoft 365 was told the user did MFA.
