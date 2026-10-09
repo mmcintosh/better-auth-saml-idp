@@ -18,7 +18,7 @@ The audit log records the sign-in level sent to each service provider, and a new
 
 ### Examples
 
-- **Two-step sign-in in the Workers example** (#64): authenticator-app codes (Better Auth's `twoFactor`, migration `0012`), reported to SPs through `authnContext`. A password is `PasswordProtectedTransport`, a password plus a code is Microsoft's `multipleauthn`, so a Microsoft 365 domain federated with `acceptIfMfaDoneByFederatedIdp` accepts it as MFA.
+- **Two-step sign-in in the Workers example** (#64): authenticator-app codes (Better Auth's `twoFactor`, migration `0012`), reported to SPs through `authnContext`. A password is `PasswordProtectedTransport`, a password plus a code is Microsoft's `multipleauthn`, which a Microsoft 365 domain federated with `acceptIfMfaDoneByFederatedIdp` is set to accept as MFA (Microsoft relying on it isn't verified yet; see the guide).
 - **A QR code for two-step sign-in setup** in the Workers example, drawn by the Worker (`uqr`), so the key never goes to a third-party QR service.
 
 ## [1.3.0] - 2026-10-08
