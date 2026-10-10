@@ -167,8 +167,8 @@ importers:
         specifier: workspace:*
         version: link:../..
       better-auth-scim-provisioning:
-        specifier: ^0.3.1
-        version: 0.3.1(@better-auth/core@1.7.5(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(better-auth@1.7.5(8d136892e7c3daff46a347dbae44012e))
+        specifier: ^1.0.0
+        version: 1.0.0(better-auth@1.7.5(8d136892e7c3daff46a347dbae44012e))
       drizzle-orm:
         specifier: ^0.45.3
         version: 0.45.3(@cloudflare/workers-types@5.20261007.1)(@electric-sql/pglite@0.4.3)(@prisma/client@7.10.0(prisma@7.10.0(@types/node@26.6.4)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2))(typescript@7.0.2))(@types/pg@8.23.1)(kysely@0.29.6)(mysql2@3.24.5(@types/node@26.6.4))(pg@8.23.1)(postgres@3.4.7)(prisma@7.10.0(@types/node@26.6.4)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2))
@@ -1692,15 +1692,11 @@ packages:
       '@cloudflare/workers-types': '>=4'
       better-auth: ^1.5.0
 
-  better-auth-scim-provisioning@0.3.1:
-    resolution: {integrity: sha512-TWYzw/pxvBXN/KxPKo1Zf0Qc+gqQFTnIpBF7+conGZHcLYblIwYQMJbJ64HfOrmHlfdflverd8nVGk/6BmboEQ==}
+  better-auth-scim-provisioning@1.0.0:
+    resolution: {integrity: sha512-6C12LYr5DEml+Hf9S1Oft69KVxQh6Q0LH649L0x+WseEKXgwKucXPiDM5TY0F9pStQz2oXCw2Ulsn9ot0gkyUA==}
     engines: {node: '>=22'}
-    deprecated: |-
-      Pre-1.0 release; issues found by the reviews before 1.0 are fixed in 1.x. Upgrade
-        to the latest 1.x.
     hasBin: true
     peerDependencies:
-      '@better-auth/core': '>=1.7.5 <1.8.0'
       better-auth: '>=1.7.5 <1.8.0'
 
   better-auth@1.7.5:
@@ -4359,9 +4355,8 @@ snapshots:
       - sql.js
       - sqlite3
 
-  better-auth-scim-provisioning@0.3.1(@better-auth/core@1.7.5(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(better-auth@1.7.5(8d136892e7c3daff46a347dbae44012e)):
+  better-auth-scim-provisioning@1.0.0(better-auth@1.7.5(8d136892e7c3daff46a347dbae44012e)):
     dependencies:
-      '@better-auth/core': 1.7.5(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4)
       better-auth: 1.7.5(8d136892e7c3daff46a347dbae44012e)
       zod: 4.6.5
 
