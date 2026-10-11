@@ -4,10 +4,22 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- **`authnContext.current()` also gets the SP and its request** (`serviceProvider`, `requested`; D-077), so it can answer per SP. For example, an SP that asks for exactly `PasswordProtectedTransport` can get that class from an MFA session, instead of a sign-in round that can't help and then `NoAuthnContext`. Callbacks that ignore the new fields behave as before.
+
+### Changed
+
+- **The registry's overlap warning** (the same entity ID and ACS URL in two tenants) no longer says tenants share one signing key when `tenants.keys` is `"per-tenant"`. It now says each copy of the SP must trust only its own tenant's certificate (D-077).
+
 ### Fixed
 
 - **Signing out at Microsoft 365 now ends the IdP session** (D-076). Microsoft sends its LogoutRequest from a hidden iframe on its sign-out page, and browsers never send the session cookie to a cross-site iframe, so the IdP found no session, answered `Success`, and the next Microsoft sign-in went through without asking. A LogoutRequest without the session's cookie (or with another session's) now ends the session its SessionIndex was issued for, found on the server. This browser's own session and cookie are left alone. The SessionIndex is unguessable and given only to that SP for that one session; whoever holds it can end that one session and nothing else.
   - **Database:** `sessionIndex` on `samlIdpSessionParticipant` gains an index, so the lookup isn't a table scan. D1: the example's migration `0014`. Without it, logout still works, more slowly on large tables. On **MySQL or SQL Server**, Better Auth's `migrate` won't index an existing `text` column: change it first (MySQL: `ALTER TABLE samlIdpSessionParticipant MODIFY sessionIndex varchar(255) NOT NULL;`, using your table and column names).
+
+### Documentation
+
+- **Microsoft 365 guide, from a second live test** (D-076, D-077): Microsoft relying on your IdP's MFA is verified with per-user MFA and with Conditional Access (security defaults off), and a password-only sign-in gets Microsoft's own MFA. New: sign-out, one Microsoft tenant per IdP entity ID (use a tenant of your IdP for a second one), the Graph API (`az rest`) route beside PowerShell, why the federation starts on `rejectMfaByFederatedIdp`, and what `AADSTS51004` usually means in a test.
 
 ### Examples
 

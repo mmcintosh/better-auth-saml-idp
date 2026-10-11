@@ -3,7 +3,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { resolveOptions, SamlIdpConfigError } from "../../src/options";
 import { satisfiesAuthnContext, stepUpTarget } from "../../src/saml/request";
-import { baseOptions } from "../support/config";
+import { baseOptions, SP_ENTITY_ID } from "../support/config";
 import { AUTH_BASE, BASE_URL, createHost } from "../support/host";
 import { authnRequestXml, Browser, readAutoPost, redirectUrl } from "../support/sp";
 
@@ -108,6 +108,29 @@ describe("step-up, end to end", () => {
     await completeMfa();
     const { xml } = await readAutoPost(await browser.fetch(await redirectUrl(authnRequestXml({ inner: rac("minimum", PPT) }).xml)));
     expect(classOf(xml)).toBe(MFA);
+  });
+
+  it("current() hears the SP and its request: an exact-password request from an MFA session can be answered with the password class", async () => {
+    // Without that, the answer (MFA) doesn't match "exact PasswordProtectedTransport": the user is
+    // sent to sign in again, which can't help (the next session is MFA too).
+    const strict = await host();
+    await strict.completeMfa();
+    const round = await strict.browser.fetch(await redirectUrl(authnRequestXml({ inner: rac("exact", PPT) }).xml));
+    expect(new URL(round.headers.get("location")!).searchParams.get("prompt")).toBe("login");
+    const seen: unknown[] = [];
+    const { browser, completeMfa } = await host(({ user, serviceProvider, requested }: any) => {
+      seen.push({ entityId: serviceProvider.entityId, requested });
+      const achieved = user.image === "mfa" ? MFA : PPT;
+      // Claiming less than the session did is honest; this SP asked for exactly the password class.
+      return requested?.comparison === "exact" && requested.classRefs.includes(PPT) ? PPT : achieved;
+    });
+    await completeMfa();
+    expect(classOf((await readAutoPost(await browser.fetch(await redirectUrl(authnRequestXml({ inner: rac("exact", PPT) }).xml)))).xml)).toBe(PPT);
+    expect(classOf((await readAutoPost(await browser.fetch(await redirectUrl(authnRequestXml().xml)))).xml)).toBe(MFA);
+    expect(seen).toEqual([
+      { entityId: SP_ENTITY_ID, requested: { comparison: "exact", classRefs: [PPT] } },
+      { entityId: SP_ENTITY_ID, requested: undefined },
+    ]);
   });
 
   it("the assertion.issued event records the class sent, so the audit log shows which level an SP was told", async () => {

@@ -142,7 +142,7 @@ describe("delegation: a tenant's administrator sees and changes its own tenant's
     expect(JSON.stringify(made.serviceProvider.warnings)).not.toContain(w.ids.b);
     expect(made.serviceProvider.warnings).toEqual([]);
     const asSeenByHost = await body(await w.asHost(`/service-providers/get?id=clone-${w.t}`));
-    expect(asSeenByHost.serviceProvider.warnings.join()).toMatch(/same entity ID and an ACS URL/);
+    expect(asSeenByHost.serviceProvider.warnings.join()).toMatch(/same entity ID and an ACS URL .* Each copy of the SP must trust only its own tenant's signing certificate/);
   });
 });
 

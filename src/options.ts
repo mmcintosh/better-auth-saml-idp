@@ -695,7 +695,7 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
   const serviceProviders = o.serviceProviders.map((sp, i) => resolveServiceProvider(sp, `serviceProviders.${i}`, spDefaults, issues, warnings));
   for (const [i, sp] of serviceProviders.entries()) {
     const other = serviceProviders.slice(0, i).find((o2) => overlaps(o2, sp));
-    if (other) warnings.push(`serviceProviders.${i}: ${overlapWarning(other)}`);
+    if (other) warnings.push(`serviceProviders.${i}: ${overlapWarning(other, tenants?.keys === "per-tenant")}`);
   }
 
   if (o.serviceProviders.length === 0 && !o.registry?.enabled)
@@ -774,7 +774,15 @@ export function overlaps(a: Pick<ResolvedServiceProvider, "entityId" | "acsUrls"
   return (a.tenantId ?? "") !== (b.tenantId ?? "") && a.entityId === b.entityId && a.acsUrls.some((u) => b.acsUrls.includes(u));
 }
 
-export function overlapWarning(other: Pick<ResolvedServiceProvider, "id" | "tenantId">): string {
+/**
+ * `perTenantKeys`: tenants sign with their own keys (D-058), so an SP that trusts only one
+ * identity's certificate can't take the other's assertions. Under the shared key, and for a
+ * tenant that doesn't have its own key yet, only the SP's check of the Issuer tells them apart.
+ */
+export function overlapWarning(other: Pick<ResolvedServiceProvider, "id" | "tenantId">, perTenantKeys = false): string {
   const where = other.tenantId === undefined ? "the root IdP" : `tenant ${other.tenantId}`;
-  return `same entity ID and an ACS URL as SP ${other.id} in ${where}. Tenants share one signing key, so only the SP's check of the assertion's Issuer keeps one tenant's assertions out of the other's account: make sure it checks it, or keep the SP in one tenant`;
+  const prefix = `same entity ID and an ACS URL as SP ${other.id} in ${where}.`;
+  if (perTenantKeys)
+    return `${prefix} Each copy of the SP must trust only its own tenant's signing certificate, so one tenant's assertions can't be used in the other's account. While either tenant still signs with the shared key, only the SP's check of the assertion's Issuer keeps them apart`;
+  return `${prefix} Tenants share one signing key, so only the SP's check of the assertion's Issuer keeps one tenant's assertions out of the other's account: make sure it checks it, or keep the SP in one tenant`;
 }
