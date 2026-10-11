@@ -125,6 +125,8 @@ When a user signs out at Microsoft, Microsoft sends a LogoutRequest to the `Sign
 
 Microsoft sends the request from a hidden iframe on its sign-out page, which never gets your IdP's session cookie. Since 1.5.0, the IdP finds the session from the SessionIndex (D-076). Earlier versions answer the request but end nothing, so the next sign-in at Microsoft goes through without asking.
 
+Verified live on 2026-10-11 with the example Worker: after signing out at myapps.microsoft.com, the next sign-in stopped at the IdP's sign-in page.
+
 ## When something goes wrong
 
 - **Microsoft still asks for a password, or shows an error before reaching your IdP:** the federation may not have settled yet (step 4). Check `https://login.microsoftonline.com/getuserrealm.srf?login=user@your-domain.example&json=1`: `NameSpaceType` should be `Federated`, with `AuthURL` pointing at your SSO URL.
