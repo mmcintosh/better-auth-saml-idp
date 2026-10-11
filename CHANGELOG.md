@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-11
+
+Signing out at Microsoft 365 now ends the IdP session, and authnContext.current() also gets the SP and its request.
+
 ### Added
 
 - **`authnContext.current()` also gets the SP and its request** (`serviceProvider`, `requested`; D-077), so it can answer per SP. For example, an SP that asks for exactly `PasswordProtectedTransport` can get that class from an MFA session, instead of a sign-in round that can't help and then `NoAuthnContext`. Callbacks that ignore the new fields behave as before.
