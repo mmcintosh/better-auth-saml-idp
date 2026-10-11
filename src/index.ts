@@ -46,6 +46,7 @@ export type {
   AttributeSource,
   AuthorizeContext,
   AuthorizeResult,
+  AuthnContextCurrentContext,
   AuthnContextOptions,
   DigestAlgorithm,
   NameIdSource,

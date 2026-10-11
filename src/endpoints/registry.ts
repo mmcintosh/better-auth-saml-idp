@@ -165,7 +165,7 @@ const codeRecord = (sp: ResolvedServiceProvider, state: PluginState, others: rea
   issues: [],
   // The overlap warning (D-052) is the one warning a code record carries: it depends on what's
   // stored, so the startup log can't have said it.
-  warnings: overlapWarnings(sp, others),
+  warnings: overlapWarnings(sp, others, state),
   config: null,
   createdAt: null,
   updatedAt: null,
@@ -176,9 +176,9 @@ const codeRecord = (sp: ResolvedServiceProvider, state: PluginState, others: rea
 type Overlappable = Pick<ResolvedServiceProvider, "id" | "entityId" | "acsUrls" | "tenantId">;
 
 /** The host-administrator overlap warning (multi-tenant design §5.1 c). */
-function overlapWarnings(sp: Overlappable, others: readonly Overlappable[]): string[] {
+function overlapWarnings(sp: Overlappable, others: readonly Overlappable[], state: PluginState): string[] {
   const other = others.find((o) => o.id !== sp.id && overlaps(sp, o));
-  return other ? [overlapWarning(other)] : [];
+  return other ? [overlapWarning(other, state.options.tenants?.perTenantKeys === true)] : [];
 }
 
 /** Stored and code SPs with this entity ID, in any tenant: what an SP could overlap with. */
@@ -235,7 +235,7 @@ function view(row: StoredSpRow, state: PluginState, authOptions: unknown, others
     enabled: isEnabled(row.enabled),
     valid: r?.serviceProvider !== undefined && issues.length === 0,
     issues,
-    warnings: [...(r?.warnings ?? []), ...(r?.serviceProvider ? overlapWarnings(r.serviceProvider, others) : [])],
+    warnings: [...(r?.warnings ?? []), ...(r?.serviceProvider ? overlapWarnings(r.serviceProvider, others, state) : [])],
     config,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

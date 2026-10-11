@@ -373,12 +373,25 @@ export interface SigningConfig {
   sign?: SignedParts | undefined;
 }
 
+/** What `authnContext.current()` is told: the session, and the SP and request it answers. */
+export interface AuthnContextCurrentContext {
+  user: SamlIdpUser;
+  session: Session;
+  /** The SP the assertion is for (the same read-only view `authorize` gets). */
+  serviceProvider: ServiceProviderInfo;
+  /** The SP's `RequestedAuthnContext`, when it sent one (never for IdP-initiated SSO). */
+  requested?: { comparison: "exact" | "minimum" | "maximum" | "better"; classRefs: readonly string[] } | undefined;
+}
+
 /** See `SamlIdpOptions.authnContext`. */
 export interface AuthnContextOptions {
   /** AuthnContextClassRef URIs your sign-in can deliver, weakest first (1 to 10, unique). */
   levels: string[];
-  /** The class this session achieved: one of `levels`. Runs on the user and session as re-read just before signing. */
-  current: (ctx: { user: SamlIdpUser; session: Session }) => string | Promise<string>;
+  /**
+   * The class this session achieved: one of `levels`. Runs on the user and session as re-read
+   * just before signing. It may answer per SP or request, but never with more than the session did.
+   */
+  current: (ctx: AuthnContextCurrentContext) => string | Promise<string>;
 }
 
 /** See `SamlIdpOptions.sessionNotOnOrAfter`. */

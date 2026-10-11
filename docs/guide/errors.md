@@ -29,7 +29,7 @@ The codes are exported as `SAML_IDP_ERROR_CODES` (and appear on the plugin's `$E
 | `EMAIL_NOT_VERIFIED` | 403 | Verify your email address before signing in to this application | `accountPolicy.requireEmailVerified` (the default) and the user's email isn't verified. | The user verifies their email. See [Account policy](users-and-access.md#account-policy). |
 | `SESSION_NOT_ALLOWED` | 403 | This kind of session cannot be used to sign in to other applications | An admin-impersonation session, or an anonymous user, while the account policy refuses them (the default). | See [Account policy](users-and-access.md#account-policy). |
 | `REAUTHENTICATION_REQUIRED` | 401 | This application requires you to sign in again | The SP sent `ForceAuthn="true"` and the session that came back through `resume` is older than the request. | The user signs in again (not just returning with the existing session). |
-| `INTERNAL_ERROR` | 500 | Sign-in could not be completed | `nameId()` or `attributes()` threw or returned an empty NameID, organization memberships couldn't be loaded, or a logout participant couldn't be recorded. | See the server log (`[saml-idp] …`). |
+| `INTERNAL_ERROR` | 500 | Sign-in could not be completed | `nameId()` or `attributes()` threw or returned an empty NameID, organization memberships couldn't be loaded, a logout participant couldn't be recorded, or a logout's session couldn't be looked up by its SessionIndex. | See the server log (`[saml-idp] …`). |
 
 ## Logout errors (HTML page, titled "Sign-out could not be completed")
 

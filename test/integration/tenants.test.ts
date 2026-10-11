@@ -159,7 +159,11 @@ describe("tenants: configuration (D-052)", () => {
 
   it("entity IDs are unique per tenant: the same one in two tenants is allowed, and warned about; twice in one tenant is not", () => {
     const two = resolveOptions(tenantOpts({ serviceProviders: [{ id: "x", entityId: "e", acsUrls: [SP_ACS], tenant: "a" }, { id: "y", entityId: "e", acsUrls: [SP_ACS], tenant: "b" }] }));
-    expect(two.warnings.join("\n")).toMatch(/serviceProviders.1: same entity ID and an ACS URL as SP x in tenant a/);
+    expect(two.warnings.join("\n")).toMatch(/serviceProviders.1: same entity ID and an ACS URL as SP x in tenant a\. Tenants share one signing key/);
+    // With per-tenant keys, each copy should trust only its own tenant's certificate.
+    const own = resolveOptions(tenantOpts({ tenants: { enabled: true, keys: "per-tenant" }, serviceProviders: [{ id: "x", entityId: "e", acsUrls: [SP_ACS], tenant: "a" }, { id: "y", entityId: "e", acsUrls: [SP_ACS], tenant: "b" }] }));
+    expect(own.warnings.join("\n")).toMatch(/serviceProviders.1: same entity ID and an ACS URL as SP x in tenant a\. Each copy of the SP must trust only its own tenant's signing certificate/);
+    expect(own.warnings.join("\n")).not.toMatch(/share one signing key/);
     // Different ACS URLs: no assertion for one can land at the other's, so no warning.
     const apart = resolveOptions(tenantOpts({ serviceProviders: [{ id: "x", entityId: "e", acsUrls: [SP_ACS], tenant: "a" }, { id: "y", entityId: "e", acsUrls: ["https://other.test/acs"], tenant: "b" }] }));
     expect(apart.warnings.join("\n")).not.toMatch(/same entity ID/);

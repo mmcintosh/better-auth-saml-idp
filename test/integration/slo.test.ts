@@ -1,7 +1,7 @@
 // SAML Single Logout (D-028): SP- and IdP-initiated, front-channel propagation, authentication.
 import { createPrivateKey } from "node:crypto";
 import { SAML } from "@node-saml/node-saml";
-import { describe, expect, inject, it } from "vitest";
+import { describe, expect, inject, it, vi } from "vitest";
 import { libxml2Validator } from "../../src/saml/validator";
 import { buildLogoutResponse, redirectBindingUrl, signedPostMessage } from "../../src/saml/logout";
 import { decodeAuthnRequest, parseRedirectQuery, verifyMessageSignature } from "../../src/saml/request";
@@ -171,6 +171,67 @@ describe("SP-initiated Single Logout", () => {
     const fresh = new Browser(auth);
     const res = await fresh.fetch(redirectBindingUrl(SLO, "SAMLRequest", logoutRequestXml({ issuer: A.entityId, nameId: "x@example.com", sessionIndex: "_x" }).xml, undefined, spSigning(keys.sp.privateKey)));
     expect((await outgoing(res.headers.get("location")!, "SAMLResponse")).xml).toContain("status:Success");
+  });
+
+  it("without the cookie (Microsoft 365 sends it from a cross-site iframe), the SessionIndex alone finds and ends its session (D-076)", async () => {
+    const C = { id: "sp-c", entityId: "https://c.test/sp", acs: "https://c.test/acs", slo: "https://c.test/slo" };
+    const { auth, browser } = await host([{ id: C.id, entityId: C.entityId, acsUrls: [C.acs], singleLogoutService: { url: C.slo } }]);
+    const c = await signIn(browser, C);
+    const b = await signIn(browser, B);
+    const iframe = new Browser(auth); // no cookies: a cross-site iframe never gets the Lax session cookie
+    const deflate = (await import("node:zlib")).deflateRawSync;
+    const send = (xml: string) => iframe.fetch(`${SLO}?SAMLRequest=${encodeURIComponent(Buffer.from(deflate(xml)).toString("base64"))}`);
+    // A guessed SessionIndex, B's sent in C's name, or none at all ends nothing.
+    for (const sessionIndex of ["_guess", b.sessionIndex, undefined]) {
+      const res = await send(logoutRequestXml({ issuer: C.entityId, nameId: c.nameId, ...(sessionIndex ? { sessionIndex } : {}) }).xml);
+      expect(new URL(res.headers.get("location")!).origin).toBe("https://c.test");
+    }
+    expect(await signedIn(browser)).toBe(true);
+    // C's own SessionIndex ends the session; B is told next, through the iframe.
+    const res = await send(logoutRequestXml({ issuer: C.entityId, nameId: c.nameId, sessionIndex: c.sessionIndex }).xml);
+    expect(await signedIn(browser)).toBe(false);
+    const toB = await outgoing(res.headers.get("location")!, "SAMLRequest");
+    expect(toB.url).toBe(B.slo);
+    expect(toB.xml).toContain(`<samlp:SessionIndex>${b.sessionIndex}</samlp:SessionIndex>`);
+    const toC = await outgoing((await answer(iframe, toB)).headers.get("location")!, "SAMLResponse");
+    expect(toC.url).toBe(C.slo);
+    expect(toC.xml).toContain("status:Success");
+  });
+
+  it("in a browser with another session, the SessionIndex's session ends; this browser's session and cookie stay", async () => {
+    const events: { type: string; userId?: string }[] = [];
+    const record = (e: { type: string }) => void events.push(e);
+    const { auth, browser } = await host([], { events: { onLogout: record, onSessionEnded: record } });
+    const a = await signIn(browser, A);
+    const userId = ((await (await browser.fetch(`${AUTH_BASE}/get-session`)).json()) as { user: { id: string } }).user.id;
+    const other = new Browser(auth);
+    await other.signUp();
+    const lr = logoutRequestXml({ issuer: A.entityId, nameId: a.nameId, sessionIndex: a.sessionIndex });
+    const res = await other.fetch(redirectBindingUrl(SLO, "SAMLRequest", lr.xml, "rs", spSigning(keys.sp.privateKey)));
+    expect(await signedIn(browser)).toBe(false);
+    expect(await signedIn(other)).toBe(true);
+    expect(clearsSession(res)).toBe(false);
+    const toA = await outgoing(res.headers.get("location")!, "SAMLResponse");
+    expect(toA.xml).toContain(`InResponseTo="${lr.id}"`);
+    expect(toA.xml).toContain("status:Success");
+    // Reported as an SP logout of that session's user, not as a session that ended unannounced.
+    await vi.waitFor(() => expect(events.filter((e) => e.type === "logout")).toMatchObject([{ initiatedBy: "sp", spId: A.id, userId }]));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(events.filter((e) => e.type === "session.ended")).toEqual([]);
+  });
+
+  it("without the cookie, only the session the SessionIndex was issued for ends, not the user's others", async () => {
+    const { auth, browser } = await host();
+    const { email } = ((await (await browser.fetch(`${AUTH_BASE}/get-session`)).json()) as { user: { email: string } }).user;
+    const second = new Browser(auth);
+    await second.signIn(email);
+    const third = new Browser(auth);
+    await third.signIn(email);
+    for (const b of [browser, second, third]) await signIn(b, A);
+    const middle = await signIn(second, A); // refreshed participant, same SessionIndex
+    const res = await new Browser(auth).fetch(redirectBindingUrl(SLO, "SAMLRequest", logoutRequestXml({ issuer: A.entityId, nameId: middle.nameId, sessionIndex: middle.sessionIndex }).xml, undefined, spSigning(keys.sp.privateKey)));
+    expect(res.status).toBe(302);
+    expect([await signedIn(browser), await signedIn(second), await signedIn(third)]).toEqual([true, false, true]);
   });
 
   it("HTTP-POST binding: a cross-site POST (no Lax cookies) re-enters same-site and works; the answer can be POSTed too", async () => {

@@ -330,8 +330,14 @@ export async function issueResponse(
   let achievedClass: string | undefined;
   const levels = state.options.authnContext;
   if (levels) {
+    const asked = request.authnContext;
     try {
-      achievedClass = await levels.current({ user, session: principal.session as any });
+      achievedClass = await levels.current({
+        user,
+        session: principal.session as any,
+        serviceProvider: serviceProviderInfo(sp),
+        ...(asked ? { requested: Object.freeze({ comparison: asked.comparison, classRefs: Object.freeze([...asked.classRefs]) }) } : {}),
+      });
     } catch (e) {
       ctx.context.logger.error(`[saml-idp] authnContext.current() threw for SP ${sp.id}`, e);
       return fail(ctx, state, "INTERNAL_ERROR", undefined, who);

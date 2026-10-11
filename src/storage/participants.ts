@@ -112,6 +112,25 @@ export async function listUserParticipants(adapter: Adapter, userId: string, now
 }
 
 /**
+ * The user `spId` was issued `sessionIndex` for, while that session is live: how a LogoutRequest
+ * that comes without the session's cookie finds the session (D-076). The caller still matches
+ * the SessionIndex to one of the user's sessions; this row only says whose sessions to look at.
+ */
+export async function userOfSessionIndex(adapter: Adapter, spId: string, sessionIndex: string): Promise<string | null> {
+  const found = (await adapter.findMany({
+    model: PARTICIPANT_MODEL,
+    where: [
+      { field: "sessionIndex", value: sessionIndex },
+      { field: "spId", value: spId },
+    ],
+    limit: 2,
+  })) as ParticipantRow[];
+  // Exact match, as findRow does (R4-L8): a case-insensitive collation must not widen it.
+  const row = found.find((r) => r.sessionIndex === sessionIndex && r.spId === spId && !r.endedAt);
+  return row?.userId ?? null;
+}
+
+/**
  * Session ids being ended by the plugin's own Single Logout, whose SPs are about to be told. The
  * session-delete hook skips them (it would otherwise report "not told" mid-chain). Entries are
  * consumed by the hook, and pruned after a minute in case it never runs.

@@ -13,7 +13,7 @@ import { idpBaseURL } from "../saml/idp";
 import { buildLogoutRequest, buildLogoutResponse, parseLogoutRequest, parseLogoutResponse, redirectBindingUrl, signedPostMessage, SLO_PATH } from "../saml/logout";
 import { autoPostResponse, confirmPage } from "../saml/post-form";
 import { checkRelayState, decodeAuthnRequest, isSigned, parseRedirectQuery, type RawAuthnRequest, SamlRequestError, verifyMessageSignature } from "../saml/request";
-import { consumeEndingBySlo, forgetParticipants, listParticipants, markEndingBySlo, type Participant, sessionIndexOf } from "../storage/participants";
+import { consumeEndingBySlo, forgetParticipants, listParticipants, markEndingBySlo, type Participant, sessionIndexOf, userOfSessionIndex } from "../storage/participants";
 import { newOpaqueToken } from "../storage/pending";
 import { recordRequestId } from "../storage/seen";
 import { sweepExpired } from "../storage/sweep";
@@ -77,8 +77,6 @@ async function consume<T>(adapter: Adapter, prefix: string, id: string | undefin
  */
 const mustSign = (sp: ResolvedServiceProvider) => sp.requestSignatures !== "ignore";
 
-
-/** End the IdP session: the Better Auth session row, its cookies, and its participant list. */
 /** Participants of a session; `partial` when they couldn't all be listed (so logout can't claim Success). */
 async function participantsOf(ctx: GenericEndpointContext, sessionId: string): Promise<{ participants: Participant[]; partial: boolean }> {
   try {
@@ -91,22 +89,45 @@ async function participantsOf(ctx: GenericEndpointContext, sessionId: string): P
   }
 }
 
-async function endSession(ctx: GenericEndpointContext, session: { session: { id: string; token: string } }): Promise<{ participants: Participant[]; partial: boolean }> {
+/**
+ * End the IdP session: the Better Auth session row, its cookies, and its participant list.
+ * `thisBrowser`: the session came with the request's cookie, which is cleared too. A session
+ * found by its SessionIndex (D-076) may belong to another browser: this one's cookie stays.
+ */
+async function endSession(ctx: GenericEndpointContext, session: { id: string; token: string }, thisBrowser: boolean): Promise<{ participants: Participant[]; partial: boolean }> {
   const adapter = ctx.context.adapter as any;
-  const { participants, partial } = await participantsOf(ctx, session.session.id);
+  const { participants, partial } = await participantsOf(ctx, session.id);
   // The session-delete hook must not report these SPs as "not told" (D-043): they're next.
-  markEndingBySlo(session.session.id);
+  markEndingBySlo(session.id);
   try {
-    await ctx.context.internalAdapter.deleteSession(session.session.token);
+    await ctx.context.internalAdapter.deleteSession(session.token);
   } catch (e) {
     // Not ended after all: a later revoke of this session must still be reported.
-    consumeEndingBySlo(session.session.id);
+    consumeEndingBySlo(session.id);
     throw e;
   }
-  deleteSessionCookie(ctx);
-  await forgetParticipants(adapter, session.session.id).catch((e) => ctx.context.logger.warn("[saml-idp] could not clear logout participants", e));
-  ctx.context.logger.info(`[saml-idp] logout: ended IdP session; ${participants.length} SP(s) to notify`);
+  if (thisBrowser) deleteSessionCookie(ctx);
+  await forgetParticipants(adapter, session.id).catch((e) => ctx.context.logger.warn("[saml-idp] could not clear logout participants", e));
+  ctx.context.logger.info(`[saml-idp] logout: ended IdP session${thisBrowser ? "" : " found by its SessionIndex"}; ${participants.length} SP(s) to notify`);
   return { participants, partial };
+}
+
+/**
+ * The live session this SP was issued one of `sessionIndexes` for, found without its cookie
+ * (D-076). The participant row names the user; the SessionIndex is then recomputed for each of
+ * their sessions, so only the session it was really issued for (to this SP) matches.
+ */
+async function sessionByIndex(ctx: GenericEndpointContext, sp: ResolvedServiceProvider, sessionIndexes: string[]): Promise<{ id: string; token: string; userId: string } | null> {
+  // An SP sends one; a request can't make the IdP look up an unbounded number.
+  for (const index of sessionIndexes.slice(0, 3)) {
+    const userId = await userOfSessionIndex(ctx.context.adapter as any, sp.id, index);
+    if (!userId) continue;
+    const now = Date.now();
+    const sessions = await ctx.context.internalAdapter.listSessions(userId, { onlyActiveSessions: true });
+    const found = sessions.find((s) => new Date(s.expiresAt).getTime() > now && sessionIndexOf(ctx.context.secret, s.id, sp.id) === index);
+    if (found) return found;
+  }
+  return null;
 }
 
 /**
@@ -165,28 +186,42 @@ async function finish(ctx: GenericEndpointContext, state: PluginState, ls: Logou
 }
 
 /**
- * An authenticated SP LogoutRequest, now on a same-site GET (so the session cookie is here).
- * The session ends only if the request is about THIS browser's session: its SessionIndex (an
- * unguessable hash of the session id) must match; a signed request without SessionIndex must
- * name the NameID this SP was given in this session.
+ * An authenticated SP LogoutRequest ends the session it is about:
+ * - this browser's, when its cookie came (a same-site GET or a top-level navigation): the
+ *   SessionIndex (an unguessable hash of the session id) must match, or a signed request without
+ *   SessionIndex must name the NameID this SP was given in this session;
+ * - otherwise the session its SessionIndex was issued for, found without the cookie (D-076).
+ *   Microsoft 365 sends its LogoutRequest from a cross-site iframe, where the Lax session cookie
+ *   never comes; the SessionIndex, given only to this SP for that one session, identifies it.
  */
 async function handleLogoutRequest(ctx: GenericEndpointContext, state: PluginState, sp: ResolvedServiceProvider, req: PendingLogoutRequest) {
   const origin: Origin = { kind: "sp", spId: sp.id, requestId: req.requestId, relayState: req.relayState };
   const session = await getSessionFromCtx(ctx);
-  if (!session) return finish(ctx, state, { origin, remaining: [], partial: false }); // nothing to end here
-  // The value issued to THIS SP (the Issuer) for this session; no other SP knows it.
-  const expectedIndex = sessionIndexOf(ctx.context.secret, session.session.id, sp.id);
-  const { participants } = await participantsOf(ctx, session.session.id);
-  const mine = participants.find((p) => p.spId === sp.id);
-  const byIndex = req.sessionIndexes.includes(expectedIndex);
-  const byNameId = req.signed && req.sessionIndexes.length === 0 && mine !== undefined && mine.nameId === req.nameId;
-  if (!byIndex && !byNameId) {
-    ctx.context.logger.info(`[saml-idp] logout from SP ${sp.id} doesn't match this browser's session; nothing ended`);
-    return finish(ctx, state, { origin, remaining: [], partial: false });
+  if (session) {
+    // The value issued to THIS SP (the Issuer) for this session; no other SP knows it.
+    const expectedIndex = sessionIndexOf(ctx.context.secret, session.session.id, sp.id);
+    const { participants } = await participantsOf(ctx, session.session.id);
+    const mine = participants.find((p) => p.spId === sp.id);
+    const byIndex = req.sessionIndexes.includes(expectedIndex);
+    const byNameId = req.signed && req.sessionIndexes.length === 0 && mine !== undefined && mine.nameId === req.nameId;
+    if (byIndex || byNameId) return endAndNotify(ctx, state, sp, origin, { ...session.session, userId: session.user.id }, true);
   }
-  const ended = await endSession(ctx, session);
+  let found: Awaited<ReturnType<typeof sessionByIndex>>;
+  try {
+    found = await sessionByIndex(ctx, sp, req.sessionIndexes);
+  } catch (e) {
+    ctx.context.logger.error("[saml-idp] logout: could not look up the session by its SessionIndex", e);
+    return fail(ctx, state, "INTERNAL_ERROR", "logout: session lookup failed", { spId: sp.id, ...tenantOf(sp) });
+  }
+  if (found) return endAndNotify(ctx, state, sp, origin, found, false);
+  ctx.context.logger.info(`[saml-idp] logout from SP ${sp.id} matches no live session${session ? ", this browser's included" : " (no session cookie came with it)"}; nothing ended`);
+  return finish(ctx, state, { origin, remaining: [], partial: false });
+}
+
+async function endAndNotify(ctx: GenericEndpointContext, state: PluginState, sp: ResolvedServiceProvider, origin: Origin, session: { id: string; token: string; userId: string }, thisBrowser: boolean) {
+  const ended = await endSession(ctx, session, thisBrowser);
   const remaining = ended.participants.filter((p) => p.spId !== sp.id);
-  emit(ctx, state.options, { type: "logout", initiatedBy: "sp", spId: sp.id, userId: session.user.id, sessionId: session.session.id, notifying: remaining.map((p) => p.spId), ...tenantOf(sp) });
+  emit(ctx, state.options, { type: "logout", initiatedBy: "sp", spId: sp.id, userId: session.userId, sessionId: session.id, notifying: remaining.map((p) => p.spId), ...tenantOf(sp) });
   return nextHop(ctx, state, { origin, remaining, partial: ended.partial });
 }
 
@@ -366,7 +401,7 @@ export const logoutEndpoint = (state: PluginState) =>
       if (!session) throw ctx.redirect(returnTo);
       // Logout CSRF: another site can't silently log the user out everywhere.
       if (isDriveByCrossSite(ctx, { sameSiteToo: true })) return confirmPage(ctx.request?.url ?? `${idpBaseURL(state.options, ctx.context.baseURL)}${LOGOUT_PATH}`, "", "sign-out");
-      const ended = await endSession(ctx, session);
+      const ended = await endSession(ctx, session.session, true);
       emit(ctx, state.options, { type: "logout", initiatedBy: "idp", userId: session.user.id, sessionId: session.session.id, notifying: ended.participants.map((p) => p.spId) });
       return nextHop(ctx, state, { origin: { kind: "idp", returnTo }, remaining: ended.participants, partial: ended.partial });
     },

@@ -140,6 +140,7 @@ export const samlIdpSessionParticipants = sqliteTable(
     index("saml_idp_session_participants_session_idx").on(t.sessionKey),
     index("saml_idp_session_participants_expires_idx").on(t.expiresAt),
     index("saml_idp_session_participants_user_idx").on(t.userId),
+    index("saml_idp_session_participants_session_index_idx").on(t.sessionIndex),
   ],
 );
 

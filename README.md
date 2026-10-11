@@ -132,7 +132,7 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 - [x] SAMLtool: Response validation
 - [x] AWS IAM Identity Center: live (multi-Region instance), the access portal and the AWS console in an assigned permission set, SP stored in the D1 registry ([guide](docs/sp-aws-iam-identity-center.md))
 - [x] Google Workspace: live (an SSO profile assigned to one organizational unit), sign-in to Google through the IdP, with the users created and suspended by [better-auth-scim-provisioning](https://www.npmjs.com/package/better-auth-scim-provisioning) ([guide](docs/sp-google-workspace.md))
-- [x] Microsoft 365 (Entra ID domain federation): live (a spare domain federated with Graph PowerShell), sign-in to My Apps through the IdP with a persistent NameID matched to `onPremisesImmutableId`, and the IdP's MFA class (`multipleauthn`) sent; Microsoft relying on it is not yet verified ([guide](docs/sp-microsoft-365.md))
+- [x] Microsoft 365 (Entra ID domain federation): live (a spare domain federated with Graph PowerShell), sign-in to My Apps through the IdP with a persistent NameID matched to `onPremisesImmutableId`, and the IdP's MFA class (`multipleauthn`) sent. In a test tenant: Microsoft took it as MFA (per-user MFA and Conditional Access), asked for its own MFA after a password-only sign-in, and signing out at Microsoft ended the IdP session ([guide](docs/sp-microsoft-365.md))
 - [ ] HubSpot: guide written ([HubSpot](docs/hubspot.md)), not yet run live
 
 **Databases, in CI:**
@@ -326,7 +326,7 @@ npx better-auth-saml-idp smoke https://auth.example.com --sp <SP entity ID>
 | `signMetadata` | boolean | `false` | Sign the metadata document |
 | `sessionNotOnOrAfter` | `false` / `"idp-session"` / `{ maxSeconds }` | `false` | Tell SPs when to end their session; each SP can override it ([Single Logout](docs/guide/single-logout.md#when-the-session-ends-without-the-browser)) |
 | `authnContextClassRef` | string | `…:unspecified` | What your sign-in guarantees |
-| `authnContext` | object | none | Step-up levels instead: `{ levels, current }`; an SP asking for more sends the user to sign in again ([guide](docs/guide/flows.md#requestedauthncontext)) |
+| `authnContext` | object | none | Step-up levels instead: `{ levels, current }`; an SP asking for more sends the user to sign in again. `current` gets the user, session, SP and request ([guide](docs/guide/flows.md#requestedauthncontext)) |
 | `accountPolicy` | object | strict | `requireEmailVerified: true`, `allowImpersonatedSessions: false`, `allowAnonymousUsers: false` |
 | `assertionLifetimeSeconds` | number | `300` | Assertion validity window |
 | `clockSkewSeconds` | number | `60` | Tolerance for `NotBefore` and `IssueInstant` |
@@ -432,7 +432,7 @@ Read the [security notes](docs/security.md#idp-initiated-sso) before you enable 
 ```ts
 samlIdp({
   // ...
-  singleLogout: { enabled: true }, // adds the saml_idp_session_participants table (migration 0004)
+  singleLogout: { enabled: true }, // adds the saml_idp_session_participants table (D1 migrations 0004, 0007, 0014)
   serviceProviders: [
     { id: "app", entityId: "…", acsUrls: ["…"], spCertificates: "…",
       singleLogoutService: { url: "https://app.example.com/saml/slo" } }, // binding: "redirect" (default) or "post"
@@ -443,14 +443,14 @@ samlIdp({
 **What happens:**
 - The IdP remembers which SPs received an assertion in each session.
 - When one SP sends a LogoutRequest to `/saml2/idp/slo`:
-  1. The IdP ends its own session first, so it's over even if a later step breaks.
+  1. The IdP ends its own session first, so it's over even if a later step breaks. That's the session the request's `SessionIndex` names, found on the server when the request comes without its cookie: Microsoft 365 sends it from a hidden iframe, where browsers never send the cookie.
   2. It sends a signed LogoutRequest through the browser to each other SP that has a `singleLogoutService`.
   3. It answers the originating SP with a signed LogoutResponse: `Success`, or `PartialLogout` if an SP failed or couldn't be reached.
 - `/saml2/idp/logout?returnTo=/` does the same from your own "sign out everywhere" button. `returnTo` must be a same-origin path or a trusted origin.
 
 **Authentication:**
 - An SP with certificates must sign its LogoutRequests (Redirect or POST, with the same hardened checks as AuthnRequests).
-- An SP without certificates ends the session only with the right `SessionIndex`. That value is different for every SP and every session (a keyed MAC), so one SP's value can't end the session in another SP's name. Any other request ends nothing.
+- An SP without certificates ends a session only with its `SessionIndex`. That value is different for every SP and every session (a keyed MAC), so one SP's value can't end the session in another SP's name. Any other request ends nothing.
 - An SP that requires signed AuthnRequests, or gets its certificates from `metadata.url`, must also sign its logout messages. If its certificates aren't available, they're refused.
 - LogoutRequests are replay-protected.
 - A cross-site drive-by to `/logout` gets a confirmation page.

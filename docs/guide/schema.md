@@ -102,7 +102,7 @@ Which SPs received an assertion in which session, so logout can reach them all, 
 | `spId` | string | | The SP's `id`. |
 | `nameId` | string | | The NameID this SP was given (refreshed on each assertion; transient NameIDs change). |
 | `nameIdFormat` | string | | Its format. |
-| `sessionIndex` | string | | The SessionIndex this SP was given: a keyed MAC over (session, SP), different for every SP. |
+| `sessionIndex` | string | index | The SessionIndex this SP was given: a keyed MAC over (session, SP), different for every SP. Logout without the session's cookie finds the session by it (D-076; D1 `0014`). |
 | `expiresAt` | date | index | Follows the session's expiry, including Better Auth's sliding refresh. Swept automatically. |
 
 <details><summary>Hand-written Drizzle (SQLite/D1)</summary>
@@ -126,6 +126,7 @@ export const samlIdpSessionParticipants = sqliteTable(
     index("saml_idp_session_participants_session_idx").on(t.sessionKey),
     index("saml_idp_session_participants_expires_idx").on(t.expiresAt),
     index("saml_idp_session_participants_user_idx").on(t.userId),
+    index("saml_idp_session_participants_session_index_idx").on(t.sessionIndex),
   ],
 );
 ```
