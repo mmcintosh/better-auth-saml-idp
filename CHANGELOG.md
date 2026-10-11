@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Examples
+
+- **Workers + Neon example** ([examples/workers-neon](examples/workers-neon/README.md), D-078): the plugin on Cloudflare Workers with Postgres on Neon through Hyperdrive, its query cache off. Better Auth is built once per isolate and each request gets its own `pg` pool (connections can't cross requests on Workers); building it per request cost about 25 ms of CPU on every request. Verified live (smoke checks, a full sign-in, a session deleted in Neon refused on the next request), and CI runs the same scripts under `wrangler dev` against Postgres.
+
 ## [1.5.0] - 2026-10-11
 
 Signing out at Microsoft 365 now ends the IdP session, and authnContext.current() also gets the SP and its request.

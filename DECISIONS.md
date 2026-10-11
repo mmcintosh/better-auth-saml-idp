@@ -2123,3 +2123,15 @@ D-075 left Microsoft relying on the IdP's MFA unverified, because the tenant had
 - **`authnContext.current()` gets the SP and its request** (`serviceProvider`, `requested`). One global answer can't serve an SP that asks for exactly `PasswordProtectedTransport` from an MFA session: the user is sent to sign in again, which can't help, and then the SP gets `NoAuthnContext`. With the SP and request, `current` can answer that SP with the password class. Additive: callbacks that ignore the new fields behave as before.
 - **Sign-out:** D-076.
 - **Guide:** the results above, the Graph API (`az rest`) route beside PowerShell, why step 4 starts on `rejectMfaByFederatedIdp`, and what `AADSTS51004` usually means in a test (the NameID of whoever was already signed in to the IdP in that browser).
+
+## D-078: A Workers + Neon (Hyperdrive) example (2026-10-11)
+
+Postgres behind Workers was documented (the Hyperdrive cache warning) but had no example, and CI tested Postgres only on Node. `examples/workers-neon` is the plugin on Workers with Postgres on Neon through Hyperdrive.
+
+- **Why Postgres at all:** D1 is enough for the plugin. Postgres is for hosts that need transactions (Better Auth's own `@better-auth/scim` doesn't run on D1), more data, ordinary Postgres tooling, or a database branch per preview.
+- **Connections per request:** a connection can't be used by another request on Workers, so each request gets its own `pg` pool (at most 5; Workers allow 6 connections per request), closed after the response once Better Auth's background tasks (event handlers, the audit log) are done.
+- **Better Auth built once per isolate**, reaching the current request's pool through `AsyncLocalStorage`. Building it per request was measured first on the deployed Worker: CPU medians of 30 ms for the metadata endpoint, 13 for get-session and 11 for SSO. Built once per isolate: 3, 5 and 8 ms. Resume went from 109 to 63 ms, sign-in from 112 to 123 (password hashing dominates).
+- **`validateSchema: false`:** with one instance per isolate, the schema check would start in one request and be awaited by others, which can hang on Workers when the first request ends (as a shared token fetch did in the SCIM package). `pnpm db:migrate` (Better Auth's `getMigrations`, from the same options) sets the schema up.
+- **Hyperdrive with `--caching-disabled`**, and Smart Placement, since Better Auth makes several queries per request.
+- **Verified live (2026-10-11)** on a Neon branch database (aws-us-east-2, Postgres 18) through a Hyperdrive config with caching off: the CLI's smoke checks, a full SP-initiated sign-in validated by node-saml, a session deleted in Neon refused 181 ms later on the next request, and 30 parallel requests, with no errors in the Worker log.
+- **CI:** a `workers-neon` job runs the example under `wrangler dev` with Postgres in a service container where Hyperdrive would be (`CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE`): migrations, `inspect` and `smoke`, and the full sign-in. That's Workers + `pg` end to end on every change.

@@ -1,0 +1,22 @@
+{
+  "name": "better-auth-saml-idp-neon-example",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-15",
+  // node-postgres (pg) and the plugin use Node APIs.
+  "compatibility_flags": ["nodejs_compat"],
+  // Better Auth makes several queries per request: let Cloudflare run the Worker near the database.
+  "placement": { "mode": "smart" },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      // `wrangler hyperdrive create … --caching-disabled` (see README.md), then paste its id here.
+      "id": "00000000000000000000000000000000",
+      // What `wrangler dev` connects to instead (a local Postgres; see README.md).
+      "localConnectionString": "postgres://postgres:postgres@localhost:5432/postgres"
+    }
+  ],
+  "vars": {
+    // JSON array of { id, entityId, acsUrls } (see README.md).
+    "SAML_SERVICE_PROVIDERS": "[]"
+  }
+}

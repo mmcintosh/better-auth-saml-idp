@@ -109,6 +109,8 @@ npx wrangler hyperdrive create <name> --connection-string "<postgres url>" --cac
 
 Hyperdrive caches read queries by default, and Better Auth's session lookup is a read. In the provisioning field test (2026-10-07), a revoked session stayed valid for 62.5 seconds through the cache. That's the same problem as KV above: an IdP must be able to revoke at once.
 
+A database connection can't be used by another request on Workers, so each request needs its own `pg` pool. Building Better Auth and the plugin per request works, but costs about 25 ms of CPU on every request. The [Workers + Neon example](../../examples/workers-neon/README.md) builds them once per isolate instead, and gives Better Auth a pool that sends each query to the current request's own pool (through `AsyncLocalStorage`), closed after the response once Better Auth's background work is done.
+
 ## Checking a deployment
 
 ```bash

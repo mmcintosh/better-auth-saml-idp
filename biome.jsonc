@@ -11,6 +11,8 @@
 			"examples/nextjs/src/**",
 			"examples/nextjs/scripts/**",
 			"examples/nextjs/next.config.ts",
+			"examples/workers-neon/src/**",
+			"examples/workers-neon/scripts/**",
 			"!src/saml/schemas.generated.ts"
 		]
 	},
