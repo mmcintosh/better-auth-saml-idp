@@ -80,7 +80,7 @@ With [better-auth-scim-provisioning](https://www.npmjs.com/package/better-auth-s
 
 It's off until you configure a target:
 
-1. Apply migration `0011_scim_provisioning.sql` (`pnpm db:migrate:remote`). It's needed only once provisioning is on: Better Auth checks the schema (`validateSchema`), so the provisioning plugin is added only with a target.
+1. Apply migrations `0011_scim_provisioning.sql` and `0015_scim_provisioning_1_0.sql` (`pnpm db:migrate:remote`). They're needed only once provisioning is on: Better Auth checks the schema (`validateSchema`), so the provisioning plugin is added only with a target. A deployment that ran provisioning on 0.3 needs `0015` before the upgrade to 1.0 is deployed (the package's upgrading guide). On 1.0, Google Workspace targets no longer take over accounts made elsewhere unless the target sets `adopt: true`.
 2. Set a target, and **who may be provisioned there** (comma-separated emails or `@domain` suffixes; empty means nobody, so a demo never pushes strangers' accounts out):
 
 | Target | Settings |

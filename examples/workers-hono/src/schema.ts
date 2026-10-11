@@ -279,7 +279,7 @@ export const samlIdpAuditEvents = sqliteTable(
   ],
 );
 
-/** better-auth-scim-provisioning (migration 0011; only with a provisioning target): the outbox and the links. */
+/** better-auth-scim-provisioning (migrations 0011 and 0015; only with a provisioning target): the outbox and the links. */
 export const scimProvisioningJobs = sqliteTable(
   "scim_provisioning_jobs",
   {
@@ -312,6 +312,7 @@ export const scimProvisioningLinks = sqliteTable(
     userName: text("user_name").notNull(),
     externalId: text("external_id"),
     active: integer("active", { mode: "boolean" }).notNull(),
+    adopted: integer("adopted", { mode: "boolean" }),
     syncedAt: integer("synced_at", { mode: "timestamp_ms" }).notNull(),
   },
   (t) => [
@@ -330,9 +331,15 @@ export const scimProvisioningGroupLinks = sqliteTable(
     organizationId: text("organization_id").notNull(),
     remoteId: text("remote_id").notNull(),
     displayName: text("display_name").notNull(),
+    kind: text("kind"),
+    subjectId: text("subject_id"),
     syncedAt: integer("synced_at", { mode: "timestamp_ms" }).notNull(),
   },
-  (t) => [index("scim_provisioning_group_links_target_idx").on(t.targetId), index("scim_provisioning_group_links_remote_idx").on(t.remoteId)],
+  (t) => [
+    index("scim_provisioning_group_links_target_idx").on(t.targetId),
+    index("scim_provisioning_group_links_remote_idx").on(t.remoteId),
+    index("scim_provisioning_group_links_org_idx").on(t.organizationId),
+  ],
 );
 
 export const schema = { scimProvisioningJobs, scimProvisioningLinks, scimProvisioningGroupLinks, users, twoFactors, passkeys, sessions, accounts, verifications, rateLimits, organizations, members, invitations, samlIdpSeenRequests, samlIdpServiceProviders, samlIdpSessionParticipants, samlIdpAuditEvents, samlIdpTenants, samlIdpRetiredTenantKeys, samlIdpTenantKeys };
