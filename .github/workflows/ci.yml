@@ -32,6 +32,7 @@ jobs:
       - run: pnpm lint          # Biome: recommended + security rules
       - run: pnpm docs:check    # every relative link and #anchor in README and docs/
       - run: pnpm -C examples/workers-hono typecheck
+      - run: pnpm -C examples/workers-neon typecheck
       - run: pnpm test          # node + workerd (D1/Drizzle, validateSchema on), incl. SP interop
       - run: pnpm test:wasm     # validator suite, node + workerd
       - run: pnpm pack:check    # dist build, publint, Are the Types Wrong
@@ -144,6 +145,43 @@ jobs:
           node scripts/sso.mjs http://localhost:3000
       - if: failure()
         run: cat examples/nextjs/next.log || true
+
+  # The Workers + Neon example (examples/workers-neon) under `wrangler dev`, with Postgres in a
+  # service container where Hyperdrive would be: migrations, the CLI's inspect and smoke checks,
+  # and a full sign-in validated by node-saml. Workers + pg end to end (D-078).
+  workers-neon:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+        env: { POSTGRES_PASSWORD: test }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:test@localhost:5432/postgres
+      CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgres://postgres:test@localhost:5432/postgres
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 24, cache: pnpm }
+      # Socket Firewall (D-073): blocks packages Socket has confirmed as malware before they download.
+      - uses: SocketDev/action@ba6de6cc0565af1f42295590380973573297e31f # v1.3.2
+        with: { mode: firewall-free }
+      - run: sfw pnpm install --frozen-lockfile
+      - run: pnpm build           # the plugin's dist/, which the example imports
+      - working-directory: examples/workers-neon
+        run: |
+          node scripts/dev-keys.mjs    # throwaway key pair, secret and the test SP in .dev.vars
+          pnpm db:migrate
+          nohup npx wrangler dev --port 8787 > wrangler.log 2>&1 &
+          for i in $(seq 60); do curl -sf -o /dev/null http://localhost:8787/ && break; sleep 2; done
+          node scripts/smoke.mjs http://localhost:8787
+          node scripts/sso.mjs http://localhost:8787
+      - if: failure()
+        run: cat examples/workers-neon/wrangler.log || true
 
   # Secret scan over the full git history (.gitleaks.toml).
   secrets:

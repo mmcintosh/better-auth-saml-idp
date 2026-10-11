@@ -8,7 +8,7 @@ const slug = (h) => h.trim().toLowerCase().replace(/<[^>]+>/g, "").replace(/[^\p
 const headings = (f) => [...strip(readFileSync(f, "utf8")).matchAll(/^#{1,6} (.+)$/gm)].map((m) => slug(m[1]));
 const walk = (d) => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : [join(d, f)]));
 
-const files = ["README.md", "CHANGELOG.md", "examples/workers-hono/README.md", "examples/nextjs/README.md", ...walk("docs").filter((f) => f.endsWith(".md"))];
+const files = ["README.md", "CHANGELOG.md", "examples/workers-hono/README.md", "examples/nextjs/README.md", "examples/workers-neon/README.md", ...walk("docs").filter((f) => f.endsWith(".md"))];
 const bad = [];
 let count = 0;
 for (const f of files) {

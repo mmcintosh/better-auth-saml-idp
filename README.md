@@ -85,6 +85,7 @@ Derived from a [feature comparison](https://mmcintosh.github.io/better-auth-saml
 **Next: Reach, trust and B2B**
 
 - [x] **Next.js example**: examples/nextjs: App Router on the Node runtime with node:sqlite, a sign-in page that honours callbackURL and prompt=login; CI builds it, starts it and signs in with node-saml.
+- [x] **Workers + Neon example**: examples/workers-neon: Postgres on Neon through Hyperdrive (query cache off), Better Auth built once per isolate with a pool per request; verified live, and CI signs in through it under `wrangler dev` with Postgres (D-078).
 - [x] **Drizzle on Postgres and MySQL, Prisma on Postgres**: The most common Better Auth adapters, proven as the query layer in the CI adapter matrix alongside Kysely, MongoDB, SQLite and D1 (D-051).
 - [x] **Bun and Deno**: The built package smoke-tested on both in CI (test/runtimes/smoke.mjs): CLI keygen, metadata and a full sign-in with the signature verified (D-051).
 - [x] **Multi-tenant IdP, phase 1**: One IdP identity per organization: each tenant gets its own entity ID, metadata and SSO/SLO URLs, under the shared signing key. Host administrators create tenants and manage their SPs; organization membership is mandatory; isolation doesn't rely on SPs checking Issuer (D-052, docs/guide/multi-tenant.md).
@@ -193,7 +194,7 @@ npx better-auth-saml-idp sp-from-metadata https://sp.example.com/saml/metadata -
 npx better-auth-saml-idp smoke https://auth.example.com --sp <the SP's entity ID>
 ```
 
-The [Workers + Hono example](examples/workers-hono/README.md) is a complete, deployable IdP with a sign-in page, D1 migrations and SPs configured from JSON. The [Next.js example](examples/nextjs/README.md) is the same on Node: App Router, `node:sqlite`, and a sign-in page that honours `callbackURL` and `prompt=login`.
+The [Workers + Hono example](examples/workers-hono/README.md) is a complete, deployable IdP with a sign-in page, D1 migrations and SPs configured from JSON. The [Next.js example](examples/nextjs/README.md) is the same on Node: App Router, `node:sqlite`, and a sign-in page that honours `callbackURL` and `prompt=login`. The [Workers + Neon example](examples/workers-neon/README.md) runs on Postgres through Hyperdrive instead of D1.
 
 ## 📦 Installation
 

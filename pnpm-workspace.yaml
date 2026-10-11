@@ -5,6 +5,7 @@ packages:
   # workspace, with their own bun.lock and their own Dependabot entry.
   - "examples/nextjs"
   - "examples/workers-hono"
+  - "examples/workers-neon"
 
 # Don't install a version published less than a day ago (D-073): most npm malware is found and
 # pulled within hours. Dependabot waits 3 days (cooldown), so it never proposes a version this
