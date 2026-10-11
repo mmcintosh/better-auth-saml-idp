@@ -23,6 +23,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ### Examples
 
+- **The Workers example's provisioning is on better-auth-scim-provisioning 1.0** (#73), with migration `0015` for its new columns (group links' `kind` and `subjectId`, links' `adopted`). A deployment that ran provisioning on 0.3 applies `0015` before deploying. Checked locally on D1 against a SCIM server: a user and an organization's group delivered, and the new columns written.
 - **Passkeys in the Workers example** (Better Auth's `passkey` plugin, migration `0013`): add them on the home page, then "Sign in with a passkey", using the browser's own WebAuthn JSON helpers with no client library.
 - **The sign-in level now comes from how the session was signed in**, not from the user's two-step setting. A session field (`auth_method`), set when the session is created, records password, authenticator code, backup code, passkey or impersonation, and the MFA class is sent only for the code and passkey ones. The Microsoft 365 guide's MFA snippet follows it.
 
