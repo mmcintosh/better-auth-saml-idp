@@ -194,7 +194,8 @@ function logoutSchema() {
         spId: { type: "string", required: true, input: false },
         nameId: { type: "string", required: true, input: false },
         nameIdFormat: { type: "string", required: true, input: false },
-        sessionIndex: { type: "string", required: true, input: false },
+        // D-076: a LogoutRequest without the session's cookie finds its session by this.
+        sessionIndex: { type: "string", required: true, input: false, index: true },
         expiresAt: { type: "date", required: true, input: false, index: true },
       },
       indexes: [{ fields: ["key"], unique: true, name: "saml_idp_session_participant_key_unique" }],

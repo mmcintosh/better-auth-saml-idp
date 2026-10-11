@@ -272,7 +272,8 @@ exports[`tenants off: output is unchanged (D-052) > the schema and the routes, w
    "sessionIndex": {
     "type": "string",
     "required": true,
-    "input": false
+    "input": false,
+    "index": true
    },
    "expiresAt": {
     "type": "date",

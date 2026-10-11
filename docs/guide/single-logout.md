@@ -46,7 +46,11 @@ User clicks "sign out" at SP A
 ```
 
 1. The LogoutRequest is validated (XSD, structure, `IssueInstant`, `Destination`, RelayState size), authenticated (see below), and checked for replay.
-2. It must be about **this browser's** session: its SessionIndex must be the one this SP was given for this session. A signed request without a SessionIndex must name the NameID this SP was given. A request about anyone else ends nothing, and is still answered `Success`, since there's no session of that principal here.
+2. It names the session to end:
+   - **This browser's**, when the request comes with its cookie: its SessionIndex must be the one this SP was given for this session. A signed request without a SessionIndex must name the NameID this SP was given.
+   - Otherwise, **the session its SessionIndex was issued for**, found on the server. Some SPs, Microsoft 365 among them, send the LogoutRequest from a hidden iframe on their sign-out page, and browsers never send the session cookie to a cross-site iframe. That session may be in another browser; this browser's own session and cookie are left alone.
+
+   A request that names no live session ends nothing, and is still answered `Success`, since there's no session of that principal here.
 3. **The IdP session ends first**: the Better Auth session row, its cookie (cleared even on auto-POST pages) and the participant list. Everything after this is notification; if the chain breaks, the user is already signed out of the IdP.
 4. Each **other** participant gets a LogoutRequest signed by the IdP, over its binding (query-signed Redirect, or an auto-posted, XML-signed form). Its LogoutResponse comes back to `/saml2/idp/slo` and continues the chain. The state of each step is a single-use value named by the RelayState, valid for 5 minutes.
 5. The originating SP gets a signed LogoutResponse over its binding, to `responseUrl` if set:
@@ -73,7 +77,7 @@ Better Auth's own `/sign-out` only ends the IdP session: the SPs aren't sent a L
 A forged LogoutRequest could sign someone out, so every one must be authenticated:
 
 - **SPs with certificates** (`spCertificates` or `metadata.url`), that is, any `requestSignatures` other than `"ignore"`, **must sign** their logout messages, and the signature is verified like an AuthnRequest's. If no certificate is available, for example because a metadata fetch failed, the message is refused rather than accepted unsigned.
-- **SPs without certificates** can end the session only with the right SessionIndex. That's a keyed MAC over (session, SP), different for every SP and every session, known only to the SP it was sent to. One SP's value can't end the session in another SP's name.
+- **SPs without certificates** can end a session only with its SessionIndex. That's a keyed MAC over (session, SP), different for every SP and every session, known only to the SP it was sent to. One SP's value can't end the session in another SP's name. Since the cookie isn't needed (see step 2), whoever holds a SessionIndex can end that one session, and nothing else.
 
 Give SPs that use SLO a certificate. For certificate-less SPs, anyone can make the IdP produce a signed `Success` LogoutResponse addressed to that SP (with no effect at the IdP), so such SPs must check `InResponseTo` against their own pending logout.
 
@@ -93,7 +97,7 @@ Give SPs that use SLO a certificate. For certificate-less SPs, anyone can make t
 | `DUPLICATE_REQUEST_ID` | A replayed LogoutRequest. |
 | `LOGOUT_STATE_NOT_FOUND` | An unknown, used or expired logout step. |
 | `INVALID_RETURN_TO` | `returnTo` isn't same-origin or trusted. |
-| `INTERNAL_ERROR` | At sign-in: the participant couldn't be recorded, so no assertion is issued (a later logout couldn't reach the SP). |
+| `INTERNAL_ERROR` | At sign-in: the participant couldn't be recorded, so no assertion is issued (a later logout couldn't reach the SP). At logout: a LogoutRequest without the session's cookie couldn't be matched to its session (database error). |
 
 ## When the session ends without the browser
 

@@ -69,7 +69,7 @@ New-MgDomainFederationConfiguration -DomainId "your-domain.example" `
   -FederatedIdpMfaBehavior "rejectMfaByFederatedIdp"
 ```
 
-Signing out at Microsoft wasn't part of the live test, so sign-out through the IdP is untested. The SP entry above has no `singleLogoutService`.
+For signing out at Microsoft to sign the user out of your IdP too, see [Sign-out](#sign-out).
 
 `Get-MgDomain -DomainId your-domain.example` then shows `AuthenticationType` **Federated**. Allow up to about 15 minutes. Until then, Microsoft's sign-in page may still ask some users for a Microsoft password.
 
@@ -110,6 +110,20 @@ Microsoft can accept MFA done at your IdP instead of asking for its own. Two thi
 
 > [!IMPORTANT]
 > **Security defaults still ask for Microsoft Authenticator.** With the tenant's security defaults on, every user must register Microsoft Authenticator, whatever MFA your IdP did. A user who hasn't registered it gets "Let's keep your account secure" after signing in at your IdP (sign-in log interrupt `50072`). Security defaults also require MFA only now and then, so most sign-ins show "Single-factor authentication" in Microsoft's sign-in log either way. For Microsoft to rely on your IdP's MFA, the tenant needs Conditional Access (Entra ID P1) instead of security defaults. Switching affects every user in the tenant, so try it in a separate test tenant. As of 2026-10-08, the IdP side and `acceptIfMfaDoneByFederatedIdp` were verified, but Microsoft accepting the IdP's MFA under Conditional Access was not yet.
+
+## Sign-out
+
+When a user signs out at Microsoft, Microsoft sends a LogoutRequest to the `SignOutUri`. For it to end the session at your IdP:
+
+1. Turn on [Single Logout](guide/single-logout.md) (`singleLogout: { enabled: true }`) and give Microsoft's SP entry a `singleLogoutService`. Without one, the IdP refuses Microsoft's request (`LOGOUT_NOT_SUPPORTED`).
+
+   ```json
+   "singleLogoutService": { "url": "https://login.microsoftonline.com/login.srf", "binding": "post" }
+   ```
+
+2. **Leave Microsoft's certificate off the SP entry.** Microsoft signs its LogoutRequest with RSA-SHA1, which the IdP refuses unless `signing.allowInsecureSha1` is on. Without a certificate, the request is authenticated by its SessionIndex: Microsoft sends back the one your IdP issued with the assertion.
+
+Microsoft sends the request from a hidden iframe on its sign-out page, which never gets your IdP's session cookie. Since 1.5.0, the IdP finds the session from the SessionIndex (D-076). Earlier versions answer the request but end nothing, so the next sign-in at Microsoft goes through without asking.
 
 ## When something goes wrong
 

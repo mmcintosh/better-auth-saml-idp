@@ -4,6 +4,11 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Fixed
+
+- **Signing out at Microsoft 365 now ends the IdP session** (D-076). Microsoft sends its LogoutRequest from a hidden iframe on its sign-out page, and browsers never send the session cookie to a cross-site iframe, so the IdP found no session, answered `Success`, and the next Microsoft sign-in went through without asking. A LogoutRequest without the session's cookie (or with another session's) now ends the session its SessionIndex was issued for, found on the server. This browser's own session and cookie are left alone. The SessionIndex is unguessable and given only to that SP for that one session; whoever holds it can end that one session and nothing else.
+  - **Database:** `sessionIndex` on `samlIdpSessionParticipant` gains an index, so the lookup isn't a table scan. D1: the example's migration `0014`. Without it, logout still works, more slowly on large tables. On **MySQL or SQL Server**, Better Auth's `migrate` won't index an existing `text` column: change it first (MySQL: `ALTER TABLE samlIdpSessionParticipant MODIFY sessionIndex varchar(255) NOT NULL;`, using your table and column names).
+
 ### Examples
 
 - **Passkeys in the Workers example** (Better Auth's `passkey` plugin, migration `0013`): add them on the home page, then "Sign in with a passkey", using the browser's own WebAuthn JSON helpers with no client library.
