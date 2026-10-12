@@ -63,9 +63,14 @@ jobs:
           fi
       - run: pnpm build && mkdir -p out && pnpm pack --pack-destination out
       # The SBOM describes what a user installs: the tarball's runtime dependency tree.
-      # The package and its runtime dependencies as a user gets them, from the pinned lockfile
-      # (not resolved afresh at release time); peers (better-auth) are the host's and left out.
-      - run: pnpm --filter better-auth-saml-idp deploy --prod --legacy --config.node-linker=hoisted sbom-root
+      # The package and its runtime dependencies as a user gets them, from the pinned lockfile:
+      # not resolved afresh at release time, so the SBOM lists the versions CI tested, and pnpm's
+      # minimumReleaseAge can't block a release. Peers (better-auth) are the host's and left out.
+      # The tree is only scanned, so lifecycle scripts are skipped; the workspace lockfile that
+      # deploy copies in is removed, or syft would list every development dependency from it.
+      - run: |
+          pnpm --filter better-auth-saml-idp deploy --prod --ignore-scripts --config.inject-workspace-packages=true --config.node-linker=hoisted sbom-root
+          rm sbom-root/pnpm-lock.yaml
       - uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           path: sbom-root
