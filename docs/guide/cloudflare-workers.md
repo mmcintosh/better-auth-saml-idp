@@ -7,7 +7,7 @@ The plugin runs on Workers with D1 through [`better-auth-cloudflare`](https://gi
 ## Requirements
 
 - `better-auth-cloudflare` and the `nodejs_compat` compatibility flag. The plugin doesn't depend on `better-auth-cloudflare` itself; any version that supports Better Auth 1.7 works.
-- With **0.3.1** (npm's current release) and Better Auth ≥ 1.7.3, keep single-use values out of KV: `verification: { storeInDatabase: true }` and `rateLimit: { storage: "database" }`. 0.3.1's KV storage has no atomic consume, and Better Auth 1.7 relies on one ([better-auth-cloudflare #72](https://github.com/zpg6/better-auth-cloudflare/issues/72)). The example does this. From 0.4 (on better-auth-cloudflare's main today), `withCloudflare` checks it when Better Auth initializes: `betterAuth()` still constructs, then every request fails with a message naming the fix, so a deploy succeeds and the first request shows the error.
+- With Better Auth ≥ 1.7.3, keep single-use values out of KV: `verification: { storeInDatabase: true }` and `rateLimit: { storage: "database" }`. 0.3.1's KV storage has no atomic consume, and Better Auth 1.7 relies on one ([better-auth-cloudflare #72](https://github.com/zpg6/better-auth-cloudflare/issues/72)). The example does this. From 0.4.0 (released 2026-10-12), `withCloudflare` checks it when Better Auth initializes: `betterAuth()` still constructs, then every request fails with a message naming the fix, so a deploy succeeds and the first request shows the error.
 - **Workers Paid.** The first SAML request in an isolate compiles the XSD validator (WebAssembly). Measured: warm SSO about 16 ms CPU; cold 56 to 162 ms, which is over the Free plan's 10 ms. See [DECISIONS D-017](../../DECISIONS.md).
 - D1 through Drizzle, with `validateSchema`.
 
@@ -59,7 +59,7 @@ A cancelled metadata refresh recovers by itself (the plugin starts a new one aft
 
 Parsing the key and compiling the validator are one-time costs per isolate, so don't build a new Better Auth instance per request. The example builds it once and passes each request's `cf` through `AsyncLocalStorage`. See `examples/workers-hono/src/auth.ts`.
 
-- **`cf` as a function needs better-auth-cloudflare 0.4** (main today). 0.3.1 takes only an object, and silently stores no geolocation when given a function. On 0.3.1, a shared instance records the first request's location for every session; build per request there, or upgrade.
+- **`cf` as a function needs better-auth-cloudflare 0.4.0.** 0.3.1 takes only an object, and silently stores no geolocation when given a function. On 0.3.1, a shared instance records the first request's location for every session; build per request there, or upgrade.
 - **If you do build Better Auth per request,** it runs its schema check (`validateSchema`) on every request, which costs a database round trip each time. Set `advanced: { database: { validateSchema: false } }` for that setup, and check the schema at deploy time instead. (Found in the provisioning field test, 2026-10-07.)
 
 ## Secrets and configuration

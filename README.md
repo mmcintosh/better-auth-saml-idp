@@ -169,7 +169,7 @@ pnpm add better-auth-saml-idp
 - `better-auth` and `@better-auth/core` `>=1.7.5 <1.8.0` (peer dependencies)
 - A real database adapter (D1/Drizzle, Postgres, MySQL, SQLite…). Replay protection depends on UNIQUE constraints.
 - `verification.storeInDatabase: true` whenever secondary storage (for example KV) is configured
-- On Workers: `better-auth-cloudflare` and the `nodejs_compat` flag. With `better-auth-cloudflare` 0.3.1 (npm's current release) and Better Auth ≥ 1.7.3, set `verification: { storeInDatabase: true }` and `rateLimit: { storage: "database" }` (0.3.1's KV storage breaks single-use values; [better-auth-cloudflare #72](https://github.com/zpg6/better-auth-cloudflare/issues/72)). 0.4, not yet on npm, won't need them
+- On Workers: `better-auth-cloudflare` and the `nodejs_compat` flag. With Better Auth ≥ 1.7.3, set `verification: { storeInDatabase: true }` and `rateLimit: { storage: "database" }`: with KV configured, `better-auth-cloudflare` 0.4.0 fails every request without them, naming the fix, and 0.3.1 silently breaks single-use values ([better-auth-cloudflare #72](https://github.com/zpg6/better-auth-cloudflare/issues/72)).
 
 ## ⛅ Setup (Cloudflare Workers + D1)
 
@@ -554,7 +554,7 @@ A feature-by-feature comparison with Shibboleth, SimpleSAMLphp, Keycloak, Zitade
 
 The 1.x line covers everything on the [roadmap](https://mmcintosh.github.io/better-auth-saml-idp/comparison/#roadmap) derived from a feature comparison with eleven other SAML identity providers (checked 2026-09-25), except:
 
-- [ ] **better-auth-cloudflare 0.4 (after 1.0)**: The plugin doesn't depend on it; 0.3.1 works with verification and rate limits in the database. When 0.4 is released, a 1.x minor release moves the example from its vendored build to ^0.4.0 and drops those two settings from the Workers setup.
+- [ ] **better-auth-cloudflare 0.4.0 in the example**: The plugin doesn't depend on it. 0.4.0 is out (2026-10-12): the example moves from its vendored build to ^0.4.0. The verification and rate-limit settings stay, since 0.4.0 requires them when KV is configured.
 
 **Not planned:**
 

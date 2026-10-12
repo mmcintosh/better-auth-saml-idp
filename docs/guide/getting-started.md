@@ -11,7 +11,7 @@ npm install better-auth-saml-idp
 # or: pnpm add / yarn add / bun add
 ```
 
-Requirements: `better-auth` `>=1.7.5 <1.8.0`, and a real database (replay protection relies on UNIQUE constraints). On Cloudflare Workers, also `better-auth-cloudflare` and the `nodejs_compat` flag. With `better-auth-cloudflare` 0.3.1 (npm's current release) and Better Auth ≥ 1.7.3, set `verification: { storeInDatabase: true }` and `rateLimit: { storage: "database" }` (0.3.1's KV storage breaks single-use values; [better-auth-cloudflare #72](https://github.com/zpg6/better-auth-cloudflare/issues/72)). 0.4, not yet on npm, won't need them; see [Cloudflare Workers](cloudflare-workers.md).
+Requirements: `better-auth` `>=1.7.5 <1.8.0`, and a real database (replay protection relies on UNIQUE constraints). On Cloudflare Workers, also `better-auth-cloudflare` and the `nodejs_compat` flag. With Better Auth ≥ 1.7.3, set `verification: { storeInDatabase: true }` and `rateLimit: { storage: "database" }`: with KV configured, `better-auth-cloudflare` 0.4.0 fails every request without them, naming the fix, and 0.3.1 silently breaks single-use values ([better-auth-cloudflare #72](https://github.com/zpg6/better-auth-cloudflare/issues/72)). See [Cloudflare Workers](cloudflare-workers.md).
 
 ## 2. Create a signing key
 
