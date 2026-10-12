@@ -30,7 +30,7 @@ describe(`host stack (${isWorkerd ? "workerd: withCloudflare + Drizzle/D1" : "no
     const versions = {
       "better-auth": await pkgVersion("better-auth"),
       "@better-auth/core": await pkgVersion("@better-auth/core"),
-      "better-auth-cloudflare": `${await pkgVersion("better-auth-cloudflare")} (main dbe08c51b)`,
+      "better-auth-cloudflare": await pkgVersion("better-auth-cloudflare"),
       "drizzle-orm": await pkgVersion("drizzle-orm"),
     };
     console.log("VERSIONS", JSON.stringify(versions));
@@ -91,7 +91,7 @@ describe("R5 negative host config: KV secondary storage without storeInDatabase"
     // A real database, so the only thing wrong is the storage routing.
     const database = await createHostDatabase();
     const run = async () => {
-      // better-auth-cloudflare 0.3.1's plugin types don't satisfy BetterAuthPlugin under
+      // better-auth-cloudflare's plugin types (0.3.1 and 0.4.0) don't satisfy BetterAuthPlugin under
       // exactOptionalPropertyTypes (the same class of bug fixed here in 1.0.1), hence the cast.
       const auth = betterAuth({
         baseURL: BASE_URL,
