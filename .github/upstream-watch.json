@@ -1,14 +1,6 @@
 {
   "vendored": [
     {
-      "name": "better-auth-cloudflare",
-      "repo": "zpg6/better-auth-cloudflare",
-      "vendorPrefix": "better-auth-cloudflare-",
-      "npm": "better-auth-cloudflare",
-      "releasedWhenVendored": "0.3.1",
-      "replaceWhen": "Replace the build with the npm release once one includes the vendored commit (DECISIONS D-010 names the settings the tests need)."
-    },
-    {
       "name": "CharDB",
       "repo": "zpg6/chardb",
       "vendorPrefix": "chardb-core-",

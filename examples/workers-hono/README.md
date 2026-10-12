@@ -5,7 +5,7 @@ This is a minimal Better Auth server that acts as a **SAML 2.0 Identity Provider
 - verification values and rate limits are stored in the database (D1), never in KV
 - `validateSchema` is on
 
-> **`better-auth-cloudflare`:** this example uses a build of upstream `main` from `../../vendor/` (the coming 0.4, which checks storage routing at startup). With npm's 0.3.1 it also works, because the settings above keep verification values and rate limits out of KV ([#72](https://github.com/zpg6/better-auth-cloudflare/issues/72)). Switch to `"better-auth-cloudflare": "^0.4.0"` once it's released.
+> **`better-auth-cloudflare`:** 0.4.0, which checks storage routing when Better Auth initializes: without the two settings above, every request fails with a message naming the fix. (0.3.1 instead broke single-use values silently: [#72](https://github.com/zpg6/better-auth-cloudflare/issues/72).)
 
 ## Run it locally
 

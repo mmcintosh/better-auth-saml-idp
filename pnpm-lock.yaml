@@ -73,8 +73,8 @@ importers:
         specifier: 1.7.5
         version: 1.7.5(6ed1f14c7febb78edb3652797c649fd4)
       better-auth-cloudflare:
-        specifier: file:vendor/better-auth-cloudflare-0.3.1-main-dbe08c51b.tgz
-        version: file:vendor/better-auth-cloudflare-0.3.1-main-dbe08c51b.tgz(0651ebf3a6ea01da5f6111316028a001)
+        specifier: ^0.4.0
+        version: 0.4.0(0651ebf3a6ea01da5f6111316028a001)
       drizzle-orm:
         specifier: ^0.45.3
         version: 0.45.4(@cloudflare/workers-types@5.20261007.1)(@electric-sql/pglite@0.4.3)(@prisma/client@7.10.0(prisma@7.10.0(@types/node@26.6.4)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2))(typescript@7.0.2))(@types/pg@8.23.1)(kysely@0.29.6)(mysql2@3.24.5(@types/node@26.6.4))(pg@8.23.1)(postgres@3.4.7)(prisma@7.10.0(@types/node@26.6.4)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2))
@@ -161,8 +161,8 @@ importers:
         specifier: 1.7.5
         version: 1.7.5(6ed1f14c7febb78edb3652797c649fd4)
       better-auth-cloudflare:
-        specifier: file:../../vendor/better-auth-cloudflare-0.3.1-main-dbe08c51b.tgz
-        version: file:vendor/better-auth-cloudflare-0.3.1-main-dbe08c51b.tgz(94cfb120d48ef054ca8ce84d50044c34)
+        specifier: ^0.4.0
+        version: 0.4.0(94cfb120d48ef054ca8ce84d50044c34)
       better-auth-saml-idp:
         specifier: workspace:*
         version: link:../..
@@ -1718,9 +1718,8 @@ packages:
     engines: {node: '>=6.0.0'}
     hasBin: true
 
-  better-auth-cloudflare@file:vendor/better-auth-cloudflare-0.3.1-main-dbe08c51b.tgz:
-    resolution: {integrity: sha512-GdTGziiPrMlaOaGFRCAa2KHSBUx7Dl1O1j+EuwxVAvPG8uCo9JlmSXtYJu+k8Ue+nxGIMgkSJOKB+6eJh4PawQ==, tarball: file:vendor/better-auth-cloudflare-0.3.1-main-dbe08c51b.tgz}
-    version: 0.3.1
+  better-auth-cloudflare@0.4.0:
+    resolution: {integrity: sha512-65UHbmZh5BI5vS3SgOYzb3NHrwQkf7rqQMOI8yDDqvWwJ/hPadQ8GIptA4SrZwQDCerY1dAEaBtYJPA+cXNLuQ==}
     peerDependencies:
       '@better-auth/drizzle-adapter': ^1.5.0
       '@cloudflare/workers-types': '>=4'
@@ -4311,7 +4310,7 @@ snapshots:
 
   baseline-browser-mapping@2.11.28: {}
 
-  better-auth-cloudflare@file:vendor/better-auth-cloudflare-0.3.1-main-dbe08c51b.tgz(0651ebf3a6ea01da5f6111316028a001):
+  better-auth-cloudflare@0.4.0(0651ebf3a6ea01da5f6111316028a001):
     dependencies:
       '@better-auth/drizzle-adapter': 1.7.5(@better-auth/core@1.7.5(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.4(@cloudflare/workers-types@5.20261007.1)(@electric-sql/pglite@0.4.3)(@prisma/client@7.10.0(prisma@7.10.0(@types/node@26.6.4)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2))(typescript@7.0.2))(@types/pg@8.23.1)(kysely@0.29.6)(mysql2@3.24.5(@types/node@26.6.4))(pg@8.23.1)(postgres@3.4.7)(prisma@7.10.0(@types/node@26.6.4)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2)))
       '@cloudflare/workers-types': 5.20261007.1
@@ -4350,7 +4349,7 @@ snapshots:
       - sql.js
       - sqlite3
 
-  better-auth-cloudflare@file:vendor/better-auth-cloudflare-0.3.1-main-dbe08c51b.tgz(94cfb120d48ef054ca8ce84d50044c34):
+  better-auth-cloudflare@0.4.0(94cfb120d48ef054ca8ce84d50044c34):
     dependencies:
       '@better-auth/drizzle-adapter': 1.7.6(@better-auth/core@1.7.5(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.4(@cloudflare/workers-types@5.20261007.1)(@electric-sql/pglite@0.4.3)(@prisma/client@7.10.0(prisma@7.10.0(@types/node@26.6.4)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2))(typescript@7.0.2))(@types/pg@8.23.1)(kysely@0.29.6)(mysql2@3.24.5(@types/node@26.6.4))(pg@8.23.1)(postgres@3.4.7)(prisma@7.10.0(@types/node@26.6.4)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2)))
       '@cloudflare/workers-types': 5.20261007.1
