@@ -53,9 +53,9 @@ DID = re.compile(r"\s*\((?:[^()]*?)?D-0\d\d[^()]*\)")  # decision ids mean nothi
 def plain(d): return DID.sub("", d)
 open_items = [(t, d) for ver, title, sub, items in ROADMAP if ver != "Not planned" for t, d in items if "(done)" not in t]
 not_planned = [(t, d) for ver, title, sub, items in ROADMAP if ver == "Not planned" for t, d in items]
-rm = ["## 🧭 What's next\n",
-      f"The 1.x line covers everything on the [roadmap](https://mmcintosh.github.io/better-auth-saml-idp/comparison/#roadmap) derived from a feature comparison with eleven other SAML identity providers (checked {CHECKED}), except:\n"]
-rm += [f"- [ ] **{t}**: {plain(d)}" for t, d in open_items] + ["", "**Not planned:**\n"]
+covers = f"The 1.x line covers everything on the [roadmap](https://mmcintosh.github.io/better-auth-saml-idp/comparison/#roadmap) derived from a feature comparison with eleven other SAML identity providers (checked {CHECKED})"
+rm = ["## 🧭 What's next\n", covers + (", except:\n" if open_items else ".\n")]
+rm += [f"- [ ] **{t}**: {plain(d)}" for t, d in open_items] + (["" ] if open_items else []) + ["**Not planned:**\n"]
 rm += [f"- 🚫 **{t}**: {plain(d)}" for t, d in not_planned]
 rm += ["", "What shipped in each release is in the [CHANGELOG](CHANGELOG.md).", ""]
 readme_path = os.path.join(ROOT, "README.md")
