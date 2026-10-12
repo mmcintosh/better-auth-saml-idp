@@ -92,8 +92,13 @@
     "idp",
     "identity-provider",
     "sso",
+    "single-sign-on",
     "cloudflare-workers",
-    "hubspot"
+    "microsoft-365",
+    "entra-id",
+    "google-workspace",
+    "okta",
+    "salesforce"
   ],
   "packageManager": "pnpm@10.34.6",
   "exports": {

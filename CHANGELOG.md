@@ -4,6 +4,11 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Documentation
+
+- **A README for newcomers on any runtime.** The Quick Start now works on Node as well as Workers (install, a key, a minimal config, the tables, then the CLI checks), and the Workers-only warning moved into the Workers setup. The examples use a generic SP instead of HubSpot, which isn't verified live yet. Setup step 2 starts from Better Auth's CLI and the example's migrations, with the hand-written tables in [Schema](docs/guide/schema.md). The verification lists sit after the Quick Start, and the roadmap became a short "What's next" (the full roadmap is on the comparison page). Fixed: Keycloak 26.8 (not 26.7) in CI, the CI matrix sentence, the better-auth-cloudflare settings (0.4.0, released 2026-10-12, requires them with KV; the README had said 0.4 wouldn't need them), and the guide links in step 5 (Okta, Auth0 and Salesforce added). The options tables gained `tenants` and the per-SP `tenant`.
+- **npm keywords** name the verified SPs (Microsoft 365, Entra ID, Google Workspace, Okta, Salesforce) instead of HubSpot.
+
 ### Examples
 
 - **Workers + Neon example** ([examples/workers-neon](examples/workers-neon/README.md), D-078): the plugin on Cloudflare Workers with Postgres on Neon through Hyperdrive, its query cache off. Better Auth is built once per isolate and each request gets its own `pg` pool (connections can't cross requests on Workers); building it per request cost about 25 ms of CPU on every request. Verified live (smoke checks, a full sign-in, a session deleted in Neon refused on the next request), and CI runs the same scripts under `wrangler dev` against Postgres.

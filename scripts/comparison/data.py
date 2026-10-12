@@ -51,25 +51,25 @@ FEATURES = [
 ]
 
 ROADMAP = [
- ("v1.0", "First npm release", "Ship what is built, safely.", [
+ ("1.0", "First npm release", "Ship what is built, safely.", [
    ("Release engineering (done)", "dist build with type declarations, Biome lint, gitleaks, publint and Are the Types Wrong, changelog; a CI-only release workflow publishing with npm provenance and a CycloneDX SBOM."),
    ("Supply chain and project files (done)", "Every GitHub Action pinned by SHA with least-privilege tokens; CodeQL, a blocking runtime dependency audit, dependency review, OSV-Scanner, OpenSSF Scorecard and Dependabot. SECURITY.md, CONTRIBUTING.md, issue forms, and a versioning and support policy."),
    ("Fuzzing (done)", "Property-based tests (fast-check) of the signature verifier, every inbound parser and issuance. The verifier held; issuance had five kinds of characters that produced invalid or unverifiable assertions, all fixed (D-036)."),
    ("Live SP verification (done)", "Cloudflare Access, Okta, Auth0, Salesforce, AWS IAM Identity Center, Google Workspace and Microsoft 365, live, with signed requests (Redirect and POST), encrypted assertions and Single Logout (D-034, D-035, D-042, D-054, D-063, D-075)."),
    ("Observability hooks (done)", "onAssertionIssued, onDenied, onLogout and onSessionEnded callbacks, run in the background (waitUntil on Workers) and isolated from the flow, plus an optional audit-log table with retention that doesn't store anonymous noise (D-038)."),
-   ("better-auth-cloudflare 0.4 (after 1.0)", "The plugin doesn't depend on it; 0.3.1 works with verification and rate limits in the database. When 0.4 is released, a 1.x minor release moves the example from its vendored build to ^0.4.0 and drops those two settings from the Workers setup."),
+   ("better-auth-cloudflare 0.4.0 in the example", "The plugin doesn't depend on it. 0.4.0 is out (2026-10-12): the example moves from its vendored build to ^0.4.0. The verification and rate-limit settings stay, since 0.4.0 requires them when KV is configured."),
    ("Key rotation guide (done)", "docs/key-rotation.md: add next certificate, switch, retire. Rehearsed live with Cloudflare Access with zero downtime."),
    ("Database adapter test matrix (done)", "Postgres, MySQL and MongoDB, and Drizzle on Postgres and MySQL and Prisma on Postgres, proven in CI next to SQLite and D1 (MongoDB found a real gap, fixed: D-033), with a Databases page in the guide."),
    ("Second adversarial review (done)", "Fresh-eyes review plus an independent review by a different model (D-029, D-030); every finding fixed with a regression test. Everything since the first round: POST re-entry, error Responses, account policy, NameID, encryption, IdP-initiated SSO, POST signatures, metadata refresh, the registry and the CLI."),
  ]),
- ("v1.1", "Close the expected-feature gaps", "What admins and SPs assume every IdP has.", [
+ ("1.0", "Close the expected-feature gaps", "What admins and SPs assume every IdP has.", [
    ("IdP-initiated SSO (done)", "Opt-in per SP, off by default; RelayState only from a per-SP allow-list. Supported by 8 of the 11 products compared (partially by Ory Polis), including all four commercial IdPs."),
    ("Encrypted assertions (done)", "AES-256-GCM with RSA-OAEP, per SP, sign-then-encrypt. Decrypted and validated by node-saml and samlify. Shibboleth encrypts by default; Keycloak, authentik, Logto, Entra and Okta offer it per SP."),
    ("Register SPs from metadata XML (done)", "serviceProviderFromMetadata(): a helper that turns an SP's metadata into a serviceProviders entry, including certificates and ACS URLs."),
    ("Per-SP signing choice (done)", "sign: both, response or assertion, per SP, as Shibboleth, Keycloak and authentik offer."),
    ("Signed IdP metadata (done)", "Optional (signMetadata), for SPs and federations that verify metadata signatures."),
  ]),
- ("v1.2", "Operations at scale", "For hosts with many SPs or changing SPs.", [
+ ("1.0", "Operations at scale", "For hosts with many SPs or changing SPs.", [
    ("Single Logout (done)", "SP- and IdP-initiated, front-channel, propagated to every SP in the session; PartialLogout when one fails. Best effort by nature, as Shibboleth says."),
    ("Database-backed SP registry and API (done)", "Add, change, disable and remove SPs at runtime without a redeploy; admin-gated API, every change logged with the acting user."),
    ("SP metadata URL with refresh (done)", "SP certificate rotation picked up automatically; certificates only, optional signature pinning."),
