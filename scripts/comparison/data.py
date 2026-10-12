@@ -51,7 +51,7 @@ FEATURES = [
 ]
 
 ROADMAP = [
- ("v1.0", "First npm release", "Ship what is built, safely.", [
+ ("1.0", "First npm release", "Ship what is built, safely.", [
    ("Release engineering (done)", "dist build with type declarations, Biome lint, gitleaks, publint and Are the Types Wrong, changelog; a CI-only release workflow publishing with npm provenance and a CycloneDX SBOM."),
    ("Supply chain and project files (done)", "Every GitHub Action pinned by SHA with least-privilege tokens; CodeQL, a blocking runtime dependency audit, dependency review, OSV-Scanner, OpenSSF Scorecard and Dependabot. SECURITY.md, CONTRIBUTING.md, issue forms, and a versioning and support policy."),
    ("Fuzzing (done)", "Property-based tests (fast-check) of the signature verifier, every inbound parser and issuance. The verifier held; issuance had five kinds of characters that produced invalid or unverifiable assertions, all fixed (D-036)."),
@@ -62,14 +62,14 @@ ROADMAP = [
    ("Database adapter test matrix (done)", "Postgres, MySQL and MongoDB, and Drizzle on Postgres and MySQL and Prisma on Postgres, proven in CI next to SQLite and D1 (MongoDB found a real gap, fixed: D-033), with a Databases page in the guide."),
    ("Second adversarial review (done)", "Fresh-eyes review plus an independent review by a different model (D-029, D-030); every finding fixed with a regression test. Everything since the first round: POST re-entry, error Responses, account policy, NameID, encryption, IdP-initiated SSO, POST signatures, metadata refresh, the registry and the CLI."),
  ]),
- ("v1.1", "Close the expected-feature gaps", "What admins and SPs assume every IdP has.", [
+ ("1.0", "Close the expected-feature gaps", "What admins and SPs assume every IdP has.", [
    ("IdP-initiated SSO (done)", "Opt-in per SP, off by default; RelayState only from a per-SP allow-list. Supported by 8 of the 11 products compared (partially by Ory Polis), including all four commercial IdPs."),
    ("Encrypted assertions (done)", "AES-256-GCM with RSA-OAEP, per SP, sign-then-encrypt. Decrypted and validated by node-saml and samlify. Shibboleth encrypts by default; Keycloak, authentik, Logto, Entra and Okta offer it per SP."),
    ("Register SPs from metadata XML (done)", "serviceProviderFromMetadata(): a helper that turns an SP's metadata into a serviceProviders entry, including certificates and ACS URLs."),
    ("Per-SP signing choice (done)", "sign: both, response or assertion, per SP, as Shibboleth, Keycloak and authentik offer."),
    ("Signed IdP metadata (done)", "Optional (signMetadata), for SPs and federations that verify metadata signatures."),
  ]),
- ("v1.2", "Operations at scale", "For hosts with many SPs or changing SPs.", [
+ ("1.0", "Operations at scale", "For hosts with many SPs or changing SPs.", [
    ("Single Logout (done)", "SP- and IdP-initiated, front-channel, propagated to every SP in the session; PartialLogout when one fails. Best effort by nature, as Shibboleth says."),
    ("Database-backed SP registry and API (done)", "Add, change, disable and remove SPs at runtime without a redeploy; admin-gated API, every change logged with the acting user."),
    ("SP metadata URL with refresh (done)", "SP certificate rotation picked up automatically; certificates only, optional signature pinning."),
