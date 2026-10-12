@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-10-12
+
+A README for newcomers on any runtime, npm keywords for the verified SPs, and the Workers example on better-auth-cloudflare 0.4.0.
+
 ### Documentation
 
 - **A README for newcomers on any runtime.** The Quick Start now works on Node as well as Workers (install, a key, a minimal config, the tables, then the CLI checks), and the Workers-only warning moved into the Workers setup. The examples use a generic SP instead of HubSpot, which isn't verified live yet. Setup step 2 starts from Better Auth's CLI and the example's migrations, with the hand-written tables in [Schema](docs/guide/schema.md). The verification lists sit after the Quick Start, and the roadmap became a short "What's next" (the full roadmap is on the comparison page). Fixed: Keycloak 26.8 (not 26.7) in CI, the CI matrix sentence, the better-auth-cloudflare settings (0.4.0, released 2026-10-12, requires them with KV; the README had said 0.4 wouldn't need them), and the guide links in step 5 (Okta, Auth0 and Salesforce added). The options tables gained `tenants` and the per-SP `tenant`.
