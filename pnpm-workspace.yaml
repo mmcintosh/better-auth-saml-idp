@@ -15,3 +15,7 @@ minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - better-auth
   - "@better-auth/*"
+  # Temporary, for the 1.5.1 release: 0.4.0 (2026-10-12) is the build the repo had vendored and
+  # tested, plus its release commit. The release's SBOM step re-resolves without the lockfile, so
+  # it would wait a day. Remove after 2026-10-13.
+  - better-auth-cloudflare
