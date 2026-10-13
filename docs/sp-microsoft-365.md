@@ -2,7 +2,7 @@
 
 This guide makes Microsoft 365 send sign-ins for one of your domains to your IdP. Users type their email at Microsoft, sign in on your app's page, and land in Microsoft 365: Outlook, Teams, My Apps and the rest. Federation is set per domain, so you can try it on a spare domain in an existing tenant without touching anyone else.
 
-Verified live on 2026-10-08 (DECISIONS.md D-075): a spare custom domain federated to the example Worker, with two test users who had no licences, signing in at myapps.microsoft.com. Verified again on 2026-10-11 in a separate test tenant (D-076, D-077): Microsoft accepting your IdP's MFA, refusing a password as MFA, and sign-out. The Microsoft steps follow Microsoft Graph PowerShell 2.41, the Graph API and the Entra admin center as they were on those days.
+Verified live on 2026-10-08 (DECISIONS.md D-075): a spare custom domain federated to the example Worker, with two test users who had no licences, signing in at myapps.microsoft.com. Verified again on 2026-10-11 in a separate test tenant (D-076, D-077): Microsoft accepting your IdP's MFA, refusing a password as MFA, and sign-out. Verified again on 2026-10-13 (D-079): a user created after the domain was federated, with `onPremisesImmutableId` set and no password, signing in at My Apps on the first try. The Microsoft steps follow Microsoft Graph PowerShell 2.41, the Graph API and the Entra admin center as they were on those days.
 
 ## Before you start
 
@@ -55,7 +55,18 @@ Set each Entra user's `onPremisesImmutableId` to the NameID the IdP will send, h
 Update-MgUser -UserId "user@your-domain.example" -OnPremisesImmutableId "<better-auth user id>"
 ```
 
-For users created later, set it when creating them. A provisioning tool can create the Entra user with `onPremisesImmutableId` already set, so the user can sign in through the IdP at once.
+For users created after the domain is federated, set it when creating them. Microsoft requires `onPremisesImmutableId` for a new user on a federated domain, and the user needs no password: they never sign in at Microsoft with one. The user can sign in through the IdP straight away. With the Graph API:
+
+```http
+POST /v1.0/users
+{ "accountEnabled": true,
+  "displayName": "A User",
+  "mailNickname": "user",
+  "userPrincipalName": "user@your-domain.example",
+  "onPremisesImmutableId": "<better-auth user id>" }
+```
+
+A provisioning tool can do the same, creating each Entra user from their Better Auth account.
 
 ## 4. Federate the domain
 
@@ -84,6 +95,7 @@ Everything above can be done with `az rest` against Microsoft Graph, as a Global
 | Get the verification record | `GET /v1.0/domains/your-domain.example/verificationDnsRecords` (add only the TXT record) |
 | Verify | `POST /v1.0/domains/your-domain.example/verify` |
 | Link a user (step 3) | `PATCH /v1.0/users/<user id or UPN>` with `{"onPremisesImmutableId": "<better-auth user id>"}`, while the domain is still managed |
+| Add a user after federating | `POST /v1.0/users` with `onPremisesImmutableId` set and no `passwordProfile` (step 3) |
 | Federate (step 4) | `POST /v1.0/domains/your-domain.example/federationConfiguration` with the body below |
 | Accept the IdP's MFA | `PATCH /v1.0/domains/your-domain.example/federationConfiguration/<id>` with `{"federatedIdpMfaBehavior": "acceptIfMfaDoneByFederatedIdp"}` |
 | Undo | `DELETE /v1.0/domains/your-domain.example/federationConfiguration/<id>`, then `PATCH /v1.0/domains/your-domain.example` with `{"authenticationType": "Managed"}` |

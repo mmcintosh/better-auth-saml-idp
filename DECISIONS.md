@@ -2135,3 +2135,12 @@ Postgres behind Workers was documented (the Hyperdrive cache warning) but had no
 - **Hyperdrive with `--caching-disabled`**, and Smart Placement, since Better Auth makes several queries per request.
 - **Verified live (2026-10-11)** on a Neon branch database (aws-us-east-2, Postgres 18) through a Hyperdrive config with caching off: the CLI's smoke checks, a full SP-initiated sign-in validated by node-saml, a session deleted in Neon refused 181 ms later on the next request, and 30 parallel requests, with no errors in the Worker log.
 - **CI:** a `workers-neon` job runs the example under `wrangler dev` with Postgres in a service container where Hyperdrive would be (`CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE`): migrations, `inspect` and `smoke`, and the full sign-in. That's Workers + `pg` end to end on every change.
+
+## D-079: Microsoft 365: a user created after federating signs in at once (2026-10-13)
+
+The guide said a provisioning tool could create Entra users with `onPremisesImmutableId` already set, but every verified user (D-075, D-077) had been linked while the domain was still managed.
+
+- **Setup:** the demo Worker, with Microsoft registered as an SP for a spare federated domain. A Better Auth account was made by ordinary sign-up, then given a verified email and a membership in the SP's organization.
+- **Result:** Graph `POST /v1.0/users` on the federated domain, with `onPremisesImmutableId` = the Better Auth user id and no `passwordProfile`, returned 201. Signing in at myapps.microsoft.com through the IdP worked on the first try. The IdP's audit log showed `assertion.issued` for that SP, and the session was recorded for Single Logout.
+- **Guide:** step 3 shows the request, and the Graph API table has a row for it. This is what an outbound SCIM or Graph provisioning tool needs.
+- **Cleanup:** the test user was deleted on both sides.

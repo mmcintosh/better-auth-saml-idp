@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Documentation
+
+- **Microsoft 365: adding users after federating** ([guide](docs/sp-microsoft-365.md#3-link-each-user-to-their-better-auth-account), D-079). A user created on the federated domain with Graph `POST /users`, `onPremisesImmutableId` set to their Better Auth id and no password, signed in at My Apps through the IdP on the first try. The guide had said this works without showing how. It now has the request, and a row in the Graph API table.
+
 ## [1.5.1] - 2026-10-12
 
 A README for newcomers on any runtime, npm keywords for the verified SPs, and the Workers example on better-auth-cloudflare 0.4.0.
