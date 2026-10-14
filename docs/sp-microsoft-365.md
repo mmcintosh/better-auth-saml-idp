@@ -46,6 +46,7 @@ Add it to `serviceProviders`, or store it with the [registry](guide/service-prov
 - **Add it by configuration, not from metadata.** Microsoft's SAML metadata (`https://nexus.microsoftonline-p.com/federationmetadata/saml20/federationmetadata.xml`) doesn't validate against the SAML metadata schema, so `sp-from-metadata` and the example's metadata import refuse it. The two values above are all it would give you.
 - **`nameIdFormat: "persistent"` with a stable value.** Microsoft matches the NameID against the user's `onPremisesImmutableId`. The Better Auth user id never changes and users can't edit it, so it's a good choice. A field users can change, such as the email, would break the link the day it changes.
 - **`IDPEmail`** is required by Microsoft and must be the user's sign-in name (UPN). With the users' Better Auth emails equal to their UPNs, `email` does it.
+- **Who may sign in.** As written, any user with a verified email. To let in only some, limit the SP to an organization (`"organization": { "id": "<organization id>" }`), so only its members get in, or add an `authorize` check ([Users and access](guide/users-and-access.md#organizations)). A user outside it is refused by the IdP before Microsoft is involved.
 
 ## 3. Link each user to their Better Auth account
 
@@ -66,7 +67,7 @@ POST /v1.0/users
   "onPremisesImmutableId": "<better-auth user id>" }
 ```
 
-A provisioning tool can do the same, creating each Entra user from their Better Auth account.
+**Or let a provisioning tool do it.** [better-auth-scim-provisioning](https://www.npmjs.com/package/better-auth-scim-provisioning) 1.3.0 or later has an Entra ID target. It creates each Entra user from their Better Auth account the same way: `onPremisesImmutableId` set to their user id, and no password on a federated domain. It then keeps them up to date: renames, disabling and deleting. It needs an app registration with `User.ReadWrite.All`, and its README's "Microsoft Entra ID" section has the setup. It handles users only for now, not groups.
 
 ## 4. Federate the domain
 
@@ -181,6 +182,8 @@ Verified live on 2026-10-11 with the example Worker: after signing out at myapps
 - **`AADSTS51004: The user account <id> does not exist in the … directory`:** your IdP sent a NameID no Entra user has as `onPremisesImmutableId`. Most often it's the user who was already signed in to your IdP in that browser, not the one you meant: test in a private window, or sign out of your IdP first.
 - **Microsoft still asks for a password, or shows an error before reaching your IdP:** the federation may not have settled yet (step 4). Check `https://login.microsoftonline.com/getuserrealm.srf?login=user@your-domain.example&json=1`: `NameSpaceType` should be `Federated`, with `AuthURL` pointing at your SSO URL.
 - **Your IdP issued an assertion, and Microsoft refused it:** check the signing certificate in the federation configuration, the user's `onPremisesImmutableId` against the NameID sent (the audit log's `nameId`), and `IDPEmail` against the user's UPN.
+- **Creating a user you deleted earlier is refused:** a deleted Entra user stays in the recycle bin for 30 days and keeps their `onPremisesImmutableId`, so no new user can have it. Restore them (`POST /v1.0/directory/deletedItems/<id>/restore` with a body of `{}`; without a body Graph answers 411), or delete them permanently first. better-auth-scim-provisioning restores them itself.
+- **A user you've just created isn't found:** Graph takes a few seconds to agree after a write, so looking them up by id or UPN can answer 404 for a while. `GET /v1.0/users?$filter=onPremisesImmutableId eq '<better-auth user id>'` finds them straight away.
 - **Microsoft's sign-in logs** (Entra admin center → Users → the user → Sign-in logs) show each attempt with an error code and an Authentication Details tab. They can take 5 to 30 minutes to appear. With the Graph API: `GET /beta/auditLogs/signIns?$filter=userId eq '<id>'` (the beta version includes `authenticationDetails`).
 
 ## Taking it back
