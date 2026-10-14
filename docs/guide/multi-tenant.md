@@ -154,7 +154,7 @@ Organization [attributes](users-and-access.md#attributes) without `only` cover t
 
 ## Signing keys: shared or per tenant
 
-With `keys: "shared"` every tenant signs with your `signing` key. A tenant's SPs pin that certificate; what tells tenant A's assertions from tenant B's is only the `Issuer`.
+With `keys: "shared"` every tenant signs with your `signing` key (the [managed](signing-and-encryption.md#a-key-the-plugin-manages) one, with `signing: { managed: true }`). A tenant's SPs pin that certificate; what tells tenant A's assertions from tenant B's is only the `Issuer`.
 
 That's why only **your** administrators manage tenant SPs. Suppose tenant B's administrator could register, in B, an SP with tenant A's Salesforce entity ID and ACS URL, mapping a constant attribute to a victim's email. The IdP would then issue, under B's identity, an assertion addressed to A's Salesforce. Salesforce checks the Issuer and refuses it; not every SP does. With a key per tenant, A's SP trusts only A's certificate, and B's assertion fails everywhere signatures are checked at all. So delegation needs per-tenant keys.
 

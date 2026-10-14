@@ -144,6 +144,21 @@ export interface TenantChangedEvent extends EventBase {
 }
 
 /**
+ * The root IdP's managed signing key changed (D-080): `key.generated` when the plugin made the
+ * first one, `key.imported` when it stored `signing.initialKey` as the first one (neither has an
+ * acting user), otherwise an administrator's rotation step. `kid` names the key;
+ * `forced` marks an activation that skipped `minPublishedSeconds` (a leaked key).
+ */
+export interface SigningKeyChangedEvent extends EventBase {
+  type: "signing-key.changed";
+  action: "key.generated" | "key.imported" | "key.rotated" | "key.activated" | "key.retired";
+  /** The acting administrator; absent for `key.generated` and `key.imported`. */
+  userId?: string | undefined;
+  kid: string;
+  forced?: boolean | undefined;
+}
+
+/**
  * A stored SP was created, changed, switched on or off, or deleted through the registry API
  * (D-059), by a host manager or, with delegation, by a tenant's administrator (`delegated`).
  */
@@ -160,7 +175,15 @@ export interface ServiceProviderChangedEvent extends EventBase {
   delegated: boolean;
 }
 
-export type SamlIdpEvent = AssertionIssuedEvent | AssertionExchangedEvent | DeniedEvent | LogoutEvent | SessionEndedEvent | TenantChangedEvent | ServiceProviderChangedEvent;
+export type SamlIdpEvent =
+  | AssertionIssuedEvent
+  | AssertionExchangedEvent
+  | DeniedEvent
+  | LogoutEvent
+  | SessionEndedEvent
+  | TenantChangedEvent
+  | SigningKeyChangedEvent
+  | ServiceProviderChangedEvent;
 
 export interface SamlIdpEventHandlers {
   onAssertionIssued?: ((event: AssertionIssuedEvent) => void | Promise<void>) | undefined;
@@ -175,6 +198,8 @@ export interface SamlIdpEventHandlers {
   onSessionEnded?: ((event: SessionEndedEvent) => void | Promise<void>) | undefined;
   /** A host administrator changed a tenant or its keys (D-058). */
   onTenantChanged?: ((event: TenantChangedEvent) => void | Promise<void>) | undefined;
+  /** The managed signing key was generated, rotated, activated or retired (D-080). */
+  onSigningKeyChanged?: ((event: SigningKeyChangedEvent) => void | Promise<void>) | undefined;
   /** A stored SP was created, changed or deleted through the registry API (D-059). */
   onServiceProviderChanged?: ((event: ServiceProviderChangedEvent) => void | Promise<void>) | undefined;
 }
@@ -215,6 +240,7 @@ type EventInput =
   | Omit<LogoutEvent, keyof EventBase>
   | Omit<SessionEndedEvent, keyof EventBase>
   | Omit<TenantChangedEvent, keyof EventBase>
+  | Omit<SigningKeyChangedEvent, keyof EventBase>
   | Omit<ServiceProviderChangedEvent, keyof EventBase>;
 
 const HANDLER = {
@@ -224,6 +250,7 @@ const HANDLER = {
   logout: "onLogout",
   "session.ended": "onSessionEnded",
   "tenant.changed": "onTenantChanged",
+  "signing-key.changed": "onSigningKeyChanged",
   "service-provider.changed": "onServiceProviderChanged",
 } as const satisfies Record<SamlIdpEvent["type"], keyof SamlIdpEventHandlers>;
 

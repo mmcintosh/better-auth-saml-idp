@@ -4,6 +4,8 @@ Every SP pins your IdP's signing certificate. Rotating the key means getting eac
 
 This procedure was rehearsed end to end against Cloudflare Access on 2026-09-25 (DECISIONS.md D-019), including a zero-downtime switch.
 
+With a key the plugin manages (`signing: { managed: true }`), the same three steps are API calls instead of deploys: see [Rotating a managed key](guide/signing-and-encryption.md#rotating-a-managed-key). The SP-side advice below still applies.
+
 ## How the plugin supports it
 
 - `signing.privateKey` / `signing.certificate` hold the **active** key. Only this key signs.

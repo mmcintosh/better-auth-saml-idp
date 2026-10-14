@@ -11,15 +11,19 @@
 //   };
 //   admin({ ac, roles }); samlIdp({ registry: { enabled: true, permissions: true }, ... });
 //
-// With tenants (D-052), `samlTenant` covers the tenant routes the same way.
+// With tenants (D-052), `samlTenant` covers the tenant routes the same way. With a managed signing
+// key (D-080), `samlSigningKey` covers its routes: `read` to list the keys, `update` to rotate,
+// activate and retire them.
 
 export const samlIdpStatements = {
   samlServiceProvider: ["list", "read", "create", "update", "delete"],
   samlTenant: ["list", "read", "create", "update", "delete"],
+  samlSigningKey: ["read", "update"],
 } as const;
 
 export type SamlServiceProviderAction = (typeof samlIdpStatements)["samlServiceProvider"][number];
 export type SamlTenantAction = (typeof samlIdpStatements)["samlTenant"][number];
+export type SamlSigningKeyAction = (typeof samlIdpStatements)["samlSigningKey"][number];
 export type SamlIdpResource = keyof typeof samlIdpStatements;
 
 type Role = { authorize(request: Record<string, string[]>): { success: boolean } };

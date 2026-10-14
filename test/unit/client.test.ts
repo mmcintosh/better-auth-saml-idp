@@ -17,6 +17,11 @@ describe("samlIdpClient", () => {
     expectTypeOf(client.samlIdp.tenants.update).toBeFunction();
     expectTypeOf(client.samlIdp.tenants.delete).toBeFunction();
     expectTypeOf(client.samlIdp.tenants.get).toBeFunction();
+    // The managed signing key (D-080), from /saml-idp/signing-keys/*.
+    expectTypeOf(client.samlIdp.signingKeys).toBeFunction();
+    expectTypeOf(client.samlIdp.signingKeys.rotate).toBeFunction();
+    expectTypeOf(client.samlIdp.signingKeys.activate).toBeFunction();
+    expectTypeOf(client.samlIdp.signingKeys.retire).toBeFunction();
   });
 
   it("builds logout and launch URLs under the auth base path", () => {

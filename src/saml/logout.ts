@@ -2,7 +2,7 @@
 // encode them for the HTTP-Redirect (query-signed) or HTTP-POST (XML-signed) binding.
 import { sign as cryptoSign } from "node:crypto";
 import { deflateRawSync } from "node:zlib";
-import type { ResolvedSamlIdpOptions } from "../types";
+import type { ResolvedSigning } from "../types";
 import { SIGNATURE_ALGORITHM_URI } from "./idp";
 import { checkMessageShape, child, DATETIME_WITH_ZONE, invalid, logSafe, MAX_REQUEST_BYTES, MAX_SAML_ID_LENGTH, NS_ASSERTION, NS_PROTOCOL, REQUEST_MAX_AGE_SECONDS } from "./request";
 import { escapeXml, newSamlId, signElement } from "./response";
@@ -128,7 +128,7 @@ export function buildLogoutResponse(o: { issuer: string; destination: string; in
   );
 }
 
-type Signing = ResolvedSamlIdpOptions["signing"];
+type Signing = ResolvedSigning;
 
 function toBase64(bytes: Uint8Array): string {
   let bin = "";

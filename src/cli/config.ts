@@ -76,13 +76,21 @@ export async function checkConfig(path: string | undefined): Promise<Report> {
   });
   if (!o.baseURL) report.warn("baseURL is not set: the IdP's own URLs follow the Host header");
   if (!o.accountPolicy.requireEmailVerified) report.warn("accountPolicy.requireEmailVerified is off: unverified addresses get assertions");
-  checkCert(report, "signing certificate", certSummary(o.signing.certificate));
-  report.section("Signing certificate", { Active: describeCert(certSummary(o.signing.certificate)) });
-  o.signing.additionalCertificates.forEach((c, i) => {
-    const s = certSummary(c);
-    report.section(`Additional certificate #${i + 1} (published, not signing)`, { Certificate: describeCert(s) });
-    checkCert(report, `additional certificate #${i + 1}`, s);
-  });
+  if (o.signing.managed) {
+    // D-080: generated and stored by the plugin, so there's no certificate here to check.
+    report.section("Signing key", {
+      Key: "managed: generated on first use, stored encrypted in samlIdpTenantKey, rotated through /saml-idp/signing-keys",
+      "Next key published for": `${o.signing.minPublishedMs / 1000}s before it can be activated`,
+    });
+  } else {
+    checkCert(report, "signing certificate", certSummary(o.signing.certificate));
+    report.section("Signing certificate", { Active: describeCert(certSummary(o.signing.certificate)) });
+    o.signing.additionalCertificates.forEach((c, i) => {
+      const s = certSummary(c);
+      report.section(`Additional certificate #${i + 1} (published, not signing)`, { Certificate: describeCert(s) });
+      checkCert(report, `additional certificate #${i + 1}`, s);
+    });
+  }
 
   for (const sp of o.serviceProviders) {
     report.section(`SP ${sp.id}`, {

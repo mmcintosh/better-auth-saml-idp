@@ -7,18 +7,17 @@ import { X509Certificate } from "node:crypto";
 import type { GenericEndpointContext } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware, sensitiveSessionMiddleware } from "better-auth/api";
 import * as z from "zod";
-import { rootIdentity, tenantIdentity } from "../saml/identity";
+import { rootSigning, tenantUrls } from "../saml/identity";
 import { idpBaseURL } from "../saml/idp";
 import { lookupKeyOf, SP_MODEL, type StoredSpRow, isEnabled } from "../saml/sp-directory";
 import { instant, RETIRED_KEY_MODEL, TENANT_KEY, TENANT_MODEL, type TenantRow } from "../saml/tenant-directory";
 import {
-  checkKeyPair,
-  encryptTenantKey,
   generateTenantKey,
   SHARED_KID,
   stateKeyOf,
   expiryWarning,
-  KEEP_RETIRED,
+  newKid,
+  ROOT_KEY_OWNER,
   TENANT_KEY_MODEL,
   TenantKeyError,
   type TenantKeyRow,
@@ -26,34 +25,23 @@ import {
 } from "../saml/tenant-keys";
 import { emit } from "../events";
 import { findManyIn } from "../storage/find-in";
-import type { TenantRecord, TenantSigningKeyInfo } from "../types";
-import { keySecret, type PluginState } from "./issue";
+import type { TenantRecord } from "../types";
+import { keySecrets, type PluginState } from "./issue";
+import { keyInfo, keyRows, moveKeyRow, pruneRetiredRows, writeKeyRow } from "./key-rows";
 import { access, adapterOf, fail, inScope, manager } from "./registry";
 
 const MAX_LIST = 1000;
-const orgIdSchema = z.string().min(1).max(256);
+// The root's managed key rows use ROOT_KEY_OWNER as their owner (D-080): no tenant may have that id,
+// nor one a case-insensitive or space-padding collation would compare equal to it.
+const orgIdSchema = z
+  .string()
+  .min(1)
+  .max(256)
+  .refine((v) => v.trim().toLowerCase() !== ROOT_KEY_OWNER, { message: "is reserved" });
 
 const date = (v: unknown) => new Date(v as string | number | Date);
-const ORDER: Record<TenantKeyState, number> = { next: 0, active: 1, previous: 2, retired: 3 };
-
-/** A tenant's key rows as the API shows them: no private material, next first. */
-function keyInfo(state: PluginState, rows: TenantKeyRow[]): TenantSigningKeyInfo[] {
-  const minMs = state.options.tenants?.minPublishedMs ?? 0;
-  return [...rows]
-    .sort((a, b) => ORDER[a.state] - ORDER[b.state] || date(b.createdAt).getTime() - date(a.createdAt).getTime())
-    .map((r) => ({
-      kid: r.kid,
-      state: r.state,
-      certificate: r.certificate,
-      notAfter: date(r.notAfter),
-      createdAt: date(r.createdAt),
-      activatedAt: r.activatedAt ? date(r.activatedAt) : null,
-      ...(r.state === "next" ? { activatableAt: new Date(date(r.createdAt).getTime() + minMs) } : {}),
-    }));
-}
-
 function record(ctx: GenericEndpointContext, state: PluginState, row: TenantRow, keys?: TenantKeyRow[]): TenantRecord {
-  const identity = tenantIdentity(state.options, idpBaseURL(state.options, ctx.context.baseURL), row);
+  const identity = tenantUrls(idpBaseURL(state.options, ctx.context.baseURL), row);
   return {
     organizationId: row.organizationId,
     tenantKey: row.tenantKey,
@@ -68,22 +56,13 @@ function record(ctx: GenericEndpointContext, state: PluginState, row: TenantRow,
     ...(state.tenantKeys && keys
       ? {
           signing: keys.some((k) => k.state === "active") ? ("own" as const) : ("shared" as const),
-          keys: keyInfo(state, keys),
+          keys: keyInfo(keys, state.options.tenants?.minPublishedMs ?? 0),
           // Its own keys only: the shared key's "previous" row is the root's, warned about at startup.
           warnings: keys.flatMap((k) => (k.state !== "retired" && k.kid !== SHARED_KID ? (expiryWarning(k) ?? []) : [])),
         }
       : {}),
   };
 }
-
-/** A tenant's key rows, read now (not the per-isolate cache): exactly its own, whatever the collation. */
-async function keyRows(ctx: GenericEndpointContext, tenantId: string): Promise<TenantKeyRow[]> {
-  const rows = (await adapterOf(ctx).findMany({ model: TENANT_KEY_MODEL, where: [{ field: "tenantId", value: tenantId }], limit: 100, sortBy: { field: "createdAt", direction: "desc" } })) as TenantKeyRow[];
-  return rows.filter((r) => r.tenantId === tenantId);
-}
-
-/** A new key row's id in URLs and logs: short, random, never reused. */
-const newKid = () => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(9)))).replace(/\+/g, "-").replace(/\//g, "_");
 
 /** The tenant row of exactly this organization (a case-insensitive collation must not widen it, R4-L8). */
 async function findTenant(ctx: GenericEndpointContext, organizationId: string): Promise<TenantRow | null> {
@@ -116,32 +95,10 @@ export function tenantEndpoints(state: PluginState) {
     state.tenantKeys?.invalidate();
     state.directory.invalidate();
   };
-  /** A key row, its private key sealed to this tenant and kid (D-058). The pair is checked first. */
-  const writeKey = async (ctx: GenericEndpointContext, tenantId: string, keyState: TenantKeyState, kid: string, privateKeyPem: string, certificate: string, userId: string, now = new Date()) => {
-    const { notAfter } = checkKeyPair(privateKeyPem, certificate);
-    const data = {
-      tenantId,
-      kid,
-      state: keyState,
-      stateKey: stateKeyOf(tenantId, keyState),
-      encryptedPrivateKey: await encryptTenantKey(keySecret(ctx, state), tenantId, kid, privateKeyPem),
-      certificate,
-      notAfter,
-      createdAt: now,
-      activatedAt: keyState === "active" ? now : null,
-      updatedBy: userId,
-    };
-    const created = (await adapterOf(ctx).create({ model: TENANT_KEY_MODEL, data })) as { id?: unknown } | null;
-    return { id: String(created?.id), ...data } as TenantKeyRow;
-  };
-  /** Move a row to another state; `next`/`active` take the tenant's UNIQUE slot, others free it. */
-  const moveKey = (ctx: GenericEndpointContext, row: TenantKeyRow, to: TenantKeyState, update: Record<string, unknown> = {}) =>
-    adapterOf(ctx).update({ model: TENANT_KEY_MODEL, where: [{ field: "id", value: row.id }], update: { state: to, stateKey: stateKeyOf(row.tenantId, to), ...update } });
-  /** Keep the newest KEEP_RETIRED retired rows of a tenant (R7-1); the audit log has the rest. */
-  const pruneRetired = async (ctx: GenericEndpointContext, tenantId: string) => {
-    const retiredRows = (await keyRows(ctx, tenantId)).filter((k) => k.state === "retired").sort((a, b) => date(b.createdAt).getTime() - date(a.createdAt).getTime());
-    for (const old of retiredRows.slice(KEEP_RETIRED)) await adapterOf(ctx).delete({ model: TENANT_KEY_MODEL, where: [{ field: "id", value: old.id }] });
-  };
+  const writeKey = (ctx: GenericEndpointContext, tenantId: string, keyState: TenantKeyState, kid: string, privateKeyPem: string, certificate: string, userId: string, now = new Date()) =>
+    writeKeyRow(ctx, keySecrets(ctx, state).tenant, tenantId, keyState, kid, privateKeyPem, certificate, userId, now);
+  const moveKey = moveKeyRow;
+  const pruneRetired = pruneRetiredRows;
   /** The tenant of a key request, as the manager reads it. */
   const tenantFor = async (ctx: GenericEndpointContext, organizationId: string) => {
     const row = await findTenant(ctx, organizationId);
@@ -286,7 +243,8 @@ export function tenantEndpoints(state: PluginState) {
           await adapterOf(ctx).create({ model: RETIRED_KEY_MODEL, data: { tenantKey: row.tenantKey, organizationId: row.organizationId, retiredAt: new Date(), retiredBy: user.id } });
         await adapterOf(ctx).delete({ model: TENANT_MODEL, where: [{ field: "id", value: row.id }] });
         // Its signing keys go with it (D-058): nothing can sign as a deleted tenant.
-        if (state.tenantKeys) await adapterOf(ctx).deleteMany({ model: TENANT_KEY_MODEL, where: [{ field: "tenantId", value: row.organizationId }] });
+        // Its own rows, by id: exactly this tenant's, whatever the collation (never another owner's).
+        if (state.tenantKeys) for (const k of await keyRows(ctx, row.organizationId)) await adapterOf(ctx).delete({ model: TENANT_KEY_MODEL, where: [{ field: "id", value: k.id }] });
         changed();
         changedBy(ctx, user.id, row, "deleted", `deleted tenant ${row.tenantKey} (organization ${row.organizationId}); the key is retired`);
         return ctx.json({ deleted: row.organizationId });
@@ -370,7 +328,8 @@ export function tenantEndpoints(state: PluginState) {
               } else {
                 // The tenant's first own key: the shared certificate stays published as its previous,
                 // so SPs that haven't fetched the new one yet still verify (a normal rotation, D-058).
-                const shared = rootIdentity(state.options, idpBaseURL(state.options, ctx.context.baseURL)).signing.certificate;
+                // The root's key, given or managed (D-080): what this tenant signed with until now.
+                const shared = (await rootSigning(state, adapterOf(ctx) as any, keySecrets(ctx, state), (m) => ctx.context.logger.warn(m))).certificate;
                 await adapterOf(ctx).create({
                   model: TENANT_KEY_MODEL,
                   data: {

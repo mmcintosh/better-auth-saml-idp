@@ -113,7 +113,7 @@ describe("tenant signing keys: storage (D-058)", () => {
     const adapter = { findMany: async () => rows.map((r) => ({ ...r })) };
     let now = 1_000_000;
     const store = new TenantKeyStore(60_000, () => now);
-    const shared = { certificate: "SHARED", additionalCertificates: [] } as any;
+    const shared = { settings: {} as any, shared: async () => ({ certificate: "SHARED", additionalCertificates: [] }) as any };
     const key = generateTenantKey("cache");
     const row = async (kid: string, state: "next" | "active") => ({
       id: kid,

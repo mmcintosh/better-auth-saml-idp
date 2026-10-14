@@ -136,7 +136,13 @@ const text = (el: any): string => String(el.textContent ?? "");
 
 /** The identity the Issuer names: the root, or an enabled tenant (its own key under per-tenant keys). */
 async function issuerIdentity(ctx: GenericEndpointContext, state: PluginState, issuer: string): Promise<IdpIdentity | undefined> {
-  const root = await routeIdentity(ctx, state, undefined);
+  let root: IdpIdentity | undefined;
+  try {
+    root = await routeIdentity(ctx, state, undefined);
+  } catch (e) {
+    // The managed key can't be used (D-080): nothing it signed is recognised.
+    if (!(e instanceof TenantKeyError)) throw e;
+  }
   if (root && issuer === root.entityId) return root;
   if (!state.tenants) return undefined;
   const prefix = `${trimSlashes(idpBaseURL(state.options, ctx.context.baseURL))}${METADATA_PATH}/`;

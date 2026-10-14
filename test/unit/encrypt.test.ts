@@ -18,7 +18,7 @@ import {
 import { rootIdentity } from "../../src/saml/identity";
 import { buildSignedResponse, type BuildResponseInput } from "../../src/saml/response";
 import { libxml2Validator } from "../../src/saml/validator";
-import type { SamlIdpOptions, ServiceProviderConfig } from "../../src/types";
+import type { SamlIdpOptions, ServiceProviderConfig, SigningConfig } from "../../src/types";
 import { baseOptions, SP_ACS, SP_ENTITY_ID } from "../support/config";
 import { decryptWithNode, decryptWithWebCrypto, parseEncryptedData } from "../support/xmlenc";
 
@@ -184,10 +184,10 @@ describe("buildSignedResponse with encryption (sign-then-encrypt)", () => {
     now: new Date(),
   });
 
-  function build(signing: Partial<SamlIdpOptions["signing"]> = {}) {
+  function build(signing: Partial<SigningConfig> = {}) {
     const options = resolveOptions(
       baseOptions({
-        signing: { ...baseOptions().signing, ...signing },
+        signing: { ...(baseOptions().signing as SigningConfig), ...signing },
         serviceProviders: [spWith({ certificate: keys.sp.certificate })],
       }),
     );

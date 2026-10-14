@@ -27,6 +27,7 @@ samlIdp({
 | `onLogout` | Single Logout ended an IdP session, started by an SP or by your app's sign-out-everywhere. |
 | `onSessionEnded` | A session ended *without* Single Logout (revoked, disabled, `/sign-out`, expired), with the SPs that weren't told. Fires outside requests too, so it has no IP or user agent. See [When the session ends without the browser](single-logout.md#when-the-session-ends-without-the-browser). |
 | `onTenantChanged` | With [tenants](multi-tenant.md): an administrator created, enabled, disabled or deleted a tenant, or rotated, activated or retired one of its keys. |
+| `onSigningKeyChanged` | With a [managed signing key](signing-and-encryption.md#a-key-the-plugin-manages): the plugin generated the first key, or a manager rotated, activated or retired one. |
 | `onServiceProviderChanged` | A stored SP was created, updated, enabled, disabled or deleted through the [registry API](service-providers.md#registry-api), by your managers or a tenant's administrator (`delegated`). |
 
 Every event has `type`, `at` (a `Date`), and when available `ipAddress` and `userAgent`. The IP is read the way Better Auth reads it: from `advanced.ipAddress.ipAddressHeaders` (which `withCloudflare` sets to `cf-connecting-ip`), a valid IP only, and from a multi-value header such as `X-Forwarded-For` only through `advanced.ipAddress.trustedProxies`, since its left-most entry is whatever the client sent. It's absent with `disableIpTracking`.
@@ -75,6 +76,15 @@ Every event has `type`, `at` (a `Date`), and when available `ipAddress` and `use
 | `userId` | The administrator who did it. |
 | `tenantId`, `tenantKey` | The tenant (its organization id, and the key in its URLs). |
 | `kid` | For key actions: which key (for `key.retired`, a comma-separated list). |
+| `forced` | `true` for an activation that skipped `minPublishedSeconds`. |
+
+**`signing-key.changed`**
+
+| Field | Description |
+|---|---|
+| `action` | `key.generated` (the plugin made the first key), `key.imported` (it stored `signing.initialKey` as the first key), `key.rotated`, `key.activated` or `key.retired`. |
+| `userId` | The manager who did it; absent for `key.generated` and `key.imported`. |
+| `kid` | Which key (for `key.retired`, a comma-separated list). |
 | `forced` | `true` for an activation that skipped `minPublishedSeconds`. |
 
 **`service-provider.changed`**

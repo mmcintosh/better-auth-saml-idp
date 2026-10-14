@@ -10,6 +10,7 @@ import { samlIdp } from "../../src/index";
 import { buildLogoutResponse, redirectBindingUrl } from "../../src/saml/logout";
 import { decodeAuthnRequest, parseRedirectQuery, verifyMessageSignature } from "../../src/saml/request";
 import { base64url } from "../../src/storage/pending";
+import type { SigningConfig } from "../../src/types";
 import { baseOptions, SP_ACS, SP_ENTITY_ID } from "../support/config";
 import { AUTH_BASE, createHost } from "../support/host";
 import { authnRequestXml, Browser, newRequestId, postBinding, readAutoPost, redirectUrl, SSO_URL, strictSp } from "../support/sp";
@@ -81,7 +82,7 @@ describe("tenants off: output is unchanged (D-052)", () => {
   it("metadata: plain, signed with Single Logout, and with a rotation certificate", async () => {
     const plain = await createHost();
     const signed = await createHost({ saml: { singleLogout: { enabled: true }, signMetadata: true } });
-    const rotation = await createHost({ saml: { signing: { ...baseOptions().signing, additionalCertificates: [keys.idpNext.certificate] } } });
+    const rotation = await createHost({ saml: { signing: { ...(baseOptions().signing as SigningConfig), additionalCertificates: [keys.idpNext.certificate] } } });
     for (const [name, { auth }] of Object.entries({ plain, signed, rotation })) {
       const res = await auth.handler(new Request(`${AUTH_BASE}/saml2/idp/metadata`));
       const xml = await res.text();

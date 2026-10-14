@@ -35,6 +35,11 @@ export const SAML_IDP_ERROR_CODES = defineErrorCodes({
   TENANT_SIGNING_KEY_EXISTS: "This tenant already has a next signing key; activate it first",
   TENANT_SIGNING_KEY_NOT_FOUND: "This tenant has no signing key in that state",
   TENANT_SIGNING_KEY_TOO_NEW: "The next signing key hasn't been published long enough to activate",
+  // The managed signing key (D-080)
+  INVALID_SIGNING_KEY: "Invalid signing key",
+  SIGNING_KEY_EXISTS: "There is already a next signing key; activate it first",
+  SIGNING_KEY_NOT_FOUND: "There is no signing key in that state",
+  SIGNING_KEY_TOO_NEW: "The next signing key hasn't been published long enough to activate",
 });
 
 export type SamlIdpErrorCode = keyof typeof SAML_IDP_ERROR_CODES;
@@ -71,4 +76,8 @@ export const ERROR_STATUS: Record<SamlIdpErrorCode, number> = {
   TENANT_SIGNING_KEY_EXISTS: 409,
   TENANT_SIGNING_KEY_NOT_FOUND: 409,
   TENANT_SIGNING_KEY_TOO_NEW: 409,
+  INVALID_SIGNING_KEY: 400,
+  SIGNING_KEY_EXISTS: 409,
+  SIGNING_KEY_NOT_FOUND: 409,
+  SIGNING_KEY_TOO_NEW: 409,
 };

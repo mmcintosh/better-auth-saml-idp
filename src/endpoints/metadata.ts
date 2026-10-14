@@ -1,6 +1,6 @@
 import { createAuthEndpoint } from "better-auth/api";
-import { type IdpIdentity, rootIdentity } from "../saml/identity";
-import { type Idp, idpBaseURL, METADATA_PATH } from "../saml/idp";
+import type { IdpIdentity } from "../saml/identity";
+import { type Idp, METADATA_PATH } from "../saml/idp";
 import { newSamlId, signElement } from "../saml/response";
 import { TenantKeyError } from "../saml/tenant-keys";
 import { type PluginState, routeIdentity } from "./issue";
@@ -81,7 +81,7 @@ export const tenantMetadataEndpoint = (state: PluginState, getIdp: (identity: Id
     },
   );
 
-export const metadataEndpoint = (getIdp: (baseURL: string) => Idp, options: ResolvedSamlIdpOptions) =>
+export const metadataEndpoint = (state: PluginState, getIdp: (identity: IdpIdentity) => Idp) =>
   createAuthEndpoint(
     METADATA_PATH,
     {
@@ -97,5 +97,17 @@ export const metadataEndpoint = (getIdp: (baseURL: string) => Idp, options: Reso
         },
       },
     },
-    async (ctx) => metadataResponse(getIdp(ctx.context.baseURL), options, rootIdentity(options, idpBaseURL(options, ctx.context.baseURL))),
+    async (ctx) => {
+      let identity: IdpIdentity | undefined;
+      try {
+        identity = await routeIdentity(ctx, state, undefined);
+      } catch (e) {
+        // The managed key can't be used (D-080): publish nothing rather than a certificate that signs nothing.
+        if (!(e instanceof TenantKeyError)) throw e;
+        ctx.context.logger.error(`[saml-idp] metadata: ${e.message}`);
+        return new Response("Internal Server Error", { status: 500, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
+      }
+      if (!identity) return notFound();
+      return metadataResponse(getIdp(identity), state.options, identity);
+    },
   );
