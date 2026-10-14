@@ -7,8 +7,11 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 ### Added
 
 - **A signing key the plugin makes and keeps: `signing: { managed: true }`** ([guide](docs/guide/signing-and-encryption.md#a-key-the-plugin-manages), D-080). Instead of a PEM key and certificate in the options, the plugin generates the IdP's key the first time it's needed (RSA 3072, a two-year certificate) and stores it encrypted in `samlIdpTenantKey`, under Better Auth's secret or `signing.keyEncryptionSecret`. Concurrent first requests end up with one key. It's rotated in the same three steps as tenants' keys, through `/saml-idp/signing-keys`, `/rotate`, `/activate` and `/retire` (with `signing.minPublishedSeconds`, default 24 hours, before a next key can sign). These need a host manager, on the new `samlSigningKey` statement with `permissions`. Every step, and the first generation, is a `signing-key.changed` event (`events.onSigningKeyChanged`). A stored key that can't be used refuses sign-ins and metadata; nothing else ever signs instead. Tenants on the shared key sign with the managed key. A deployment can now start with no key made by hand, which a one-click install needs. Keys given as PEM work as before. **Switching an existing deployment:** without `signing.initialKey` (the current key, stored as the first one) the plugin makes a new key and SPs that trust the old certificate refuse its signatures ([how to switch](docs/guide/signing-and-encryption.md#switching-an-existing-deployment)). **Set `signing.keyEncryptionSecret`:** with Better Auth's secret, rotating it without keeping the old version makes the stored key unreadable and stops the IdP signing ([recovering](docs/guide/signing-and-encryption.md#recovering-a-managed-key)).
-- **Types:** `SamlIdpOptions["signing"]` is now `SigningConfig | ManagedSigningConfig` (narrow on `managed`), `SamlIdpEvent` includes `SigningKeyChangedEvent`, and `samlIdpStatements` includes `samlSigningKey`. Code that switches exhaustively over events or statements gets a new case.
 - **Error codes** `INVALID_SIGNING_KEY`, `SIGNING_KEY_EXISTS`, `SIGNING_KEY_NOT_FOUND` and `SIGNING_KEY_TOO_NEW`, for the managed key's routes.
+
+### Changed
+
+- **Types:** `SamlIdpOptions["signing"]` is now `SigningConfig | ManagedSigningConfig` (narrow on `managed`), `SamlIdpEvent` includes `SigningKeyChangedEvent`, and `samlIdpStatements` includes `samlSigningKey`. Code that switches exhaustively over events or statements gets a new case.
 
 ### Documentation
 

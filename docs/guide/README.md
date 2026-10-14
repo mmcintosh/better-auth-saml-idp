@@ -10,7 +10,7 @@ Everything about running Better Auth as a SAML 2.0 Identity Provider. New here? 
 | [Service providers](service-providers.md) | SPs in code, from metadata, and in the database registry (with its API); keeping SP certificates current |
 | [Sign-in flows](flows.md) | Endpoints; SP-initiated SSO over both bindings; ForceAuthn, IsPassive, RequestedAuthnContext; IdP-initiated SSO; metadata |
 | [Users and access](users-and-access.md) | Account policy, NameID formats, attributes, organizations, `authorize`, registry permissions |
-| [Signing, encryption and keys](signing-and-encryption.md) | The IdP's key, what gets signed, SHA-1, rotation, signed metadata, encrypted assertions |
+| [Signing, encryption and keys](signing-and-encryption.md) | The IdP's key (given, or managed by the plugin), what gets signed, SHA-1, rotation, signed metadata, encrypted assertions |
 | [Single Logout](single-logout.md) | SP- and IdP-initiated logout, how it's authenticated, its limits |
 | [Multi-tenant IdP](multi-tenant.md) | An IdP identity per organization: creating tenants, their URLs and SPs, how they're kept apart, the shared key, migrating a registry |
 | [Exchanging assertions for OAuth tokens](token-exchange.md) | Let an agent trade an assertion for tokens (draft ID-JAG §4.5, MCP enterprise authorization): the per-SP opt-in, what is checked, single use |
