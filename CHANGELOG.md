@@ -7,6 +7,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 ### Documentation
 
 - **Microsoft 365: adding users after federating** ([guide](docs/sp-microsoft-365.md#3-link-each-user-to-their-better-auth-account), D-079). A user created on the federated domain with Graph `POST /users`, `onPremisesImmutableId` set to their Better Auth id and no password, signed in at My Apps through the IdP on the first try. The guide had said this works without showing how. It now has the request, and a row in the Graph API table.
+- **Microsoft 365: provisioning, who may sign in, and two Graph surprises** ([guide](docs/sp-microsoft-365.md)). Step 3 points to [better-auth-scim-provisioning](https://www.npmjs.com/package/better-auth-scim-provisioning) 1.3.0's Entra ID target, which creates users with `onPremisesImmutableId` set and no password. Step 2 says how to let in only some users. "When something goes wrong" covers a deleted user blocking a new one with the same immutableId (the recycle bin, and how to restore), and a new user not yet found by id.
 
 ## [1.5.1] - 2026-10-12
 
