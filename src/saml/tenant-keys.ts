@@ -179,8 +179,8 @@ export class TenantKeyStore {
    * An owner with no key rows at all gets its first key, active at once (the root's managed key,
    * D-080): `initial` when given (an existing key brought along), else a generated one. Made once
    * per isolate even under concurrent requests; across isolates the UNIQUE state key lets one row
-   * in and the others use it, and if that index is missing, every writer keeps the earliest row
-   * and removes its own. A failure that isn't a lost race is remembered for FAILED_RETRY_MS, so a
+   * in and the others use it. If that index is missing, any writer that then sees more than one
+   * first key keeps the earliest and deletes the others, so the last writer always leaves one. A failure that isn't a lost race is remembered for FAILED_RETRY_MS, so a
    * broken table doesn't cost a key generation on every request. True when this call stored the key.
    */
   async ensureFirstKey(
@@ -199,10 +199,11 @@ export class TenantKeyStore {
         // A fresh read: the cached empty list may predate another instance's key.
         this.invalidate(tenantId);
         if ((await this.load(adapter, tenantId)).length > 0) return false;
-        const at = now();
-        const { privateKeyPem, certificate } = first.initial ?? generateSigningKey(first.commonName, at);
+        const { privateKeyPem, certificate } = first.initial ?? generateSigningKey(first.commonName, now());
         const { notAfter } = checkKeyPair(privateKeyPem, certificate);
         const kid = newKid();
+        // Taken after generating: the repair below orders first keys by when they were written.
+        const at = now();
         try {
           await adapter.create({
             model: TENANT_KEY_MODEL,
@@ -227,16 +228,16 @@ export class TenantKeyStore {
           throw e;
         }
         this.invalidate(tenantId);
-        // Without the UNIQUE index (a hand-written schema), two writers can both get in: each keeps
-        // the earliest active row and deletes its own if it isn't that one.
-        const actives = (await this.load(adapter, tenantId))
-          .filter((r) => r.state === "active")
+        // Without the UNIQUE index (a hand-written schema), several writers can get in. Any writer
+        // that sees more than one first key (active, made by no one) keeps the earliest and deletes
+        // the others: every writer re-reads after its own write, so the last one always sees them all.
+        const firsts = (await this.load(adapter, tenantId))
+          .filter((r) => r.state === "active" && (r.updatedBy ?? null) === null)
           .sort((a, b) => new Date(a.createdAt as string).getTime() - new Date(b.createdAt as string).getTime() || (a.kid < b.kid ? -1 : a.kid > b.kid ? 1 : 0));
-        const mine = actives.find((r) => r.kid === kid);
-        if (actives.length > 1 && mine && actives[0] !== mine) {
-          await adapter.delete({ model: TENANT_KEY_MODEL, where: [{ field: "id", value: mine.id }] });
+        if (firsts.length > 1) {
+          for (const extra of firsts.slice(1)) await adapter.delete({ model: TENANT_KEY_MODEL, where: [{ field: "id", value: extra.id }] });
           this.invalidate(tenantId);
-          return false;
+          if (firsts[0]?.kid !== kid) return false;
         }
         this.onGenerated?.(tenantId, kid, first.initial !== undefined);
         return true;

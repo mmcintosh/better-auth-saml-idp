@@ -109,6 +109,9 @@ export function keySecretsFor(options: ResolvedSamlIdpOptions, own: KeySecret): 
   return { root: (signing.managed ? signing.keyEncryptionSecret : undefined) ?? own, tenant: options.tenants?.keyEncryptionSecret ?? own };
 }
 
+/** Key stores whose `initialKey` has been compared with the stored keys, once per isolate. */
+const initialChecked = new WeakSet<TenantKeyStore>();
+
 /**
  * The root IdP's key: the one in the options, or the managed one (D-080), generated and stored
  * the first time it's needed. Throws TenantKeyError when the stored key can't be used: the
@@ -125,6 +128,14 @@ export async function rootSigning(state: IdentityState, adapter: Adapter, secret
         ? "[saml-idp] stored signing.initialKey as the IdP's managed signing key; it can now be removed from the options"
         : "[saml-idp] generated the IdP's managed signing key: SPs that pin the IdP's certificate need the new one, from the metadata",
     );
+  else if (policy.first.initial && !initialChecked.has(state.rootKeys)) {
+    // Once per isolate: an initialKey that none of the stored keys is (added after another key was
+    // stored, say) does nothing, and a host expecting it to sign should hear so.
+    initialChecked.add(state.rootKeys);
+    const pem = policy.first.initial.certificate.replace(/\s+/g, "");
+    if (!(await state.rootKeys.load(adapter, ROOT_KEY_OWNER)).some((r) => r.certificate.replace(/\s+/g, "") === pem))
+      warn?.("[saml-idp] signing.initialKey is none of the stored signing keys, so it isn't used: it's only stored while no key exists. Rotate it in through /saml-idp/signing-keys/rotate, or remove it from the options");
+  }
   return state.rootKeys.signing(adapter, secrets.root, ROOT_KEY_OWNER, { settings: signingSettings(state.options) }, warn);
 }
 

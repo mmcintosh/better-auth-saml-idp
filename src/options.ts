@@ -421,29 +421,29 @@ const EXPIRY_WARNING_DAYS = 30;
  * Expiry only warns: failing here would take every Better Auth route down the moment a
  * (possibly publish-only rotation) certificate expires.
  */
-function checkKeyMaterial(o: { signing: SigningConfig }, warnings: string[]): { issues: string[]; key?: KeyObject } {
+function checkKeyMaterial(o: { signing: SigningConfig }, warnings: string[], at = "signing"): { issues: string[]; key?: KeyObject } {
   const issues: string[] = [];
   let publicFromKey: string;
   let key: KeyObject;
   try {
     key = createPrivateKey(o.signing.privateKey);
-    if (key.asymmetricKeyType !== "rsa") issues.push(`signing.privateKey: must be an RSA key, got ${key.asymmetricKeyType}`);
+    if (key.asymmetricKeyType !== "rsa") issues.push(`${at}.privateKey: must be an RSA key, got ${key.asymmetricKeyType}`);
     const bits = key.asymmetricKeyDetails?.modulusLength;
-    if (bits !== undefined && bits < 2048) issues.push(`signing.privateKey: RSA key must be at least 2048 bits, got ${bits}`);
+    if (bits !== undefined && bits < 2048) issues.push(`${at}.privateKey: RSA key must be at least 2048 bits, got ${bits}`);
     publicFromKey = createPublicKey(key).export({ type: "spki", format: "pem" }).toString();
   } catch (e) {
-    return { issues: [`signing.privateKey: could not be parsed (${(e as Error).message})`] };
+    return { issues: [`${at}.privateKey: could not be parsed (${(e as Error).message})`] };
   }
   const certs: [string, string][] = [
-    ["signing.certificate", o.signing.certificate],
-    ...(o.signing.additionalCertificates ?? []).map((c, i): [string, string] => [`signing.additionalCertificates.${i}`, c]),
+    [`${at}.certificate`, o.signing.certificate],
+    ...(o.signing.additionalCertificates ?? []).map((c, i): [string, string] => [`${at}.additionalCertificates.${i}`, c]),
   ];
   for (const [path, pemText] of certs) {
     try {
       const cert = new X509Certificate(pemText);
-      if (path === "signing.certificate") {
+      if (path === `${at}.certificate`) {
         const publicFromCert = cert.publicKey.export({ type: "spki", format: "pem" }).toString();
-        if (publicFromCert !== publicFromKey) issues.push(`${path}: does not match signing.privateKey`);
+        if (publicFromCert !== publicFromKey) issues.push(`${path}: does not match ${at}.privateKey`);
       }
       const validTo = new Date(cert.validTo).getTime();
       if (validTo < Date.now()) warnings.push(`${path}: EXPIRED on ${cert.validTo}; SPs that check validity will reject it`);
@@ -732,8 +732,7 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
   const keyCheck = o.signing.managed ? undefined : checkKeyMaterial({ signing: o.signing as SigningConfig }, warnings);
   if (keyCheck) issues.push(...keyCheck.issues);
   if (o.signing.managed === true && o.signing.initialKey) {
-    const initial = checkKeyMaterial({ signing: o.signing.initialKey }, warnings);
-    issues.push(...initial.issues.map((i) => i.replace(/^signing\.(privateKey|certificate)/, "signing.initialKey.$1").replace("does not match signing.privateKey", "does not match signing.initialKey.privateKey")));
+    issues.push(...checkKeyMaterial({ signing: o.signing.initialKey }, warnings, "signing.initialKey").issues);
   }
   if (issues.length || (keyCheck && !keyCheck.key)) throw new SamlIdpConfigError(issues);
   const settings = { signatureAlgorithm: sigAlg, digestAlgorithm: digestAlg, allowInsecureSha1: o.signing.allowInsecureSha1 ?? false, sign: o.signing.sign ?? "both" } as const;

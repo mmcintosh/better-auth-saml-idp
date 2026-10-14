@@ -2193,4 +2193,5 @@ A deployment needed a key made by hand (`keygen`) and pasted into two secrets be
   - the cooldown;
   - the invalidation;
   - the case-insensitive check.
+- **Second look at the fixes (the same reviewer).** One gap: the missing-index repair (L3) left two active keys when a writer with an older key wrote last and the other had re-read before it landed (reproduced). Fixed: any writer that sees more than one first key (active, made by no one) keeps the earliest and deletes the others, so the last writer always leaves one. A first key's time is now taken after generating. A writer that finished first may have signed with a key that's then removed; acceptable for a schema missing its index. Also: `initialKey`'s expiry warnings name `signing.initialKey`, and an `initialKey` that none of the stored keys is logs a warning once per isolate. Both were seen to fail once broken: the old repair under the late-write test, and the warning repeated without its once-per-isolate check.
 

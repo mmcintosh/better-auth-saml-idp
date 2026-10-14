@@ -145,6 +145,23 @@ describe("managed signing key: bringing a key along (D-080)", () => {
     expect(await w.rows()).toHaveLength(1);
   });
 
+  it("an initialKey that none of the stored keys is does nothing, and says so once", async () => {
+    const w = await world();
+    await w.metadata(); // a generated key is stored
+    const warnings: string[] = [];
+    const late = await w.host({ signing: { managed: true, initialKey: { privateKey: keys.idp.privateKey, certificate: keys.idp.certificate } } });
+    const ctx = (await late.$context) as any;
+    const original = ctx.logger.warn;
+    ctx.logger.warn = (m: string, ...rest: unknown[]) => {
+      warnings.push(String(m));
+      return original.call(ctx.logger, m, ...rest);
+    };
+    await w.metadata(late);
+    await w.metadata(late);
+    expect(certsIn(await w.metadata(late))).not.toContain(b64(keys.idp.certificate));
+    expect(warnings.filter((m) => m.includes("signing.initialKey is none of the stored signing keys"))).toHaveLength(1);
+  });
+
   it("initialKey is checked at startup like a key given as PEM", () => {
     const mismatch = () => resolveOptions(baseOptions({ signing: { managed: true, initialKey: { privateKey: keys.idp.privateKey, certificate: keys.sp.certificate } } }));
     expect(mismatch).toThrow(SamlIdpConfigError);
@@ -294,11 +311,11 @@ describe("managed signing key: the store (D-080)", () => {
     const adapter = {
       findMany: async ({ where }: any) => rows.filter((r) => r.tenantId === where[0].value).map((r) => ({ ...r })),
       create: async ({ data }: any) => {
-        counts.creates++;
+        const id = `row${++counts.creates}`; // before any await: concurrent writes get their own ids
         await Promise.resolve();
         if (o.failCreate) throw new Error("no such table: samlIdpTenantKey");
         if (o.unique !== false && rows.some((r) => r.stateKey === data.stateKey)) throw new Error("UNIQUE constraint failed");
-        const row = { id: `row${counts.creates}`, ...data };
+        const row = { id, ...data };
         rows.push(row);
         return row;
       },
@@ -307,7 +324,20 @@ describe("managed signing key: the store (D-080)", () => {
         if (i >= 0) rows.splice(i, 1);
       },
     };
-    return { rows, counts, adapter };
+    /** The same table seen by a writer whose create waits for `release`. */
+    const slow = () => {
+      let release!: () => void;
+      let arrived!: () => void;
+      const held = new Promise<void>((r) => (release = r));
+      const reached = new Promise<void>((r) => (arrived = r));
+      const create = async (args: any) => {
+        arrived();
+        await held;
+        return adapter.create(args);
+      };
+      return { adapter: { ...adapter, create }, release, reached };
+    };
+    return { rows, counts, adapter, slow };
   };
 
   it("one isolate makes the first key once, however many requests ask for it at the same time", async () => {
@@ -324,7 +354,22 @@ describe("managed signing key: the store (D-080)", () => {
     const made = await Promise.all([a, b].map((s) => s.ensureFirstKey(t.adapter, SECRET, ROOT_KEY_OWNER, { commonName: "saml-idp", initial })));
     expect(t.counts.creates).toBe(2);
     expect(t.rows.filter((r) => r.state === "active")).toHaveLength(1);
-    expect(made.filter(Boolean)).toHaveLength(1);
+    // At least one says it stored the key. A writer that re-read before the other's row landed says
+    // so too, and its key may then be the one removed: acceptable for a schema missing its index.
+    expect(made.filter(Boolean).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("without the UNIQUE index, a slow writer whose key is older still leaves one active key (review: a write that lands last)", async () => {
+    const t = table({ unique: false });
+    const slow = t.slow();
+    // B's key is made first (an earlier clock) but written last; A writes in between and sees only its own.
+    const b = new TenantKeyStore(0, () => 1_000).ensureFirstKey(slow.adapter, SECRET, ROOT_KEY_OWNER, { commonName: "saml-idp", initial });
+    await slow.reached;
+    await new TenantKeyStore(0, () => 2_000).ensureFirstKey(t.adapter, SECRET, ROOT_KEY_OWNER, { commonName: "saml-idp", initial });
+    expect(t.rows.filter((r) => r.state === "active")).toHaveLength(1);
+    slow.release();
+    await b;
+    expect(t.rows.filter((r) => r.state === "active")).toHaveLength(1);
   });
 
   it("a write that fails for another reason isn't retried on every request: only after a while", async () => {
