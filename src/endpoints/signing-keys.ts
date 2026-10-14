@@ -7,7 +7,7 @@ import { createAuthEndpoint, sensitiveSessionMiddleware } from "better-auth/api"
 import * as z from "zod";
 import { emit } from "../events";
 import { managedKeyPolicy } from "../saml/identity";
-import { expiryWarning, generateSigningKey, newKid, ROOT_KEY_COMMON_NAME, ROOT_KEY_OWNER, TenantKeyError, type TenantKeyRow } from "../saml/tenant-keys";
+import { expiryWarning, generateSigningKey, newKid, ROOT_KEY_OWNER, TenantKeyError, type TenantKeyRow } from "../saml/tenant-keys";
 import type { TenantSigningKeyInfo } from "../types";
 import { keySecrets, type PluginState } from "./issue";
 import { keyInfo, keyRows, moveKeyRow, pruneRetiredRows, writeKeyRow } from "./key-rows";
@@ -28,7 +28,7 @@ export function signingKeyEndpoints(state: PluginState) {
     return { keys: keyInfo(rows, policy.minPublishedMs), warnings: rows.flatMap((k) => (k.state !== "retired" ? (expiryWarning(k) ?? []) : [])) };
   };
   /** The first key, if the IdP hasn't needed one yet: every route works on a key that exists. */
-  const ensure = (ctx: GenericEndpointContext) => store.ensureFirstKey(adapterOf(ctx) as any, keySecrets(ctx, state).root, owner, ROOT_KEY_COMMON_NAME);
+  const ensure = (ctx: GenericEndpointContext) => store.ensureFirstKey(adapterOf(ctx) as any, keySecrets(ctx, state).root, owner, policy.first);
   const changed = () => store.invalidate();
   /** Logged, and a `signing-key.changed` event (its handler and the audit log). */
   const changedBy = (ctx: GenericEndpointContext, userId: string, action: "key.rotated" | "key.activated" | "key.retired", kid: string, what: string, forced = false) => {
@@ -59,7 +59,7 @@ export function signingKeyEndpoints(state: PluginState) {
         await ensure(ctx);
         // Before generating: an RSA 3072 key costs real CPU, which a refused request shouldn't spend.
         if ((await keyRows(ctx, owner)).some((k) => k.state === "next")) throw fail("CONFLICT", "SIGNING_KEY_EXISTS");
-        const pair = privateKey !== undefined && certificate !== undefined ? { privateKeyPem: privateKey, certificate } : generateSigningKey(ROOT_KEY_COMMON_NAME);
+        const pair = privateKey !== undefined && certificate !== undefined ? { privateKeyPem: privateKey, certificate } : generateSigningKey(policy.first.commonName);
         let created: TenantKeyRow;
         try {
           created = await writeKeyRow(ctx, keySecrets(ctx, state).root, owner, "next", newKid(), pair.privateKeyPem, pair.certificate, user.id);

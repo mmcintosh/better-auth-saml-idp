@@ -7,7 +7,7 @@ import type { ResolvedSamlIdpOptions, ResolvedServiceProvider, ResolvedSigning, 
 import { idpBaseURL, METADATA_PATH, SSO_PATH } from "./idp";
 import { SLO_PATH } from "./logout";
 import type { Tenant, TenantDirectory } from "./tenant-directory";
-import { type KeySecret, ROOT_KEY_COMMON_NAME, ROOT_KEY_OWNER, type TenantKeyStore, type WritableKeyAdapter } from "./tenant-keys";
+import { type KeySecret, ROOT_KEY_OWNER, rootCommonName, type TenantKeyStore, type WritableKeyAdapter } from "./tenant-keys";
 import { trimSlashes } from "../url";
 
 export interface IdpIdentity {
@@ -91,9 +91,16 @@ export interface KeySecrets {
   tenant: KeySecret;
 }
 
-/** The managed key's rotation policy (D-080); undefined when the key is given in the options. */
-export function managedKeyPolicy(options: ResolvedSamlIdpOptions): { minPublishedMs: number } | undefined {
-  return options.signing.managed ? { minPublishedMs: options.signing.minPublishedMs } : undefined;
+/**
+ * The managed key's policy (D-080): how long a next key waits, and what the first key is (the
+ * initial key brought along, else a generated one named after the IdP's host). Undefined when the
+ * key is given in the options.
+ */
+export function managedKeyPolicy(
+  options: ResolvedSamlIdpOptions,
+): { minPublishedMs: number; first: { commonName: string; initial: { privateKeyPem: string; certificate: string } | undefined } } | undefined {
+  const s = options.signing;
+  return s.managed ? { minPublishedMs: s.minPublishedMs, first: { commonName: rootCommonName(options.entityId), initial: s.initialKey } } : undefined;
 }
 
 /** The secrets for stored keys: each one's own option, else Better Auth's secret (`own`). */
@@ -110,9 +117,14 @@ export function keySecretsFor(options: ResolvedSamlIdpOptions, own: KeySecret): 
 export async function rootSigning(state: IdentityState, adapter: Adapter, secrets: KeySecrets, warn?: (message: string) => void): Promise<ResolvedSigning> {
   const configured = configuredKey(state.options);
   if (configured) return configured;
-  if (!state.rootKeys) throw new Error("[saml-idp] managed signing key without a key store");
-  if (await state.rootKeys.ensureFirstKey(adapter, secrets.root, ROOT_KEY_OWNER, ROOT_KEY_COMMON_NAME))
-    warn?.("[saml-idp] generated the IdP's managed signing key: SPs that pin the IdP's certificate need the new one, from the metadata");
+  const policy = managedKeyPolicy(state.options);
+  if (!state.rootKeys || !policy) throw new Error("[saml-idp] managed signing key without a key store");
+  if (await state.rootKeys.ensureFirstKey(adapter, secrets.root, ROOT_KEY_OWNER, policy.first))
+    warn?.(
+      policy.first.initial
+        ? "[saml-idp] stored signing.initialKey as the IdP's managed signing key; it can now be removed from the options"
+        : "[saml-idp] generated the IdP's managed signing key: SPs that pin the IdP's certificate need the new one, from the metadata",
+    );
   return state.rootKeys.signing(adapter, secrets.root, ROOT_KEY_OWNER, { settings: signingSettings(state.options) }, warn);
 }
 

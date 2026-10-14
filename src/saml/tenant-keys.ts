@@ -25,8 +25,17 @@ export const TENANT_KEY_MODEL = "samlIdpTenantKey";
  * colon is in no id Better Auth generates, and the tenant API refuses it as an organization id.
  */
 export const ROOT_KEY_OWNER = "saml-idp:root";
-/** The common name of every generated root key's certificate. */
-export const ROOT_KEY_COMMON_NAME = "saml-idp";
+/** How long a failed first-key write is remembered per isolate before it's tried again (D-080). */
+export const FAILED_RETRY_MS = 60_000;
+
+/** A generated root key's certificate names the IdP's host, so admins can tell it apart in SP consoles. */
+export function rootCommonName(entityId: string): string {
+  try {
+    const host = new URL(entityId).host;
+    if (host) return `saml-idp ${host}`;
+  } catch {}
+  return "saml-idp";
+}
 /** How errors and warnings name a key's owner. */
 export const ownerLabel = (tenantId: string) => (tenantId === ROOT_KEY_OWNER ? "the IdP's managed signing key" : `tenant ${tenantId}`);
 export type TenantKeyState = "next" | "active" | "previous" | "retired";
@@ -129,7 +138,10 @@ export const newKid = () => btoa(String.fromCharCode(...crypto.getRandomValues(n
 type Adapter = {
   findMany(args: { model: string; where: { field: string; value: unknown }[]; limit?: number; sortBy?: { field: string; direction: "asc" | "desc" } }): Promise<unknown[]>;
 };
-export type WritableKeyAdapter = Adapter & { create(args: { model: string; data: Record<string, unknown> }): Promise<unknown> };
+export type WritableKeyAdapter = Adapter & {
+  create(args: { model: string; data: Record<string, unknown> }): Promise<unknown>;
+  delete(args: { model: string; where: { field: string; value: unknown }[] }): Promise<unknown>;
+};
 type Signing = ResolvedSigning;
 
 /** What a key's owner signs with: the settings, and for a tenant the shared key to fall back on. */
@@ -148,8 +160,9 @@ export class TenantKeyStore {
   private readonly rows = new Map<string, { rows: TenantKeyRow[]; expires: number }>();
   private readonly keys = new Map<string, { key: KeyObject; pem: string }>();
   private readonly generating = new Map<string, Promise<boolean>>();
+  private readonly failed = new Map<string, { until: number; error: unknown }>();
   /** Told when `ensureFirstKey` stores a key (the `signing-key.changed` event, D-080). */
-  onGenerated: ((tenantId: string, kid: string) => void) | undefined;
+  onGenerated: ((tenantId: string, kid: string, imported: boolean) => void) | undefined;
 
   constructor(
     private readonly cacheMs: number,
@@ -164,11 +177,22 @@ export class TenantKeyStore {
 
   /**
    * An owner with no key rows at all gets its first key, active at once (the root's managed key,
-   * D-080). Generated once per isolate even under concurrent requests; across isolates the UNIQUE
-   * state key lets one row in, and the others use it. True when this call stored the key.
+   * D-080): `initial` when given (an existing key brought along), else a generated one. Made once
+   * per isolate even under concurrent requests; across isolates the UNIQUE state key lets one row
+   * in and the others use it, and if that index is missing, every writer keeps the earliest row
+   * and removes its own. A failure that isn't a lost race is remembered for FAILED_RETRY_MS, so a
+   * broken table doesn't cost a key generation on every request. True when this call stored the key.
    */
-  async ensureFirstKey(adapter: WritableKeyAdapter, secret: KeySecret, tenantId: string, commonName: string, now: () => Date = () => new Date(this.now())): Promise<boolean> {
+  async ensureFirstKey(
+    adapter: WritableKeyAdapter,
+    secret: KeySecret,
+    tenantId: string,
+    first: { commonName: string; initial?: { privateKeyPem: string; certificate: string } | undefined },
+    now: () => Date = () => new Date(this.now()),
+  ): Promise<boolean> {
     if ((await this.load(adapter, tenantId)).length > 0) return false;
+    const failed = this.failed.get(tenantId);
+    if (failed && failed.until > this.now()) throw failed.error;
     let pending = this.generating.get(tenantId);
     if (!pending) {
       pending = (async () => {
@@ -176,7 +200,7 @@ export class TenantKeyStore {
         this.invalidate(tenantId);
         if ((await this.load(adapter, tenantId)).length > 0) return false;
         const at = now();
-        const { privateKeyPem, certificate } = generateSigningKey(commonName, at);
+        const { privateKeyPem, certificate } = first.initial ?? generateSigningKey(first.commonName, at);
         const { notAfter } = checkKeyPair(privateKeyPem, certificate);
         const kid = newKid();
         try {
@@ -195,16 +219,27 @@ export class TenantKeyStore {
               updatedBy: null,
             },
           });
-          this.onGenerated?.(tenantId, kid);
-          return true;
         } catch (e) {
           // Another isolate or instance stored one first: use it. Anything else is a real failure.
           this.invalidate(tenantId);
           if ((await this.load(adapter, tenantId)).some((r) => r.state === "active")) return false;
+          this.failed.set(tenantId, { until: this.now() + FAILED_RETRY_MS, error: e });
           throw e;
-        } finally {
-          this.invalidate(tenantId);
         }
+        this.invalidate(tenantId);
+        // Without the UNIQUE index (a hand-written schema), two writers can both get in: each keeps
+        // the earliest active row and deletes its own if it isn't that one.
+        const actives = (await this.load(adapter, tenantId))
+          .filter((r) => r.state === "active")
+          .sort((a, b) => new Date(a.createdAt as string).getTime() - new Date(b.createdAt as string).getTime() || (a.kid < b.kid ? -1 : a.kid > b.kid ? 1 : 0));
+        const mine = actives.find((r) => r.kid === kid);
+        if (actives.length > 1 && mine && actives[0] !== mine) {
+          await adapter.delete({ model: TENANT_KEY_MODEL, where: [{ field: "id", value: mine.id }] });
+          this.invalidate(tenantId);
+          return false;
+        }
+        this.onGenerated?.(tenantId, kid, first.initial !== undefined);
+        return true;
       })().finally(() => this.generating.delete(tenantId));
       this.generating.set(tenantId, pending);
     }

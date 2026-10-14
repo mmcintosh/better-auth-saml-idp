@@ -1,6 +1,6 @@
 import { describe, expect, inject, it } from "vitest";
 import { NAMEID_EMAIL, resolveOptions, SamlIdpConfigError } from "../../src/options";
-import type { SamlIdpOptions, ServiceProviderConfig } from "../../src/types";
+import type { SamlIdpOptions, ServiceProviderConfig, SigningConfig } from "../../src/types";
 import { baseOptions, SP_ACS, SP_ENTITY_ID, type TestSamlOptions } from "../support/config";
 
 const keys = inject("keys");
@@ -67,37 +67,37 @@ describe("resolveOptions: defaults", () => {
   });
 
   it("accepts additional certificates for rotation", () => {
-    const r = resolveOptions(baseOptions({ signing: { ...baseOptions().signing, additionalCertificates: [keys.idpNext.certificate] } }));
+    const r = resolveOptions(baseOptions({ signing: { ...(baseOptions().signing as SigningConfig), additionalCertificates: [keys.idpNext.certificate] } }));
     expect(!r.signing.managed && r.signing.additionalCertificates).toHaveLength(1);
   });
 });
 
 describe("resolveOptions: signing algorithms", () => {
   it("rejects SHA-1 without explicit opt-in", () => {
-    expect(issuesFor(baseOptions({ signing: { ...baseOptions().signing, signatureAlgorithm: "rsa-sha1" } }))).toEqual([
+    expect(issuesFor(baseOptions({ signing: { ...(baseOptions().signing as SigningConfig), signatureAlgorithm: "rsa-sha1" } }))).toEqual([
       "signing: SHA-1 is insecure; set signing.allowInsecureSha1: true to use it anyway",
     ]);
-    expect(issuesFor(baseOptions({ signing: { ...baseOptions().signing, digestAlgorithm: "sha1" } }))).toHaveLength(1);
+    expect(issuesFor(baseOptions({ signing: { ...(baseOptions().signing as SigningConfig), digestAlgorithm: "sha1" } }))).toHaveLength(1);
   });
 
   it("allows SHA-1 with opt-in, and warns", () => {
     const r = resolveOptions(
-      baseOptions({ signing: { ...baseOptions().signing, signatureAlgorithm: "rsa-sha1", allowInsecureSha1: true } }),
+      baseOptions({ signing: { ...(baseOptions().signing as SigningConfig), signatureAlgorithm: "rsa-sha1", allowInsecureSha1: true } }),
     );
     expect(r.signing.signatureAlgorithm).toBe("rsa-sha1");
     expect(r.warnings.join()).toMatch(/SHA-1 is enabled/);
   });
 
   it("rejects unknown algorithms", () => {
-    expect(issuesFor(baseOptions({ signing: { ...baseOptions().signing, signatureAlgorithm: "hmac-sha256" as any } }))[0]).toMatch(
+    expect(issuesFor(baseOptions({ signing: { ...(baseOptions().signing as SigningConfig), signatureAlgorithm: "hmac-sha256" as any } }))[0]).toMatch(
       /^signing\.signatureAlgorithm:/,
     );
   });
 
   it("sign takes only the three choices (API decision 4: no way to sign nothing)", () => {
-    expect(issuesFor(baseOptions({ signing: { ...baseOptions().signing, sign: "none" as any } }))[0]).toMatch(/^signing\.sign:/);
+    expect(issuesFor(baseOptions({ signing: { ...(baseOptions().signing as SigningConfig), sign: "none" as any } }))[0]).toMatch(/^signing\.sign:/);
     // The pre-decision-4 booleans are gone, not silently ignored.
-    expect(issuesFor(baseOptions({ signing: { ...baseOptions().signing, signResponse: false } as any }))[0]).toMatch(/signResponse/);
+    expect(issuesFor(baseOptions({ signing: { ...(baseOptions().signing as SigningConfig), signResponse: false } as any }))[0]).toMatch(/signResponse/);
   });
 });
 
@@ -107,7 +107,7 @@ describe("resolveOptions: per-SP signing and signed metadata", () => {
   it("per-SP overrides fall back to the global setting", () => {
     const r = resolveOptions(
       baseOptions({
-        signing: { ...baseOptions().signing, sign: "assertion" },
+        signing: { ...(baseOptions().signing as SigningConfig), sign: "assertion" },
         serviceProviders: [sp({ id: "a" }), sp({ id: "b", sign: "response" })] as any,
       }),
     );
@@ -145,22 +145,22 @@ describe("resolveOptions: key material", () => {
   });
 
   it("only warns about an expired rotation certificate in additionalCertificates", () => {
-    const r = resolveOptions(baseOptions({ signing: { ...baseOptions().signing, additionalCertificates: [keys.expired.certificate] } }));
+    const r = resolveOptions(baseOptions({ signing: { ...(baseOptions().signing as SigningConfig), additionalCertificates: [keys.expired.certificate] } }));
     expect(r.warnings.join()).toMatch(/signing\.additionalCertificates\.0: EXPIRED on /);
   });
 
   it("rejects encrypted and non-PEM private keys", () => {
     const enc = "-----BEGIN ENCRYPTED PRIVATE KEY-----\nAAAA\n-----END ENCRYPTED PRIVATE KEY-----";
-    expect(issuesFor(baseOptions({ signing: { ...baseOptions().signing, privateKey: enc } }))).toContain(
+    expect(issuesFor(baseOptions({ signing: { ...(baseOptions().signing as SigningConfig), privateKey: enc } }))).toContain(
       "signing.privateKey: encrypted private keys are not supported",
     );
-    expect(issuesFor(baseOptions({ signing: { ...baseOptions().signing, privateKey: "not a key" } }))).toContain(
+    expect(issuesFor(baseOptions({ signing: { ...(baseOptions().signing as SigningConfig), privateKey: "not a key" } }))).toContain(
       "signing.privateKey: must be a PEM private key (PKCS#1 or PKCS#8)",
     );
   });
 
   it("rejects a malformed certificate PEM", () => {
-    expect(issuesFor(baseOptions({ signing: { ...baseOptions().signing, certificate: "nope" } }))).toContain(
+    expect(issuesFor(baseOptions({ signing: { ...(baseOptions().signing as SigningConfig), certificate: "nope" } }))).toContain(
       "signing.certificate: must be a PEM CERTIFICATE",
     );
   });

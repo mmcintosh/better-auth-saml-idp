@@ -357,6 +357,8 @@ export interface ServiceProviderEncryptionConfig {
 }
 
 export interface SigningConfig {
+  /** Absent: the key is given here. See `ManagedSigningConfig` for `managed: true`. */
+  managed?: undefined;
   /** PEM private key (PKCS#1 or PKCS#8, unencrypted, RSA ≥ 2048 bits). */
   privateKey: string;
   /** PEM X.509 certificate matching `privateKey`. */
@@ -381,6 +383,13 @@ export interface SigningConfig {
  */
 export interface ManagedSigningConfig {
   managed: true;
+  /**
+   * An existing key to bring along when switching a deployment to a managed key: it becomes the
+   * first stored key instead of a generated one, so SPs that pinned its certificate keep working.
+   * Used only while no key is stored; once stored (after the first request that needs it), it can
+   * be removed from the options.
+   */
+  initialKey?: { privateKey: string; certificate: string } | undefined;
   /**
    * The secret that encrypts the stored private key. Default: Better Auth's (`secrets`, else
    * `secret`), whose versions also rotate it. Keep every version that encrypted a stored key
@@ -426,7 +435,13 @@ export interface ResolvedSigning extends ResolvedSigningSettings {
  */
 export type ResolvedSigningOptions =
   | (ResolvedSigning & { managed: false })
-  | (ResolvedSigningSettings & { managed: true; minPublishedMs: number; keyEncryptionSecret: string | undefined });
+  | (ResolvedSigningSettings & {
+      managed: true;
+      minPublishedMs: number;
+      keyEncryptionSecret: string | undefined;
+      /** The key to store first instead of generating one, checked at startup. */
+      initialKey: { privateKeyPem: string; certificate: string } | undefined;
+    });
 
 /** What `authnContext.current()` is told: the session, and the SP and request it answers. */
 export interface AuthnContextCurrentContext {

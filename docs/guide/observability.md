@@ -82,8 +82,8 @@ Every event has `type`, `at` (a `Date`), and when available `ipAddress` and `use
 
 | Field | Description |
 |---|---|
-| `action` | `key.generated` (the plugin made the first key), `key.rotated`, `key.activated` or `key.retired`. |
-| `userId` | The manager who did it; absent for `key.generated`. |
+| `action` | `key.generated` (the plugin made the first key), `key.imported` (it stored `signing.initialKey` as the first key), `key.rotated`, `key.activated` or `key.retired`. |
+| `userId` | The manager who did it; absent for `key.generated` and `key.imported`. |
 | `kid` | Which key (for `key.retired`, a comma-separated list). |
 | `forced` | `true` for an activation that skipped `minPublishedSeconds`. |
 

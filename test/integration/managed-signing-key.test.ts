@@ -7,7 +7,7 @@ import { organization } from "better-auth/plugins";
 import { describe, expect, inject, it } from "vitest";
 import { parseDoc, verifyEnveloped } from "../../src/cli/saml";
 import { resolveOptions, SamlIdpConfigError } from "../../src/options";
-import { decryptTenantKey, GENERATED_KEY_BITS, ROOT_KEY_OWNER, stateKeyOf, TENANT_KEY_MODEL } from "../../src/saml/tenant-keys";
+import { decryptTenantKey, FAILED_RETRY_MS, GENERATED_KEY_BITS, ROOT_KEY_OWNER, stateKeyOf, TENANT_KEY_MODEL, TenantKeyStore } from "../../src/saml/tenant-keys";
 import { baseOptions, type TestSamlOptions } from "../support/config";
 import { AUTH_BASE, createHost, createHostDatabase, type HostDatabase } from "../support/host";
 import { authnRequestXml, Browser, readAutoPost, redirectUrl } from "../support/sp";
@@ -19,6 +19,7 @@ const METADATA = `${AUTH_BASE}/saml2/idp/metadata`;
 const canManage = ({ user }: { user: Record<string, unknown> }) => user.role === "admin";
 const certsIn = (xml: string) => [...xml.matchAll(/<(?:ds:)?X509Certificate>([^<]+)</g)].map((m) => m[1]!.replace(/\s+/g, ""));
 const b64 = (pem: string) => pem.replace(/-----[^-]+-----|\s+/g, "");
+const code = async (res: Response) => /<code>([A-Z_]+)<\/code>/.exec(await res.clone().text())?.[1];
 
 /** Did this certificate sign the Response and its Assertion? */
 function signedWith(xml: string, cert: string): boolean {
@@ -86,7 +87,8 @@ describe("managed signing key: the first key (D-080)", () => {
     expect(pem).toContain("PRIVATE KEY");
     const cert = new X509Certificate(row.certificate);
     expect((cert.publicKey.asymmetricKeyDetails?.modulusLength ?? 0)).toBe(GENERATED_KEY_BITS);
-    expect(cert.subject).toContain("CN=saml-idp");
+    // Named after the IdP's host, so admins can tell it apart in SP consoles.
+    expect(cert.subject).toContain("CN=saml-idp auth.test");
     const { xml } = await readAutoPost(await w.signIn());
     expect(signedWith(xml, row.certificate)).toBe(true);
     // Reported, without an acting user.
@@ -123,6 +125,34 @@ describe("managed signing key: the first key (D-080)", () => {
     const [row] = await w.rows();
     expect(await decryptTenantKey(own, row)).toContain("PRIVATE KEY");
     await expect(decryptTenantKey(SECRET, row)).rejects.toThrow(/can't be decrypted/);
+  });
+});
+
+describe("managed signing key: bringing a key along (D-080)", () => {
+  it("initialKey is stored as the first key instead of a generated one, so SPs that trust it keep working; once stored, it's ignored", async () => {
+    const initialKey = { privateKey: keys.idp.privateKey, certificate: keys.idp.certificate };
+    const w = await world({ saml: { signing: { managed: true, minPublishedSeconds: 0, initialKey } } });
+    const md = await w.metadata();
+    const [row] = await w.rows();
+    expect(b64(row.certificate)).toBe(b64(keys.idp.certificate));
+    expect(certsIn(md)).toEqual([b64(keys.idp.certificate)]);
+    expect(await decryptTenantKey(SECRET, row)).toBe(keys.idp.privateKey);
+    expect(signedWith((await readAutoPost(await w.signIn())).xml, keys.idp.certificate)).toBe(true);
+    expect(w.events).toEqual([expect.objectContaining({ type: "signing-key.changed", action: "key.imported", kid: row.kid })]);
+    // Another initial key changes nothing once a key is stored.
+    const other = await w.host({ signing: { managed: true, initialKey: { privateKey: keys.idpNext.privateKey, certificate: keys.idpNext.certificate } } });
+    expect(certsIn(await w.metadata(other))).toEqual([b64(keys.idp.certificate)]);
+    expect(await w.rows()).toHaveLength(1);
+  });
+
+  it("initialKey is checked at startup like a key given as PEM", () => {
+    const mismatch = () => resolveOptions(baseOptions({ signing: { managed: true, initialKey: { privateKey: keys.idp.privateKey, certificate: keys.sp.certificate } } }));
+    expect(mismatch).toThrow(SamlIdpConfigError);
+    try {
+      mismatch();
+    } catch (e) {
+      expect((e as SamlIdpConfigError).message).toContain("signing.initialKey.certificate: does not match signing.initialKey.privateKey");
+    }
   });
 });
 
@@ -201,6 +231,7 @@ describe("managed signing key: never another key (D-080)", () => {
     const res = await w.auth.handler(new Request(METADATA));
     expect(res.status).toBe(500);
     const signIn = await w.signIn();
+    expect(await code(signIn)).toBe("INTERNAL_ERROR");
     expect(await signIn.text()).not.toContain("SAMLResponse");
     expect(await w.rows()).toHaveLength(1);
   });
@@ -215,6 +246,98 @@ describe("managed signing key: never another key (D-080)", () => {
     const finished = await json(await w.keys("/activate", {}));
     expect(finished.keys.map((k: any) => k.state)).toEqual(["active", "previous"]);
     expect((await w.auth.handler(new Request(METADATA))).status).toBe(200);
+  });
+});
+
+describe("managed signing key: recovering (D-080)", () => {
+  it("a key that can't be decrypted is replaced by rotate, a forced activate and retire, none of which needs to decrypt it", async () => {
+    const w = await world({ saml: { signing: { managed: true } } }); // 24-hour wait: the forced activation skips it
+    await w.metadata();
+    await w.ctx.adapter.update({ model: TENANT_KEY_MODEL, where: [{ field: "tenantId", value: ROOT_KEY_OWNER }], update: { encryptedPrivateKey: "garbage" } });
+    expect((await w.auth.handler(new Request(METADATA))).status).toBe(500);
+    const next = (await json(await w.keys("/rotate", {}))).keys.find((k: any) => k.state === "next");
+    expect((await json(await w.keys("/activate", { force: true }))).keys.map((k: any) => k.state)).toEqual(["active", "previous"]);
+    expect(signedWith((await readAutoPost(await w.signIn())).xml, next.certificate)).toBe(true);
+    await json(await w.keys("/retire", {}));
+    expect(certsIn(await w.metadata())).toEqual([b64(next.certificate)]);
+  });
+});
+
+describe("managed signing key: more root paths (D-080)", () => {
+  it("signed metadata and IdP-initiated sign-in use the managed key", async () => {
+    const w = await world({ saml: { signMetadata: true, serviceProviders: [{ id: SP.id, entityId: SP.entityId, acsUrls: [SP.acs], allowIdpInitiated: true }] } });
+    const md = await w.metadata();
+    const [row] = await w.rows();
+    const doc = parseDoc(md);
+    expect(verifyEnveloped(md, doc, doc.documentElement, [row.certificate]).valid).toBe(true);
+    const { xml } = await readAutoPost(await w.browser.fetch(`${AUTH_BASE}/saml2/idp/init?sp=${SP.id}`));
+    expect(signedWith(xml, row.certificate)).toBe(true);
+  });
+
+  it("with the row cache on, a rotation is seen at once by the host that made it", async () => {
+    const w = await world({ saml: { registry: { enabled: true, canManage, cacheSeconds: 60 } } });
+    const first = certsIn(await w.metadata()); // caches the rows
+    const next = (await json(await w.keys("/rotate", {}))).keys.find((k: any) => k.state === "next");
+    expect(certsIn(await w.metadata())).toEqual([...first, b64(next.certificate)]);
+    await json(await w.keys("/activate", {}));
+    expect(certsIn(await w.metadata())[0]).toBe(b64(next.certificate));
+    expect(signedWith((await readAutoPost(await w.signIn())).xml, next.certificate)).toBe(true);
+  });
+});
+
+describe("managed signing key: the store (D-080)", () => {
+  const initial = { privateKeyPem: keys.idp.privateKey, certificate: keys.idp.certificate };
+  /** An in-memory key table: with or without the UNIQUE state key, or failing every write. */
+  const table = (o: { unique?: boolean; failCreate?: boolean } = {}) => {
+    const rows: any[] = [];
+    const counts = { creates: 0 };
+    const adapter = {
+      findMany: async ({ where }: any) => rows.filter((r) => r.tenantId === where[0].value).map((r) => ({ ...r })),
+      create: async ({ data }: any) => {
+        counts.creates++;
+        await Promise.resolve();
+        if (o.failCreate) throw new Error("no such table: samlIdpTenantKey");
+        if (o.unique !== false && rows.some((r) => r.stateKey === data.stateKey)) throw new Error("UNIQUE constraint failed");
+        const row = { id: `row${counts.creates}`, ...data };
+        rows.push(row);
+        return row;
+      },
+      delete: async ({ where }: any) => {
+        const i = rows.findIndex((r) => r.id === where[0].value);
+        if (i >= 0) rows.splice(i, 1);
+      },
+    };
+    return { rows, counts, adapter };
+  };
+
+  it("one isolate makes the first key once, however many requests ask for it at the same time", async () => {
+    const t = table({ unique: false });
+    const store = new TenantKeyStore(0);
+    await Promise.all(Array.from({ length: 5 }, () => store.ensureFirstKey(t.adapter, SECRET, ROOT_KEY_OWNER, { commonName: "saml-idp", initial })));
+    expect(t.counts.creates).toBe(1);
+    expect(t.rows).toHaveLength(1);
+  });
+
+  it("without the UNIQUE index, two writers that both get in end with one active key", async () => {
+    const t = table({ unique: false });
+    const [a, b] = [new TenantKeyStore(0), new TenantKeyStore(0)];
+    const made = await Promise.all([a, b].map((s) => s.ensureFirstKey(t.adapter, SECRET, ROOT_KEY_OWNER, { commonName: "saml-idp", initial })));
+    expect(t.counts.creates).toBe(2);
+    expect(t.rows.filter((r) => r.state === "active")).toHaveLength(1);
+    expect(made.filter(Boolean)).toHaveLength(1);
+  });
+
+  it("a write that fails for another reason isn't retried on every request: only after a while", async () => {
+    const t = table({ failCreate: true });
+    let now = 1_000_000;
+    const store = new TenantKeyStore(0, () => now);
+    const ensure = () => store.ensureFirstKey(t.adapter, SECRET, ROOT_KEY_OWNER, { commonName: "saml-idp", initial });
+    await expect(ensure()).rejects.toThrow(/no such table/);
+    await expect(ensure()).rejects.toThrow(/no such table/);
+    expect(t.counts.creates).toBe(1);
+    now += FAILED_RETRY_MS + 1;
+    await expect(ensure()).rejects.toThrow(/no such table/);
+    expect(t.counts.creates).toBe(2);
   });
 });
 
@@ -241,8 +364,9 @@ describe("managed signing key with tenants (D-080)", () => {
     const w = await world({ plugins: [organization()], saml: { tenants: { enabled: true, keys: "per-tenant", cacheSeconds: 0, minPublishedSeconds: 0 } } });
     const res = await w.admin.fetch(`${AUTH_BASE}/saml-idp/tenants/create`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ organizationId: ROOT_KEY_OWNER }) });
     expect(res.status).toBe(400);
-    const keysRes = await w.admin.fetch(`${AUTH_BASE}/saml-idp/tenants/keys?organizationId=${encodeURIComponent(ROOT_KEY_OWNER)}`);
-    expect(keysRes.status).toBe(400);
+    // The lookup by organization id would refuse it too; only the schema answers 400 here.
+    for (const id of [ROOT_KEY_OWNER, "SAML-IDP:ROOT", `${ROOT_KEY_OWNER} `])
+      expect((await w.admin.fetch(`${AUTH_BASE}/saml-idp/tenants/keys?organizationId=${encodeURIComponent(id)}`)).status).toBe(400);
   });
 });
 

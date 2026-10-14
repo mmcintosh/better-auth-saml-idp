@@ -31,12 +31,13 @@ import { keyInfo, keyRows, moveKeyRow, pruneRetiredRows, writeKeyRow } from "./k
 import { access, adapterOf, fail, inScope, manager } from "./registry";
 
 const MAX_LIST = 1000;
-// The root's managed key rows use ROOT_KEY_OWNER as their owner (D-080): no tenant may have that id.
+// The root's managed key rows use ROOT_KEY_OWNER as their owner (D-080): no tenant may have that id,
+// nor one a case-insensitive or space-padding collation would compare equal to it.
 const orgIdSchema = z
   .string()
   .min(1)
   .max(256)
-  .refine((v) => v !== ROOT_KEY_OWNER, { message: "is reserved" });
+  .refine((v) => v.trim().toLowerCase() !== ROOT_KEY_OWNER, { message: "is reserved" });
 
 const date = (v: unknown) => new Date(v as string | number | Date);
 function record(ctx: GenericEndpointContext, state: PluginState, row: TenantRow, keys?: TenantKeyRow[]): TenantRecord {
@@ -242,7 +243,8 @@ export function tenantEndpoints(state: PluginState) {
           await adapterOf(ctx).create({ model: RETIRED_KEY_MODEL, data: { tenantKey: row.tenantKey, organizationId: row.organizationId, retiredAt: new Date(), retiredBy: user.id } });
         await adapterOf(ctx).delete({ model: TENANT_MODEL, where: [{ field: "id", value: row.id }] });
         // Its signing keys go with it (D-058): nothing can sign as a deleted tenant.
-        if (state.tenantKeys) await adapterOf(ctx).deleteMany({ model: TENANT_KEY_MODEL, where: [{ field: "tenantId", value: row.organizationId }] });
+        // Its own rows, by id: exactly this tenant's, whatever the collation (never another owner's).
+        if (state.tenantKeys) for (const k of await keyRows(ctx, row.organizationId)) await adapterOf(ctx).delete({ model: TENANT_KEY_MODEL, where: [{ field: "id", value: k.id }] });
         changed();
         changedBy(ctx, user.id, row, "deleted", `deleted tenant ${row.tenantKey} (organization ${row.organizationId}); the key is retired`);
         return ctx.json({ deleted: row.organizationId });

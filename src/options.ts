@@ -219,6 +219,7 @@ const optionsSchema = z
       z
         .object({
           managed: z.literal(true),
+          initialKey: z.object({ privateKey: privateKeyPem, certificate: pem("CERTIFICATE") }).strict().optional(),
           keyEncryptionSecret: z.string().min(32).optional(),
           minPublishedSeconds: z.number().int().min(0).max(31_536_000).optional(),
           ...signingSettings,
@@ -727,14 +728,24 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
   if (o.serviceProviders.length === 0 && !o.registry?.enabled)
     warnings.push("serviceProviders is empty: every AuthnRequest will be rejected");
 
-  // A managed key (D-080) has no key material to check here: it's made, and checked, when loaded.
+  // A managed key (D-080) has no key material to check here, unless it brings an initial key along.
   const keyCheck = o.signing.managed ? undefined : checkKeyMaterial({ signing: o.signing as SigningConfig }, warnings);
   if (keyCheck) issues.push(...keyCheck.issues);
+  if (o.signing.managed === true && o.signing.initialKey) {
+    const initial = checkKeyMaterial({ signing: o.signing.initialKey }, warnings);
+    issues.push(...initial.issues.map((i) => i.replace(/^signing\.(privateKey|certificate)/, "signing.initialKey.$1").replace("does not match signing.privateKey", "does not match signing.initialKey.privateKey")));
+  }
   if (issues.length || (keyCheck && !keyCheck.key)) throw new SamlIdpConfigError(issues);
   const settings = { signatureAlgorithm: sigAlg, digestAlgorithm: digestAlg, allowInsecureSha1: o.signing.allowInsecureSha1 ?? false, sign: o.signing.sign ?? "both" } as const;
   const signing: ResolvedSigningOptions =
     o.signing.managed === true
-      ? { ...settings, managed: true, minPublishedMs: (o.signing.minPublishedSeconds ?? 86_400) * 1000, keyEncryptionSecret: o.signing.keyEncryptionSecret }
+      ? {
+          ...settings,
+          managed: true,
+          minPublishedMs: (o.signing.minPublishedSeconds ?? 86_400) * 1000,
+          keyEncryptionSecret: o.signing.keyEncryptionSecret,
+          initialKey: o.signing.initialKey ? { privateKeyPem: o.signing.initialKey.privateKey, certificate: o.signing.initialKey.certificate } : undefined,
+        }
       : {
           ...settings,
           managed: false,

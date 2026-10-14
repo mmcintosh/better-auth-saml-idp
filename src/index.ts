@@ -139,7 +139,7 @@ export const samlIdp = (options: SamlIdpOptions) => {
       const sink = { logger: ctx.logger, adapter: ctx.adapter as any, runInBackground: (p: Promise<unknown>) => ctx.runInBackground(p) };
       // The managed key's first generation happens inside a request's identity lookup, which has no
       // endpoint context to hand: it's reported from here, without the request's IP (D-080).
-      if (rootKeys) rootKeys.onGenerated = (_owner, kid) => emitWithoutRequest(sink, resolved, { type: "signing-key.changed", action: "key.generated", kid });
+      if (rootKeys) rootKeys.onGenerated = (_owner, kid, imported) => emitWithoutRequest(sink, resolved, { type: "signing-key.changed", action: imported ? "key.imported" : "key.generated", kid });
       const options = resolved.sessionTracking
         ? {
             databaseHooks: {

@@ -2174,4 +2174,23 @@ A deployment needed a key made by hand (`keygen`) and pasted into two secrets be
   - generating when no key is active (instead of no rows);
   - no fallback after losing the race;
   - listing without the access check.
+- **Fresh-eyes review before push (2026-10-13, a sub-agent, at the maintainer's request).** It found nothing Critical or High: no path where the wrong key signs, and nothing that lets a non-manager change keys. Its findings, all fixed in the same branch:
+  - **M1, switching from PEM replaced the key at once.** Fix: `signing.initialKey`, stored as the first key instead of a generated one (event `key.imported`), checked at startup like a PEM key. Docs: how to switch.
+  - **M2, rotating Better Auth's secret stops the IdP.** Fix: the docs and options table say so, and recommend `signing.keyEncryptionSecret`. A tested recovery: rotate, activate with `force`, retire, none of which decrypts the old key.
+  - **L1, other isolates keep the old key for `registry.cacheSeconds`.** Fix: documented (wait between activate and retire; exchange checks only the active key, as for tenants).
+  - **L2, a failing first write cost a key generation on every request.** Fix: remembered per isolate for 60 s (`FAILED_RETRY_MS`).
+  - **L3, without the UNIQUE index two writers could both get in.** Fix: after its write, each keeps the earliest active row and deletes its own if it isn't that one.
+  - **L4, test gaps.** Fix: tests for the per-isolate de-duplication, the missing-index repair, the failure cooldown, local invalidation with the cache on, signed metadata and IdP-initiated sign-in, the recovery, `initialKey`, and a stronger refusal check. Not added: the adapter matrix (the key rows use the same table and queries as tenants', which it covers) and SLO and exchange with a managed key (they go through the same `routeIdentity`/`spIdentity` as tenants').
+  - **N1, reserved owner compared exactly.** Fix: refused whatever its case or padding, and a tenant's key rows deleted one by one after an exact match.
+  - **N2, any host manager can rotate.** Documented.
+  - **N3, types.** `SigningConfig` gained `managed?: undefined` so `options.signing.managed` reads on both forms; the CHANGELOG lists the widened types.
+  - **N4, docs.** The schema heading, losing every row, and the database reads.
+  - **N5, every certificate named `saml-idp`.** Fix: `saml-idp <host of the entity ID>`.
+
+  Each new guard was seen to fail once removed:
+  - the de-duplication;
+  - the repair;
+  - the cooldown;
+  - the invalidation;
+  - the case-insensitive check.
 

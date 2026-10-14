@@ -145,13 +145,14 @@ export interface TenantChangedEvent extends EventBase {
 
 /**
  * The root IdP's managed signing key changed (D-080): `key.generated` when the plugin made the
- * first one (no acting user), otherwise an administrator's rotation step. `kid` names the key;
+ * first one, `key.imported` when it stored `signing.initialKey` as the first one (neither has an
+ * acting user), otherwise an administrator's rotation step. `kid` names the key;
  * `forced` marks an activation that skipped `minPublishedSeconds` (a leaked key).
  */
 export interface SigningKeyChangedEvent extends EventBase {
   type: "signing-key.changed";
-  action: "key.generated" | "key.rotated" | "key.activated" | "key.retired";
-  /** The acting administrator; absent for `key.generated`. */
+  action: "key.generated" | "key.imported" | "key.rotated" | "key.activated" | "key.retired";
+  /** The acting administrator; absent for `key.generated` and `key.imported`. */
   userId?: string | undefined;
   kid: string;
   forced?: boolean | undefined;

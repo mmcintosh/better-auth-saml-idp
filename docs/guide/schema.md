@@ -232,7 +232,7 @@ The key of every deleted tenant, so it is never used again: SPs set up for a del
 | `retiredAt` | date | | When the tenant was deleted. |
 | `retiredBy` | string | | The user id who deleted it (optional). |
 
-## `samlIdpTenantKey` (with `tenants.keys: "per-tenant"`)
+## `samlIdpTenantKey` (with per-tenant or managed keys)
 
 A tenant's signing keys, one row per key ([Per-tenant signing keys](multi-tenant.md#per-tenant-signing-keys), D-058). Also needed with `signing: { managed: true }`, with or without tenants: the root IdP's [managed key](signing-and-encryption.md#a-key-the-plugin-manages) is stored here too, as the rows of the owner `saml-idp:root` (D-080).
 
