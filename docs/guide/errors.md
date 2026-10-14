@@ -58,6 +58,10 @@ The codes are exported as `SAML_IDP_ERROR_CODES` (and appear on the plugin's `$E
 | `INVALID_TENANT_SIGNING_KEY` | 400 | [Rotating](multi-tenant.md#rotating-a-tenants-key) in an uploaded key that isn't a matching RSA pair of at least 2048 bits, or only one of `privateKey` and `certificate`; `issues` says which. |
 | `TENANT_SIGNING_KEY_EXISTS` | 409 | `rotate` while the tenant already has a next key: activate it first. |
 | `TENANT_SIGNING_KEY_NOT_FOUND` | 409 | `activate` without a next key, or `retire` without a previous one (`state` says which). |
+| `INVALID_SIGNING_KEY` | 400 | [Rotating](signing-and-encryption.md#rotating-a-managed-key) the managed key to an uploaded key that isn't a matching RSA pair of at least 2048 bits, or with only one of `privateKey` and `certificate`; `issues` says which. |
+| `SIGNING_KEY_EXISTS` | 409 | `rotate` while there's already a next managed key: activate it first. |
+| `SIGNING_KEY_NOT_FOUND` | 409 | `activate` without a next managed key, or `retire` without a previous one (`state` says which). |
+| `SIGNING_KEY_TOO_NEW` | 409 | `activate` before the next managed key has been published for `signing.minPublishedSeconds`; `activatableAt` says when. `force: true` skips the wait (for a leaked key). |
 | `TENANT_SIGNING_KEY_TOO_NEW` | 409 | `activate` before the next key has been published for `minPublishedSeconds`; `activatableAt` says when. `force: true` skips the wait (for a leaked key). |
 
 With tenants, `INVALID_SERVICE_PROVIDER` also covers an SP naming a `tenant` that doesn't exist, a change of `tenant` on update, and an `organization` rule on a tenant SP other than `{ id: <its tenant>, roles? }`. A request at an unknown or disabled tenant's URL, or naming an SP of another tenant, is the sign-in error `UNKNOWN_SERVICE_PROVIDER`; a tenant's metadata URL answers a plain `404 Not Found`.

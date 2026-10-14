@@ -25,7 +25,7 @@ Every option `samlIdp()` accepts. Options are validated when `samlIdp()` is call
 | `entityId` | `string` | **required** | The IdP's entity ID, published in metadata and sent as the `Issuer` of every Response. Usually `https://<host>/<basePath>/saml2/idp`. SPs pin it, so choose it once. |
 | `baseURL` | `string` | Better Auth's `baseURL`, else the request host | Where the IdP's own URLs come from: the SSO URL in metadata, the expected `Destination`, resume links. It follows **Better Auth's rule**, so it takes the same value as `betterAuth({ baseURL })`. A bare origin (`https://auth.example.com`) gets `basePath` added (default `/api/auth`); a URL with a path is used as it is. Only needed when Better Auth's `baseURL` isn't pinned. If the two disagree, a warning is logged and this one is used. Without either, URLs follow the request's `Host` header and a warning is logged. An absolute http(s) URL without query or fragment. |
 | `loginPage` | `string` | **required** | Where signed-out users are sent, with `?callbackURL=<absolute resume URL>`. A path starting with `/` (not `//`), or an absolute http(s) URL. Backslashes, whitespace and control characters are refused. See [the sign-in page contract](getting-started.md#5-return-users-from-your-sign-in-page). |
-| `signing` | `object` | **required** | The IdP's key and certificate, and signing choices. See [`signing`](#signing). |
+| `signing` | `object` | **required** | The IdP's key and certificate, or `{ managed: true }` for a key the plugin makes and keeps, and signing choices. See [`signing`](#signing). |
 | `serviceProviders` | `ServiceProviderConfig[]` | **required** | SPs defined in code. May be `[]` with a `registry`. See [Service provider options](#service-provider-options). |
 | `assertionLifetimeSeconds` | `number` | `300` | How long an assertion is valid (`NotOnOrAfter`). 30 to 3600; above 300 logs a warning. |
 | `clockSkewSeconds` | `number` | `60` | Tolerance for clock differences, applied to `NotBefore` and to request `IssueInstant` checks. 0 to 300. |
@@ -49,8 +49,11 @@ Every option `samlIdp()` accepts. Options are validated when `samlIdp()` is call
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `privateKey` | PEM `string` | **required** | The IdP's RSA private key (PKCS#1 or PKCS#8, unencrypted), 2048 bits or more. Only this key signs. Keep it in a secret store. |
-| `certificate` | PEM `string` | **required** | The X.509 certificate matching `privateKey`, published in metadata. A mismatch is a startup error. Expiry only warns (30 days ahead), so a certificate expiring never takes your site down. |
+| `managed` | `true` | none | The plugin makes, stores and rotates the key itself, instead of `privateKey`, `certificate` and `additionalCertificates` (which it then refuses). See [A key the plugin manages](signing-and-encryption.md#a-key-the-plugin-manages). |
+| `keyEncryptionSecret` | `string` | Better Auth's secret | With `managed`: the secret that encrypts the stored private key, 32 characters or more. Keep every version that sealed a stored key until that key is rotated out. |
+| `minPublishedSeconds` | `number` | `86400` | With `managed`: how long a next key must have been published before `activate` accepts it. 0 to 31536000. `force: true` skips it. |
+| `privateKey` | PEM `string` | **required** without `managed` | The IdP's RSA private key (PKCS#1 or PKCS#8, unencrypted), 2048 bits or more. Only this key signs. Keep it in a secret store. |
+| `certificate` | PEM `string` | **required** without `managed` | The X.509 certificate matching `privateKey`, published in metadata. A mismatch is a startup error. Expiry only warns (30 days ahead), so a certificate expiring never takes your site down. |
 | `additionalCertificates` | PEM `string[]` | `[]` | Published in metadata but never used to sign: the next key before a rotation, the previous one after. See [key rotation](../key-rotation.md). |
 | `signatureAlgorithm` | `"rsa-sha256" \| "rsa-sha512" \| "rsa-sha1"` | `"rsa-sha256"` | Signature algorithm for everything the IdP signs. `rsa-sha1` also needs `allowInsecureSha1`. |
 | `digestAlgorithm` | `"sha256" \| "sha512" \| "sha1"` | `"sha256"` | Digest algorithm. `sha1` also needs `allowInsecureSha1`. |

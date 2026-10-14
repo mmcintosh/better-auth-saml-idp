@@ -1,5 +1,5 @@
 import type { ResolvedSamlIdpOptions, ResolvedServiceProvider, SignatureAlgorithm } from "../types";
-import { type IdpIdentity, rootIdentity } from "./identity";
+import type { IdpIdentity } from "./identity";
 import { buildIdpMetadata } from "./metadata";
 import { trimSlashes } from "../url";
 
@@ -48,18 +48,17 @@ export function idpBaseURL(options: ResolvedSamlIdpOptions, requestBaseURL: stri
 const MAX_CACHED_BASE_URLS = 32;
 
 /**
- * IdP per base URL. With `options.baseURL` pinned there is exactly one. Otherwise the
- * base URL follows the request's Host, so the cache is bounded (LRU) instead of growing with
- * every Host header a client sends (review finding #7).
+ * The root IdP per base URL and certificates. With `options.baseURL` pinned there is one per
+ * key; otherwise the base URL follows the request's Host, so the cache is bounded (LRU) instead
+ * of growing with every Host header a client sends (review finding #7). The certificates are in
+ * the key: a rotated managed key gets a new IdP (D-080).
  */
 export function idpCache(options: ResolvedSamlIdpOptions) {
   const cache = lru(MAX_CACHED_BASE_URLS);
   // The root IdP's SPs in code; without tenants, all of them.
   const rootSps = options.serviceProviders.filter((sp) => sp.tenantId === undefined);
-  return (requestBaseURL: string) => {
-    const baseURL = idpBaseURL(options, requestBaseURL);
-    return cache(baseURL, () => createIdp(options, rootIdentity(options, baseURL), rootSps));
-  };
+  return (identity: IdpIdentity) =>
+    cache(`${identity.ssoUrl}\u0000${identity.signing.certificate}\u0000${identity.signing.additionalCertificates.join("\u0000")}`, () => createIdp(options, identity, rootSps));
 }
 
 const MAX_CACHED_TENANTS = 256;

@@ -10,12 +10,25 @@
 // purpose, tenant and key id, and they must match the row: a ciphertext copied from another row,
 // or from anything else Better Auth encrypts with that secret, is refused. This protects backups,
 // dumps and read-only database leaks, not a compromised Worker (the secret lives there too).
+//
+// The root IdP's managed key (`signing: { managed: true }`, D-080) lives here too, as the keys of
+// the reserved owner ROOT_KEY_OWNER, with the same states and rotation. It has no shared key to
+// fall back on: its first key is generated the first time the IdP needs one.
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, randomUUID, type KeyObject, X509Certificate } from "node:crypto";
 import { symmetricDecrypt, symmetricEncrypt } from "better-auth/crypto";
-import type { ResolvedSamlIdpOptions } from "../types";
+import type { ResolvedSigning, ResolvedSigningSettings } from "../types";
 import { selfSignedCertificate } from "./certificate";
 
 export const TENANT_KEY_MODEL = "samlIdpTenantKey";
+/**
+ * The owner (`tenantId`) of the root IdP's managed key rows (D-080). Not an organization id: the
+ * colon is in no id Better Auth generates, and the tenant API refuses it as an organization id.
+ */
+export const ROOT_KEY_OWNER = "saml-idp:root";
+/** The common name of every generated root key's certificate. */
+export const ROOT_KEY_COMMON_NAME = "saml-idp";
+/** How errors and warnings name a key's owner. */
+export const ownerLabel = (tenantId: string) => (tenantId === ROOT_KEY_OWNER ? "the IdP's managed signing key" : `tenant ${tenantId}`);
 export type TenantKeyState = "next" | "active" | "previous" | "retired";
 /** The kid of a `previous` row that records the shared key a tenant used before its own. */
 export const SHARED_KID = "shared";
@@ -74,10 +87,10 @@ export async function decryptTenantKey(secret: KeySecret, row: Pick<TenantKeyRow
   try {
     plain = JSON.parse(await symmetricDecrypt({ key: secret, data: row.encryptedPrivateKey }));
   } catch (e) {
-    throw new TenantKeyError(`tenant ${row.tenantId} key ${row.kid}: can't be decrypted (${(e as Error).message})`);
+    throw new TenantKeyError(`${ownerLabel(row.tenantId)}, key ${row.kid}: can't be decrypted (${(e as Error).message})`);
   }
   if (plain.purpose !== PURPOSE || plain.v !== 1 || plain.tenantId !== row.tenantId || plain.kid !== row.kid || typeof plain.privateKeyPem !== "string")
-    throw new TenantKeyError(`tenant ${row.tenantId} key ${row.kid}: the stored key belongs to another row`);
+    throw new TenantKeyError(`${ownerLabel(row.tenantId)}, key ${row.kid}: the stored key belongs to another row`);
   return plain.privateKeyPem;
 }
 
@@ -98,17 +111,33 @@ export function checkKeyPair(privateKeyPem: string, certificatePem: string): { k
   return { key, notAfter: new Date(cert.validTo) };
 }
 
-/** A new key for a tenant: RSA 3072 and a self-signed certificate named after its key. */
-export function generateTenantKey(tenantKey: string, now = new Date()): { privateKeyPem: string; certificate: string } {
+/** A new key: RSA 3072 and a two-year self-signed certificate with this common name. */
+export function generateSigningKey(commonName: string, now = new Date()): { privateKeyPem: string; certificate: string } {
   const { privateKey } = generateKeyPairSync("rsa", { modulusLength: GENERATED_KEY_BITS });
-  const certificate = selfSignedCertificate(privateKey, { commonName: `saml-idp tenant ${tenantKey}`, days: GENERATED_CERT_DAYS, now });
+  const certificate = selfSignedCertificate(privateKey, { commonName, days: GENERATED_CERT_DAYS, now });
   return { privateKeyPem: privateKey.export({ type: "pkcs8", format: "pem" }).toString(), certificate };
 }
+
+/** A new key for a tenant, its certificate named after the tenant's key. */
+export function generateTenantKey(tenantKey: string, now = new Date()): { privateKeyPem: string; certificate: string } {
+  return generateSigningKey(`saml-idp tenant ${tenantKey}`, now);
+}
+
+/** A new key row's id in URLs and logs: short, random, never reused. */
+export const newKid = () => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(9)))).replace(/\+/g, "-").replace(/\//g, "_");
 
 type Adapter = {
   findMany(args: { model: string; where: { field: string; value: unknown }[]; limit?: number; sortBy?: { field: string; direction: "asc" | "desc" } }): Promise<unknown[]>;
 };
-type Signing = ResolvedSamlIdpOptions["signing"];
+export type WritableKeyAdapter = Adapter & { create(args: { model: string; data: Record<string, unknown> }): Promise<unknown> };
+type Signing = ResolvedSigning;
+
+/** What a key's owner signs with: the settings, and for a tenant the shared key to fall back on. */
+export interface SigningBase {
+  settings: ResolvedSigningSettings;
+  /** Only a tenant that has never had a key of its own signs with it; the root has none. */
+  shared?: (() => Promise<Signing>) | undefined;
+}
 
 /**
  * A tenant's keys, and the signing configuration they give, per isolate. Rows are cached for
@@ -118,14 +147,68 @@ type Signing = ResolvedSamlIdpOptions["signing"];
 export class TenantKeyStore {
   private readonly rows = new Map<string, { rows: TenantKeyRow[]; expires: number }>();
   private readonly keys = new Map<string, { key: KeyObject; pem: string }>();
+  private readonly generating = new Map<string, Promise<boolean>>();
+  /** Told when `ensureFirstKey` stores a key (the `signing-key.changed` event, D-080). */
+  onGenerated: ((tenantId: string, kid: string) => void) | undefined;
 
   constructor(
     private readonly cacheMs: number,
     private readonly now: () => number = Date.now,
   ) {}
 
-  invalidate(): void {
-    this.rows.clear();
+  /** Forget cached rows: one owner's, or every owner's. */
+  invalidate(tenantId?: string): void {
+    if (tenantId === undefined) this.rows.clear();
+    else this.rows.delete(tenantId);
+  }
+
+  /**
+   * An owner with no key rows at all gets its first key, active at once (the root's managed key,
+   * D-080). Generated once per isolate even under concurrent requests; across isolates the UNIQUE
+   * state key lets one row in, and the others use it. True when this call stored the key.
+   */
+  async ensureFirstKey(adapter: WritableKeyAdapter, secret: KeySecret, tenantId: string, commonName: string, now: () => Date = () => new Date(this.now())): Promise<boolean> {
+    if ((await this.load(adapter, tenantId)).length > 0) return false;
+    let pending = this.generating.get(tenantId);
+    if (!pending) {
+      pending = (async () => {
+        // A fresh read: the cached empty list may predate another instance's key.
+        this.invalidate(tenantId);
+        if ((await this.load(adapter, tenantId)).length > 0) return false;
+        const at = now();
+        const { privateKeyPem, certificate } = generateSigningKey(commonName, at);
+        const { notAfter } = checkKeyPair(privateKeyPem, certificate);
+        const kid = newKid();
+        try {
+          await adapter.create({
+            model: TENANT_KEY_MODEL,
+            data: {
+              tenantId,
+              kid,
+              state: "active",
+              stateKey: stateKeyOf(tenantId, "active"),
+              encryptedPrivateKey: await encryptTenantKey(secret, tenantId, kid, privateKeyPem),
+              certificate,
+              notAfter,
+              createdAt: at,
+              activatedAt: at,
+              updatedBy: null,
+            },
+          });
+          this.onGenerated?.(tenantId, kid);
+          return true;
+        } catch (e) {
+          // Another isolate or instance stored one first: use it. Anything else is a real failure.
+          this.invalidate(tenantId);
+          if ((await this.load(adapter, tenantId)).some((r) => r.state === "active")) return false;
+          throw e;
+        } finally {
+          this.invalidate(tenantId);
+        }
+      })().finally(() => this.generating.delete(tenantId));
+      this.generating.set(tenantId, pending);
+    }
+    return pending;
   }
 
   /** The tenant's rows, exactly its own (a case-insensitive collation must not widen them). */
@@ -143,21 +226,23 @@ export class TenantKeyStore {
   }
 
   /**
-   * What the tenant signs with, and the certificates its metadata publishes: its active key with
-   * its next and previous certificates, or, before it has one, the shared key with its next.
-   * Throws TenantKeyError when its active key can't be used; the caller refuses the request.
+   * What the owner signs with, and the certificates its metadata publishes: its active key with
+   * its next and previous certificates, or, for a tenant before it has one, the shared key with
+   * its next. Throws TenantKeyError when its active key can't be used; the caller refuses the request.
    */
-  async signing(adapter: Adapter, secret: KeySecret, tenantId: string, shared: Signing, warn?: (message: string) => void): Promise<Signing> {
+  async signing(adapter: Adapter, secret: KeySecret, tenantId: string, base: SigningBase, warn?: (message: string) => void): Promise<Signing> {
     const rows = await this.load(adapter, tenantId);
     const of = (state: TenantKeyState) => rows.filter((r) => r.state === state);
     const active = of("active");
     const published = [...of("next"), ...of("previous")].map((r) => r.certificate);
-    if (active.length > 1) throw new TenantKeyError(`tenant ${tenantId}: more than one active key`);
+    if (active.length > 1) throw new TenantKeyError(`${ownerLabel(tenantId)}: more than one active key`);
     const own = active[0];
     if (!own) {
       // Only a tenant that has never had a key of its own signs with the shared one. Once it has
-      // had one (an activation mid-way, or rows left inconsistent), refuse: never fall back.
-      if (rows.some((r) => r.kid !== SHARED_KID && r.state !== "next")) throw new TenantKeyError(`tenant ${tenantId}: no active signing key`);
+      // had one (an activation mid-way, or rows left inconsistent), refuse: never fall back. The
+      // root's managed key has nothing to fall back on at all.
+      if (!base.shared || rows.some((r) => r.kid !== SHARED_KID && r.state !== "next")) throw new TenantKeyError(`${ownerLabel(tenantId)}: no active signing key`);
+      const shared = await base.shared();
       return { ...shared, additionalCertificates: [...shared.additionalCertificates, ...published] };
     }
     const cacheKey = `${own.id}\u0000${own.kid}\u0000${own.encryptedPrivateKey.length}`;
@@ -167,12 +252,12 @@ export class TenantKeyStore {
       loaded = { key: checkKeyPair(pem, own.certificate).key, pem };
       // Once per key and isolate, when it is loaded (R7-2).
       const expiring = expiryWarning(own);
-      if (expiring) warn?.(`[saml-idp] tenant ${tenantId}: ${expiring}`);
+      if (expiring) warn?.(`[saml-idp] ${ownerLabel(tenantId)}: ${expiring}`);
       if (this.keys.size >= MAX_CACHE_ENTRIES) this.keys.clear();
       this.keys.set(cacheKey, loaded);
     }
     return {
-      ...shared,
+      ...base.settings,
       privateKey: loaded.pem,
       keyObject: loaded.key,
       certificate: own.certificate,

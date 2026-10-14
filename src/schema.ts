@@ -8,11 +8,12 @@ import type { BetterAuthPluginDBSchema } from "better-auth/db";
  * "serial" or "uuid", which ignore forced ids), so replay protection never depends on it.
  * Hosts' hand-written schemas should also add UNIQUE(spId, requestId) (see README).
  */
-export function samlIdpSchema(opts: { registry?: boolean; sessionTracking?: boolean; auditLog?: boolean; tenants?: boolean; tenantKeys?: boolean } = {}) {
+export function samlIdpSchema(opts: { registry?: boolean; sessionTracking?: boolean; auditLog?: boolean; tenants?: boolean; tenantKeys?: boolean; managedSigningKey?: boolean } = {}) {
   return {
     ...(opts.registry ? (opts.tenants ? tenantRegistrySchema() : registrySchema()) : {}),
     ...(opts.tenants ? tenantSchema() : {}),
-    ...(opts.tenants && opts.tenantKeys ? tenantKeySchema() : {}),
+    // Tenants' keys (D-058), and the root's managed key (D-080) under the owner "saml-idp:root".
+    ...((opts.tenants && opts.tenantKeys) || opts.managedSigningKey ? tenantKeySchema() : {}),
     ...(opts.auditLog ? auditSchema(opts.tenants === true) : {}),
     ...(opts.sessionTracking ? logoutSchema() : {}),
     samlIdpSeenRequest: {

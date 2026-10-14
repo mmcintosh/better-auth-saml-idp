@@ -9,7 +9,7 @@ import { logSafe, type SamlStatus, satisfiesAuthnContext, stepUpTarget } from ".
 import { buildSignedErrorResponse, buildSignedResponse, hasNonXmlChars, newSamlId } from "../saml/response";
 import type { SpMetadataCache } from "../saml/sp-metadata-refresh";
 import type { SpDirectory } from "../saml/sp-directory";
-import { type IdpIdentity, identityFor, resolveTenantIdentity, rootIdentity } from "../saml/identity";
+import { type IdpIdentity, identityFor, type KeySecrets, keySecretsFor, resolveRootIdentity, resolveTenantIdentity } from "../saml/identity";
 import { idpBaseURL } from "../saml/idp";
 import type { TenantDirectory } from "../saml/tenant-directory";
 import { type KeySecret, TenantKeyError, type TenantKeyStore } from "../saml/tenant-keys";
@@ -39,11 +39,16 @@ export interface PluginState {
   tenants: TenantDirectory | undefined;
   /** With `tenants.keys: "per-tenant"` (D-058). */
   tenantKeys: TenantKeyStore | undefined;
+  /** With `signing: { managed: true }` (D-080): the root IdP's stored keys. */
+  rootKeys: TenantKeyStore | undefined;
 }
 
-/** What encrypts tenant keys (D-058): `tenants.keyEncryptionSecret`, else Better Auth's own. */
-export function keySecret(ctx: GenericEndpointContext, state: PluginState): KeySecret {
-  return state.options.tenants?.keyEncryptionSecret ?? (ctx.context as unknown as { secretConfig: KeySecret }).secretConfig;
+/**
+ * What encrypts stored keys: tenants' (D-058) with `tenants.keyEncryptionSecret`, the root's
+ * managed key (D-080) with `signing.keyEncryptionSecret`; each else Better Auth's own.
+ */
+export function keySecrets(ctx: GenericEndpointContext, state: PluginState): KeySecrets {
+  return keySecretsFor(state.options, (ctx.context as unknown as { secretConfig: KeySecret }).secretConfig);
 }
 
 /** Log sink for SP lookups (a stored SP that no longer validates is logged, not thrown). */
@@ -51,7 +56,7 @@ export const lookupLog = (ctx: GenericEndpointContext) => ({ error: (m: string) 
 
 /** The IdP identity this SP deals with (D-052); undefined when its tenant is gone or disabled. */
 export function spIdentity(ctx: GenericEndpointContext, state: PluginState, sp: Pick<ResolvedServiceProvider, "tenantId">): Promise<IdpIdentity | undefined> {
-  return identityFor(state, ctx.context.adapter as any, keySecret(ctx, state), ctx.context.baseURL, sp, (m) => ctx.context.logger.warn(m));
+  return identityFor(state, ctx.context.adapter as any, keySecrets(ctx, state), ctx.context.baseURL, sp, (m) => ctx.context.logger.warn(m));
 }
 
 /**
@@ -74,9 +79,10 @@ export async function reachableIdentity(ctx: GenericEndpointContext, state: Plug
  */
 export async function routeIdentity(ctx: GenericEndpointContext, state: PluginState, tenantKey: string | undefined): Promise<IdpIdentity | undefined> {
   const base = idpBaseURL(state.options, ctx.context.baseURL);
-  if (tenantKey === undefined) return rootIdentity(state.options, base);
+  const warn = (m: string) => ctx.context.logger.warn(m);
+  if (tenantKey === undefined) return resolveRootIdentity(state, ctx.context.adapter as any, keySecrets(ctx, state), base, warn);
   const tenant = state.tenants && (await state.tenants.byKey(ctx.context.adapter as any, tenantKey));
-  return tenant ? resolveTenantIdentity(state, ctx.context.adapter as any, keySecret(ctx, state), base, tenant, (m) => ctx.context.logger.warn(m)) : undefined;
+  return tenant ? resolveTenantIdentity(state, ctx.context.adapter as any, keySecrets(ctx, state), base, tenant, warn) : undefined;
 }
 
 /** The tenant field of events and requests: present only for a tenant's SP (D-052). */

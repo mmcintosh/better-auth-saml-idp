@@ -12,6 +12,8 @@ import type {
   AttributeSource,
   SignedParts,
   SessionLimit,
+  SigningConfig,
+  ResolvedSigningOptions,
 } from "./types";
 import { trimSlashes } from "./url";
 import { NAMEID_FORMAT } from "./types";
@@ -179,6 +181,14 @@ export const storedServiceProviderSchema = serviceProviderShape
   .superRefine(refineServiceProvider);
 export type StoredServiceProviderConfig = z.infer<typeof storedServiceProviderSchema>;
 
+/** The algorithms and signed parts, the same whether the key is given or managed (D-080). */
+const signingSettings = {
+  signatureAlgorithm: z.enum(["rsa-sha256", "rsa-sha512", "rsa-sha1"]).optional(),
+  digestAlgorithm: z.enum(["sha256", "sha512", "sha1"]).optional(),
+  allowInsecureSha1: z.boolean().optional(),
+  sign: z.enum(["both", "response", "assertion"]).optional(),
+};
+
 const optionsSchema = z
   .object({
     entityId: z.string().min(1).max(1024),
@@ -195,17 +205,26 @@ const optionsSchema = z
       .refine((v) => (v.startsWith("/") && !v.startsWith("//")) || /^https?:\/\//.test(v), {
         message: "must be a path starting with / or an absolute http(s) URL",
       }),
-    signing: z
-      .object({
-        privateKey: privateKeyPem,
-        certificate: pem("CERTIFICATE"),
-        additionalCertificates: z.array(pem("CERTIFICATE")).optional(),
-        signatureAlgorithm: z.enum(["rsa-sha256", "rsa-sha512", "rsa-sha1"]).optional(),
-        digestAlgorithm: z.enum(["sha256", "sha512", "sha1"]).optional(),
-        allowInsecureSha1: z.boolean().optional(),
-        sign: z.enum(["both", "response", "assertion"]).optional(),
-      })
-      .strict(),
+    signing: z.discriminatedUnion("managed", [
+      z
+        .object({
+          managed: z.undefined().optional(),
+          privateKey: privateKeyPem,
+          certificate: pem("CERTIFICATE"),
+          additionalCertificates: z.array(pem("CERTIFICATE")).optional(),
+          ...signingSettings,
+        })
+        .strict(),
+      // A key the plugin generates, stores encrypted and rotates (D-080): no key material here.
+      z
+        .object({
+          managed: z.literal(true),
+          keyEncryptionSecret: z.string().min(32).optional(),
+          minPublishedSeconds: z.number().int().min(0).max(31_536_000).optional(),
+          ...signingSettings,
+        })
+        .strict(),
+    ]),
     assertionLifetimeSeconds: z.number().int().min(30).max(3600).optional(),
     clockSkewSeconds: z.number().int().min(0).max(300).optional(),
     pendingRequestTtlSeconds: z.number().int().min(60).max(3600).optional(),
@@ -346,6 +365,7 @@ const optionsSchema = z
         onLogout: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onLogout"]>>().optional(),
         onSessionEnded: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onSessionEnded"]>>().optional(),
         onTenantChanged: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onTenantChanged"]>>().optional(),
+        onSigningKeyChanged: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onSigningKeyChanged"]>>().optional(),
         onServiceProviderChanged: fn<NonNullable<NonNullable<SamlIdpOptions["events"]>["onServiceProviderChanged"]>>().optional(),
       })
       .strict()
@@ -400,7 +420,7 @@ const EXPIRY_WARNING_DAYS = 30;
  * Expiry only warns: failing here would take every Better Auth route down the moment a
  * (possibly publish-only rotation) certificate expires.
  */
-function checkKeyMaterial(o: SamlIdpOptions, warnings: string[]): { issues: string[]; key?: KeyObject } {
+function checkKeyMaterial(o: { signing: SigningConfig }, warnings: string[]): { issues: string[]; key?: KeyObject } {
   const issues: string[] = [];
   let publicFromKey: string;
   let key: KeyObject;
@@ -698,27 +718,37 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
     if (other) warnings.push(`serviceProviders.${i}: ${overlapWarning(other, tenants?.keys === "per-tenant")}`);
   }
 
+  // D-080: the rotation routes are the registry API's, for host managers only.
+  if (o.signing.managed === true && !(o.registry?.enabled && (o.registry.canManage !== undefined || o.registry.permissions === true)))
+    warnings.push(
+      "signing.managed: the key is generated and used, but rotating it needs the registry API for host managers (registry.enabled with canManage or permissions): without it, there are no routes to rotate the key",
+    );
+
   if (o.serviceProviders.length === 0 && !o.registry?.enabled)
     warnings.push("serviceProviders is empty: every AuthnRequest will be rejected");
 
-  const keyCheck = checkKeyMaterial(o as SamlIdpOptions, warnings);
-  issues.push(...keyCheck.issues);
-  if (issues.length || !keyCheck.key) throw new SamlIdpConfigError(issues);
+  // A managed key (D-080) has no key material to check here: it's made, and checked, when loaded.
+  const keyCheck = o.signing.managed ? undefined : checkKeyMaterial({ signing: o.signing as SigningConfig }, warnings);
+  if (keyCheck) issues.push(...keyCheck.issues);
+  if (issues.length || (keyCheck && !keyCheck.key)) throw new SamlIdpConfigError(issues);
+  const settings = { signatureAlgorithm: sigAlg, digestAlgorithm: digestAlg, allowInsecureSha1: o.signing.allowInsecureSha1 ?? false, sign: o.signing.sign ?? "both" } as const;
+  const signing: ResolvedSigningOptions =
+    o.signing.managed === true
+      ? { ...settings, managed: true, minPublishedMs: (o.signing.minPublishedSeconds ?? 86_400) * 1000, keyEncryptionSecret: o.signing.keyEncryptionSecret }
+      : {
+          ...settings,
+          managed: false,
+          privateKey: o.signing.privateKey,
+          certificate: o.signing.certificate,
+          additionalCertificates: o.signing.additionalCertificates ?? [],
+          keyObject: keyCheck?.key as KeyObject,
+        };
 
   return {
     entityId: o.entityId,
     baseURL: o.baseURL === undefined ? undefined : trimSlashes(o.baseURL),
     loginPage: o.loginPage,
-    signing: {
-      privateKey: o.signing.privateKey,
-      certificate: o.signing.certificate,
-      additionalCertificates: o.signing.additionalCertificates ?? [],
-      signatureAlgorithm: sigAlg,
-      digestAlgorithm: digestAlg,
-      allowInsecureSha1: o.signing.allowInsecureSha1 ?? false,
-      sign: o.signing.sign ?? "both",
-      keyObject: keyCheck.key,
-    },
+    signing,
     assertionLifetimeSeconds: lifetime,
     clockSkewSeconds: o.clockSkewSeconds ?? 60,
     pendingRequestTtlSeconds: o.pendingRequestTtlSeconds ?? 600,

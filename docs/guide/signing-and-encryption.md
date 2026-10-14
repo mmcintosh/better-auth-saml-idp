@@ -16,6 +16,8 @@ signing: {
 }
 ```
 
+Or let the plugin make and keep the key itself: [`signing: { managed: true }`](#a-key-the-plugin-manages).
+
 Create a key with `npx better-auth-saml-idp keygen` ([getting started](getting-started.md#2-create-a-signing-key)). At startup the key is parsed once, checked to be RSA with 2048 bits or more, and checked against the certificate. Certificate expiry only **warns**, 30 days ahead, and never fails: a certificate expiring must not take your whole site down. `npx better-auth-saml-idp inspect` and `check-config` show the expiry too.
 
 ### What gets signed
@@ -50,6 +52,35 @@ SPs pin your certificate, so rotate in three steps, each deployed and tested:
 3. **Retire** the old certificate from the SPs and from `additionalCertificates`.
 
 The full procedure, rehearsed live with Cloudflare Access (including a zero-downtime switch), is in [docs/key-rotation.md](../key-rotation.md).
+
+### A key the plugin manages
+
+Instead of a key you make and keep yourself, the plugin can make and keep one (D-080):
+
+```ts
+signing: { managed: true },   // signatureAlgorithm, digestAlgorithm, allowInsecureSha1 and sign work as above
+```
+
+- **Made when first needed.** The first request that needs the key generates it: the metadata, a sign-in, or listing the keys. It's RSA 3072, with a two-year self-signed certificate (CN `saml-idp`). Concurrent first requests, on any number of isolates or servers, end up with one key. To have it made before any SP asks, call `GET /saml-idp/signing-keys` as a manager during setup, or fetch the metadata.
+- **Stored encrypted** in `samlIdpTenantKey`, the table per-tenant keys use, so run your migration ([Schema](schema.md#samlidptenantkey-with-tenantskeys-per-tenant)). Its rows belong to the owner `saml-idp:root`. The private key is sealed with Better Auth's secret (its versioned `secrets`, else `secret`), or with `signing.keyEncryptionSecret`, and the sealed text names its purpose, owner and key id. This protects backups, dumps and read-only database leaks. It doesn't protect against a compromised server, which holds the secret too.
+- **Never another key.** If the stored key can't be used, the metadata answers 500 and sign-ins are refused. That happens when it can't be decrypted, or when an activation was cut short. The plugin never signs with anything else, and never makes a new key while key rows exist. Keep every version of the secret that sealed a stored key until that key is rotated out.
+- **CPU.** Generating an RSA 3072 key takes a few hundred milliseconds of CPU, once per key. That's more than the Workers Free plan allows a request: on Free, give the key with `privateKey` and `certificate` instead.
+- **Reported.** Generating it is a [`signing-key.changed`](observability.md#event-callbacks) event (`action: "key.generated"`, with no user), and a row in the audit log when that's on.
+
+#### Rotating a managed key
+
+The same three steps as above, through the registry API. They need a host manager: `canManage`, or with `permissions` the `samlSigningKey` statement ([Registry permissions](users-and-access.md#registry-permissions)).
+
+| Step | Call |
+|---|---|
+| List | `GET /saml-idp/signing-keys` returns `{ keys, warnings }`. Each key has its `kid`, `state`, `certificate`, `notAfter`, `createdAt` and `activatedAt`, and the next key its `activatableAt`. `warnings` lists certificates that expire within 30 days, or have. |
+| Publish the next key | `POST /saml-idp/signing-keys/rotate` with `{}` to generate one, or `{ privateKey, certificate }` to upload your own (a matching RSA pair, 2048 bits or more). |
+| Switch | `POST /saml-idp/signing-keys/activate`, once the next key has been published for `signing.minPublishedSeconds` (default 86400, 24 hours), so SPs that read your metadata have it. `{ force: true }` skips the wait, for a leaked key; the event says `forced`. The active key stays published as the previous one. |
+| Retire | `POST /saml-idp/signing-keys/retire`: the previous certificate is no longer published, and its private key is erased. |
+
+With the client plugin: `authClient.samlIdp.signingKeys()`, `.rotate({})`, `.activate({})` and `.retire({})`. Each step is a `signing-key.changed` event with the acting `userId`. Most SPs pin the certificate by hand, so give them the next certificate (the list shows it) before you activate it.
+
+Without the registry API for host managers, the key is still made and used, but there's nothing to rotate it with; a startup warning says so.
 
 ### Signed metadata
 

@@ -234,12 +234,12 @@ The key of every deleted tenant, so it is never used again: SPs set up for a del
 
 ## `samlIdpTenantKey` (with `tenants.keys: "per-tenant"`)
 
-A tenant's signing keys, one row per key ([Per-tenant signing keys](multi-tenant.md#per-tenant-signing-keys), D-058).
+A tenant's signing keys, one row per key ([Per-tenant signing keys](multi-tenant.md#per-tenant-signing-keys), D-058). Also needed with `signing: { managed: true }`, with or without tenants: the root IdP's [managed key](signing-and-encryption.md#a-key-the-plugin-manages) is stored here too, as the rows of the owner `saml-idp:root` (D-080).
 
 | Field | Type | Key | Description |
 |---|---|---|---|
 | `id` | string | primary | Row id. |
-| `tenantId` | string | index | The tenant's organization id. |
+| `tenantId` | string | index | The tenant's organization id, or `saml-idp:root` for the root's managed key. |
 | `kid` | string | | The key's id in the API and logs. `"shared"` for the row that keeps the shared certificate published after a tenant's first own key. |
 | `state` | string | | `next` (published, not signing yet), `active` (signs), `previous` (replaced, still published) or `retired` (neither). |
 | `stateKey` | string | **unique** | A hash of (tenant, state) for `next` and `active`, so a tenant has at most one of each; a random value otherwise. |

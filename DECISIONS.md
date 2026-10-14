@@ -2144,3 +2144,34 @@ The guide said a provisioning tool could create Entra users with `onPremisesImmu
 - **Result:** Graph `POST /v1.0/users` on the federated domain, with `onPremisesImmutableId` = the Better Auth user id and no `passwordProfile`, returned 201. Signing in at myapps.microsoft.com through the IdP worked on the first try. The IdP's audit log showed `assertion.issued` for that SP, and the session was recorded for Single Logout.
 - **Guide:** step 3 shows the request, and the Graph API table has a row for it. This is what an outbound SCIM or Graph provisioning tool needs.
 - **Cleanup:** the test user was deleted on both sides.
+
+## D-080: A signing key the plugin makes and keeps (2026-10-13)
+
+A deployment needed a key made by hand (`keygen`) and pasted into two secrets before it could start. A one-click install, like the Deploy to Cloudflare button, can ask for secrets but can't make an RSA key and a certificate. The OIDC side of Better Auth (the `jwt` plugin) already generates its key on first use and stores it encrypted. Per-tenant keys (D-058) did the same here, but only for tenants. Asked for by a host that installs this way; the maintainer decided it belongs in the package.
+
+- **`signing: { managed: true }`**, instead of `privateKey`, `certificate` and `additionalCertificates`, which it refuses. A discriminated union on `managed`, so the PEM form's error messages are unchanged. The algorithms and `sign` work as before.
+- **The tenant key store, reused.** The root's keys are rows of `samlIdpTenantKey` with the reserved owner `saml-idp:root`, with the same states (next, active, previous, retired), encryption bound to purpose, owner and kid, row cache and rotation. The colon is in no id Better Auth generates, and the tenant API refuses the owner as an organization id. The table is part of the schema whenever the key is managed, with or without tenants.
+- **Generated on first need, once.** The first request that needs the key (the metadata, a sign-in, an exchange, or listing the keys) generates it, active at once. One generation per isolate even under concurrent requests. Across isolates and servers, the UNIQUE state key lets one row in and the others read it. It's only generated when the owner has no rows at all, so a key that can't be used, or an activation cut short, refuses rather than being silently replaced. A generated key is reported as `signing-key.changed` with `key.generated`, from the plugin's init context, because the identity lookup that makes it has no endpoint context.
+- **Not Better Auth's rotation model.** The `jwt` plugin switches to a new key at once and keeps the old one published for a grace period. That works for OIDC, where relying parties fetch keys by `kid`. SAML SPs pin a certificate, pasted in or refreshed from metadata now and then, so a next key is published for `minPublishedSeconds` (default 24 hours) before it can sign, as for tenants.
+- **Routes:** `/saml-idp/signing-keys` (list), `/rotate`, `/activate`, `/retire`, mounted with the registry API, for host managers only (`canManage`, or `samlSigningKey` with `permissions`). Tenants' administrators get nothing here. Without the registry API for host managers the key is still made and used, and a startup warning says it can't be rotated. Listing makes the first key, so a setup step can make it before any SP asks.
+- **The identity module stays the only reader of the key** (D-052, `identity-lint`). `rootIdentity` takes the loaded key, `rootSigning`/`resolveRootIdentity` load it, and every root path awaits it: metadata, SSO, IdP-initiated, SLO, exchange, and a tenant's first activation (which publishes the root certificate as its previous). Tenants on the shared key sign with the loaded root key. The root metadata's cached document is keyed by its certificates, like tenants', so a rotation gets a new one. The resolved option type is a union, so the compiler finds any code that assumes a key at startup.
+- **CPU:** an RSA 3072 key takes about 100 to 450 ms of CPU (measured locally), once per key: fine on Workers Paid, too much for Free, where the docs say to give the key as PEM.
+- **Tests:** `test/integration/managed-signing-key.test.ts`, on Node and workerd (D1):
+  - first generation, its encryption and its event;
+  - one key from concurrent first requests across hosts;
+  - listing;
+  - `keyEncryptionSecret`;
+  - rotation end to end, with metadata certificates and which key signs;
+  - `minPublishedSeconds` and `force`, with the audit log;
+  - uploaded keys;
+  - route permissions;
+  - an undecryptable key and a cut-short activation refusing without regenerating;
+  - tenants on the shared key and a tenant's first own key;
+  - the reserved owner;
+  - the options.
+
+  Seen to fail before trusting them, each guard broken once:
+  - generating when no key is active (instead of no rows);
+  - no fallback after losing the race;
+  - listing without the access check.
+

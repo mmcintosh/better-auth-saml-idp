@@ -217,7 +217,9 @@ betterAuth({
 | `delete` | `POST /saml-idp/service-providers/delete` |
 | `list` | `GET /saml-idp/audit` |
 
-- The admin plugin's **default** roles grant nothing on `samlServiceProvider`: you opt roles in explicitly. `adminUserIds` are always allowed.
+With a [managed signing key](signing-and-encryption.md#a-key-the-plugin-manages), `samlSigningKey` covers its routes the same way: `read` for `GET /saml-idp/signing-keys`, and `update` for `rotate`, `activate` and `retire`. With tenants, `samlTenant` covers the [tenant routes](multi-tenant.md).
+
+- The admin plugin's **default** roles grant nothing on `samlServiceProvider` (or `samlSigningKey`): you opt roles in explicitly. `adminUserIds` are always allowed.
 - A user with several roles is allowed if any of them grants the action.
 - With both `canManage` and `permissions`, both must allow.
 - Either way, the session is re-read from the database (a demoted admin loses access at once, even with the cookie cache on), impersonated sessions are refused, and mutations keep Better Auth's origin checks.

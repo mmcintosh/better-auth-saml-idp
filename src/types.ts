@@ -373,6 +373,61 @@ export interface SigningConfig {
   sign?: SignedParts | undefined;
 }
 
+/**
+ * A signing key the plugin makes and keeps itself (D-080), instead of `privateKey` and
+ * `certificate`: generated (RSA 3072, a two-year self-signed certificate) the first time the IdP
+ * needs it, stored encrypted in `samlIdpTenantKey`, and rotated through the registry API
+ * (`/saml-idp/signing-keys/rotate`, `/activate`, `/retire`) the same way as tenants' keys.
+ */
+export interface ManagedSigningConfig {
+  managed: true;
+  /**
+   * The secret that encrypts the stored private key. Default: Better Auth's (`secrets`, else
+   * `secret`), whose versions also rotate it. Keep every version that encrypted a stored key
+   * until that key is rotated out.
+   */
+  keyEncryptionSecret?: string | undefined;
+  /**
+   * How long a next key must have been published in the metadata before `activate` accepts it,
+   * so SPs can fetch the new certificate. Default 86400 (24 hours); 0 to 31536000. `activate`
+   * with `force: true` skips it (audited; for a leaked key).
+   */
+  minPublishedSeconds?: number | undefined;
+  /** Default `rsa-sha256`. `rsa-sha1` also needs `allowInsecureSha1: true`. */
+  signatureAlgorithm?: SignatureAlgorithm | undefined;
+  /** Default `sha256`. `sha1` also needs `allowInsecureSha1: true`. */
+  digestAlgorithm?: DigestAlgorithm | undefined;
+  /** Explicit opt-in to SHA-1 for legacy SPs. Logs a warning at startup. */
+  allowInsecureSha1?: boolean | undefined;
+  /** Which parts of the SAML Response to sign. Default `"both"`. */
+  sign?: SignedParts | undefined;
+}
+
+/** The algorithms and signed parts, whatever holds the key. */
+export interface ResolvedSigningSettings {
+  signatureAlgorithm: SignatureAlgorithm;
+  digestAlgorithm: DigestAlgorithm;
+  allowInsecureSha1: boolean;
+  sign: SignedParts;
+}
+
+/** A key that signs: what an IdP identity signs its messages and metadata with. */
+export interface ResolvedSigning extends ResolvedSigningSettings {
+  privateKey: string;
+  certificate: string;
+  additionalCertificates: string[];
+  /** Parsed once (at startup, or when a stored key is first loaded). */
+  keyObject: import("node:crypto").KeyObject;
+}
+
+/**
+ * `signing` as resolved: the key from the options (`managed: false`), or the settings of a key
+ * the plugin keeps in the database (`managed: true`, D-080), which only the identity module loads.
+ */
+export type ResolvedSigningOptions =
+  | (ResolvedSigning & { managed: false })
+  | (ResolvedSigningSettings & { managed: true; minPublishedMs: number; keyEncryptionSecret: string | undefined });
+
 /** What `authnContext.current()` is told: the session, and the SP and request it answers. */
 export interface AuthnContextCurrentContext {
   user: SamlIdpUser;
@@ -428,7 +483,8 @@ export interface SamlIdpOptions {
   baseURL?: string | undefined;
   /** Where unauthenticated users are sent. Path on this origin, or an absolute URL. */
   loginPage: string;
-  signing: SigningConfig;
+  /** The IdP's signing key: given as PEM, or `{ managed: true }` for one the plugin generates, stores and rotates (D-080). */
+  signing: SigningConfig | ManagedSigningConfig;
   /** Assertion validity window. Default 300 s. */
   assertionLifetimeSeconds?: number | undefined;
   /** Tolerance applied to `NotBefore` and request `IssueInstant`. Default 60 s. */
@@ -626,11 +682,7 @@ export interface ResolvedSamlIdpOptions {
   entityId: string;
   baseURL: string | undefined;
   loginPage: string;
-  signing: Defined<Omit<SigningConfig, "allowInsecureSha1">> & {
-    allowInsecureSha1: boolean;
-    /** Parsed once at startup. */
-    keyObject: import("node:crypto").KeyObject;
-  };
+  signing: ResolvedSigningOptions;
   assertionLifetimeSeconds: number;
   clockSkewSeconds: number;
   pendingRequestTtlSeconds: number;

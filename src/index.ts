@@ -13,7 +13,9 @@ import { resolveOptions, SamlIdpConfigError } from "./options";
 import { idpCache, SSO_PATH, tenantIdpCache, withBasePath } from "./saml/idp";
 import { TenantDirectory } from "./saml/tenant-directory";
 import { TenantKeyStore } from "./saml/tenant-keys";
+import { signingKeyEndpoints } from "./endpoints/signing-keys";
 import { backfillEndpoint, organizationDeletedHook, tenantEndpoints } from "./endpoints/tenants";
+import { managedKeyPolicy } from "./saml/identity";
 import { tenantOf } from "./endpoints/issue";
 import { samlIdpSchema } from "./schema";
 import { SpMetadataCache } from "./saml/sp-metadata-refresh";
@@ -35,7 +37,7 @@ export { AssertionExchangeError, getSamlIdpExchange, MAX_ASSERTION_BYTES } from 
 export type { AssertionExchangeErrorCode, SamlIdpExchange, VerifiedAssertion } from "./exchange";
 export { libxml2Validator } from "./saml/validator";
 export { serviceProviderFromMetadata, SpMetadataError } from "./saml/sp-metadata";
-export { samlIdpStatements, type SamlServiceProviderAction, type SamlTenantAction } from "./access";
+export { samlIdpStatements, type SamlServiceProviderAction, type SamlSigningKeyAction, type SamlTenantAction } from "./access";
 export { backfillMongoServiceProviderKeys, type MongoDbLike } from "./endpoints/tenants";
 export type { SpFromMetadataOptions, SpFromMetadataResult } from "./saml/sp-metadata";
 // An explicit list (API decision 1, before 1.0): what's here is supported; the plugin's resolved
@@ -70,11 +72,12 @@ export type {
   SignatureAlgorithm,
   SignedParts,
   SigningConfig,
+  ManagedSigningConfig,
   TokenExchangeConfig,
 } from "./types";
 export type { SamlIdpErrorCode } from "./errors";
 export type { StoredServiceProviderConfig } from "./options";
-export type { AssertionExchangedEvent, AssertionIssuedEvent, AuditLogOptions, DeniedEvent, LogoutEvent, SamlIdpEvent, SamlIdpEventHandlers, ServiceProviderChangedEvent, SessionEndedEvent, TenantChangedEvent } from "./events";
+export type { AssertionExchangedEvent, AssertionIssuedEvent, AuditLogOptions, DeniedEvent, LogoutEvent, SamlIdpEvent, SamlIdpEventHandlers, ServiceProviderChangedEvent, SessionEndedEvent, SigningKeyChangedEvent, TenantChangedEvent } from "./events";
 
 export const samlIdp = (options: SamlIdpOptions) => {
   const resolved = resolveOptions(options);
@@ -84,7 +87,9 @@ export const samlIdp = (options: SamlIdpOptions) => {
   // The registry API exists for host managers, and with delegation (D-059) for tenants' administrators.
   const managed = resolved.registry !== undefined && (resolved.registry.canManage !== undefined || resolved.registry.permissions || resolved.tenants?.delegation !== undefined);
   const tenantKeys = resolved.tenants?.perTenantKeys ? new TenantKeyStore(resolved.tenants.cacheMs) : undefined;
-  const state = { options: resolved, directory, metadata: new SpMetadataCache(resolved.schemaValidator), tenants, tenantKeys };
+  // The root's managed key (D-080): cached like stored SPs, so a rotation reaches other isolates within that time.
+  const rootKeys = managedKeyPolicy(resolved) ? new TenantKeyStore(resolved.registry?.cacheMs ?? 60_000) : undefined;
+  const state = { options: resolved, directory, metadata: new SpMetadataCache(resolved.schemaValidator), tenants, tenantKeys, rootKeys };
   const exchangeApi = resolved.tokenExchange ? createExchange(state) : undefined;
 
   return {
@@ -132,6 +137,9 @@ export const samlIdp = (options: SamlIdpOptions) => {
           "[saml-idp] sessions live only in secondaryStorage, so Better Auth deletes them without database hooks: events.onSessionEnded won't fire. Set session.storeSessionInDatabase: true to get it.",
         );
       const sink = { logger: ctx.logger, adapter: ctx.adapter as any, runInBackground: (p: Promise<unknown>) => ctx.runInBackground(p) };
+      // The managed key's first generation happens inside a request's identity lookup, which has no
+      // endpoint context to hand: it's reported from here, without the request's IP (D-080).
+      if (rootKeys) rootKeys.onGenerated = (_owner, kid) => emitWithoutRequest(sink, resolved, { type: "signing-key.changed", action: "key.generated", kid });
       const options = resolved.sessionTracking
         ? {
             databaseHooks: {
@@ -204,11 +212,13 @@ export const samlIdp = (options: SamlIdpOptions) => {
       };
     },
     endpoints: {
-      getSamlIdpMetadata: metadataEndpoint(getIdp, resolved),
+      getSamlIdpMetadata: metadataEndpoint(state, getIdp),
       samlIdpSingleSignOn: ssoEndpoint(state),
       samlIdpResume: resumeEndpoint(state),
       samlIdpInitiatedSignOn: initEndpoint(state),
       ...(managed ? registryEndpoints(state) : {}),
+      // The managed signing key's rotation (D-080), under the registry API's checks.
+      ...(managed && rootKeys ? signingKeyEndpoints(state) : {}),
       ...(resolved.singleLogout ? { samlIdpSingleLogout: sloEndpoint(state), samlIdpLogout: logoutEndpoint(state) } : {}),
       ...(resolved.sessionTracking ? { samlIdpListSessionParticipants: listSessionParticipantsEndpoint(state) } : {}),
       // Multi-tenant IdP (D-052): no route exists unless it's on.
@@ -227,7 +237,14 @@ export const samlIdp = (options: SamlIdpOptions) => {
     // A fresh schema object per plugin: mergeSchema mutates its first argument, so a shared
     // module-level object would leak one instance's renames into every other (finding #10).
     schema: mergeSchema(
-      samlIdpSchema({ registry: resolved.registry !== undefined, sessionTracking: resolved.sessionTracking, auditLog: resolved.auditLog !== undefined, tenants: resolved.tenants !== undefined, tenantKeys: resolved.tenants?.perTenantKeys === true }),
+      samlIdpSchema({
+        registry: resolved.registry !== undefined,
+        sessionTracking: resolved.sessionTracking,
+        auditLog: resolved.auditLog !== undefined,
+        tenants: resolved.tenants !== undefined,
+        tenantKeys: resolved.tenants?.perTenantKeys === true,
+        managedSigningKey: rootKeys !== undefined,
+      }),
       resolved.schema,
     ),
     $ERROR_CODES: SAML_IDP_ERROR_CODES,

@@ -41,7 +41,8 @@ describe("resolveOptions: defaults", () => {
     expect(r.accountPolicy).toEqual({ requireEmailVerified: true, allowImpersonatedSessions: false, allowAnonymousUsers: false });
     expect(r.authnContextClassRef).toBe("urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified");
     expect(r.baseURL).toBeUndefined();
-    expect(r.signing.keyObject.asymmetricKeyType).toBe("rsa"); // parsed once, not per request
+    expect(r.signing.managed).toBe(false);
+    if (!r.signing.managed) expect(r.signing.keyObject.asymmetricKeyType).toBe("rsa"); // parsed once, not per request
   });
 
   it("applies SP defaults", async () => {
@@ -67,7 +68,7 @@ describe("resolveOptions: defaults", () => {
 
   it("accepts additional certificates for rotation", () => {
     const r = resolveOptions(baseOptions({ signing: { ...baseOptions().signing, additionalCertificates: [keys.idpNext.certificate] } }));
-    expect(r.signing.additionalCertificates).toHaveLength(1);
+    expect(!r.signing.managed && r.signing.additionalCertificates).toHaveLength(1);
   });
 });
 

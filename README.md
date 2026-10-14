@@ -258,7 +258,7 @@ npx better-auth-saml-idp smoke https://auth.example.com --sp <SP entity ID>
 | `entityId` | string | (required) | The IdP entity ID, usually `https://<host>/<basePath>/saml2/idp` |
 | `baseURL` | string | Better Auth's `baseURL`, else request host | Pins the IdP's own URLs (metadata, Destination check, resume links). Same value and rule as Better Auth's `baseURL` (`basePath` is added to a bare origin). **Pin one of the two** |
 | `loginPage` | string | (required) | Path or absolute URL of your sign-in page; it receives `callbackURL` |
-| `signing.privateKey` / `.certificate` | PEM | (required) | RSA ≥ 2048 key and its certificate |
+| `signing.privateKey` / `.certificate` | PEM | (required) | RSA ≥ 2048 key and its certificate. Or `signing: { managed: true }`: the plugin makes, stores and rotates the key ([details](docs/guide/signing-and-encryption.md#a-key-the-plugin-manages)) |
 | `signing.additionalCertificates` | PEM[] | `[]` | Published but not used to sign (rotation) |
 | `signing.signatureAlgorithm` / `.digestAlgorithm` | string | `rsa-sha256` / `sha256` | SHA-1 also needs `allowInsecureSha1` |
 | `signing.sign` | `"both"` / `"response"` / `"assertion"` | `"both"` | What to sign: the Response, the Assertion, or both. Each SP can override |
