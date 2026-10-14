@@ -25,6 +25,7 @@ The plugin can't protect against a host misconfiguration it can't see. In produc
 - **Use a real database.** Replay protection relies on UNIQUE constraints; Better Auth's in-memory adapter doesn't enforce them.
 - **Don't cache sessions in KV** (`secondaryStorage` for sessions), and leave `session.cookieCache` off. Revoking a session must take effect at once; the plugin re-reads sessions from the database where it can, but a cached session outlives revocation elsewhere in Better Auth. See [docs/security.md](../security.md).
 - **With any secondary storage, set `verification: { storeInDatabase: true }`**, so single-use values (pending requests, logout state) are consumed atomically.
+- **With a managed signing key**, set `signing.keyEncryptionSecret` and keep its old versions while they sealed a stored key ([A key the plugin manages](signing-and-encryption.md#a-key-the-plugin-manages)).
 - On Cloudflare Workers: put `samlIdp()` inside `withCloudflare`'s second argument, and use Workers Paid (the first request in an isolate compiles the XSD validator).
 
 ## Inbound message validation
