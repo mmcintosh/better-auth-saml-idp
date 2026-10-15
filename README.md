@@ -12,6 +12,8 @@ Turn your [Better Auth](https://www.better-auth.com) server into a **SAML 2.0 Id
 
 **Try it:** the [example IdP](https://better-auth-saml-idp-example.mmcintosh-f61.workers.dev/) (Workers + Hono + D1) signs users in to Microsoft 365, AWS IAM Identity Center, Cloudflare Access, Okta, Auth0 and Salesforce, verified live.
 
+[![Signing in to Microsoft 365 through the example IdP: Microsoft's sign-in page, for an address on a domain federated to the IdP (blurred), hands the user to the Better Auth sign-in page.](docs/assets/demo-microsoft-365.png)](docs/sp-microsoft-365.md)
+
 📖 **[Read the guide](docs/guide/README.md)** for everything this page leaves out: every option, every error code, the security controls, Single Logout, Cloudflare Workers, the CLI and troubleshooting.
 
 > **Unofficial community plugin.** Not affiliated with or endorsed by Better Auth. Stable 1.x on npm, following [semantic versioning](docs/guide/versioning.md); the [CHANGELOG](CHANGELOG.md) says what changed in each release and why.
