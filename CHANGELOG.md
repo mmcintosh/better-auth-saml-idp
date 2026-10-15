@@ -10,7 +10,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ### Documentation
 
-- docs/security.md no longer calls `better-auth-cloudflare` 0.4 unreleased. [CONTRIBUTING](CONTRIBUTING.md#releasing-maintainers) says when releases are cut: every week or two, and at once for a security fix.
+- docs/security.md no longer calls `better-auth-cloudflare` 0.4 unreleased. [CONTRIBUTING](CONTRIBUTING.md#releasing-maintainers) says when releases are cut (every week or two, and at once for a security fix), and `pnpm release` now requires the sentence that opens each release, saying why it exists and who should upgrade.
 
 ### Examples
 

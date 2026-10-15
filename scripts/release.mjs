@@ -1,7 +1,7 @@
 // Prepares a release: bumps package.json, dates CHANGELOG.md's [Unreleased] section, and opens the
 // "Release X.Y.Z" pull request. Merging it releases (tag-release.yml tags it and starts release.yml).
 //
-//   pnpm release patch|minor|major ["One sentence for the top of the version's section."]
+//   pnpm release patch|minor|major "One sentence: why this release exists and who should upgrade."
 //
 // Run on an up-to-date, clean main, with `gh` signed in.
 import { execFileSync } from "node:child_process";
@@ -14,7 +14,10 @@ const fail = (msg) => {
 };
 
 const [bump, summary] = process.argv.slice(2);
-if (!["patch", "minor", "major"].includes(bump)) fail('usage: pnpm release patch|minor|major ["summary"]');
+if (!["patch", "minor", "major"].includes(bump)) fail('usage: pnpm release patch|minor|major "summary"');
+// The summary opens the version's changelog section and its GitHub release: the one place a user
+// reads why the release exists. Releases come every week or two, so each must say so (2026-10-15).
+if (!summary?.trim()) fail("give a one-sentence summary: why this release exists and who should upgrade");
 
 if (run("git", ["branch", "--show-current"]) !== "main") fail("run it on main");
 if (run("git", ["status", "--porcelain"])) fail("the working tree isn't clean");
@@ -38,7 +41,7 @@ const unreleased = (end < 0 ? rest : rest.slice(0, end)).trim();
 if (!unreleased) fail("the [Unreleased] section is empty: there's nothing to release");
 
 const date = new Date().toISOString().slice(0, 10);
-const section = `## [${next}] - ${date}\n\n${summary ? `${summary}\n\n` : ""}${unreleased}\n\n`;
+const section = `## [${next}] - ${date}\n\n${summary.trim()}\n\n${unreleased}\n\n`;
 writeFileSync("CHANGELOG.md", `${changelog.slice(0, at)}${head}\n${section}${end < 0 ? "" : rest.slice(end)}`);
 writeFileSync("package.json", pkg.replace(/("version":\s*")[^"]+(")/, `$1${next}$2`));
 
