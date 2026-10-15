@@ -1,6 +1,7 @@
-# ADDENDUM-01 R4: weekly run against Better Auth's latest and next tags. Failures open an
-# issue; they never block PRs. Note: on 2026-09-24 the `next` dist-tag pointed at a stale
-# 0.8.7-beta.5, so the job skips any tag older than the pinned minimum.
+# ADDENDUM-01 R4: weekly run against Better Auth's latest, next and beta tags. Failures open an
+# issue; they never block PRs. Better Auth publishes its prereleases under `beta` (1.8.0-beta.0 on
+# 2026-10-15); `next` has pointed at a stale 0.8.7-beta.5 since 2026-09-24. So the job skips any
+# tag older than the pinned minimum, and a prerelease tag once latest has caught up with it.
 name: Upstream canary
 on:
   schedule: [{ cron: "0 6 * * 1" }]
@@ -11,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        tag: [latest, next]
+        tag: [latest, next, beta]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -25,8 +26,10 @@ jobs:
       - id: ver
         run: |
           v="$(npm view better-auth@${{ matrix.tag }} version)"
+          latest="$(npm view better-auth@latest version)"
           echo "version=$v" >> "$GITHUB_OUTPUT"
-          node -e 'const [a,b]=process.argv.slice(1).map(s=>s.split(/[.-]/).slice(0,3).map(Number));process.exit(a[0]>b[0]||(a[0]===b[0]&&(a[1]>b[1]||(a[1]===b[1]&&a[2]>=b[2])))?0:1)' "$v" 1.7.5 \
+          # Compares major.minor.patch only: 1.8.0-beta.0 runs while latest is 1.7.x, and stops once 1.8.0 is out.
+          node -e 'const [v,min,latest,tag]=process.argv.slice(1);const p=s=>s.split(/[.-]/).slice(0,3).map(Number);const cmp=(a,b)=>{a=p(a);b=p(b);return a[0]-b[0]||a[1]-b[1]||a[2]-b[2]};process.exit(cmp(v,min)>=0&&(tag==="latest"||cmp(v,latest)>0)?0:1)' "$v" 1.7.5 "$latest" "${{ matrix.tag }}" \
             && echo "run=true" >> "$GITHUB_OUTPUT" || echo "run=false" >> "$GITHUB_OUTPUT"
       - if: steps.ver.outputs.run == 'true'
         run: sfw scripts/use-better-auth.sh ${{ steps.ver.outputs.version }}
