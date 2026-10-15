@@ -56,7 +56,11 @@ export const auth = betterAuth({
 - `baseURL` pins the URLs the IdP puts in its metadata and checks in requests. It takes the same value as Better Auth's `baseURL`: the site's origin, with `basePath` (`/api/auth`) added for you. If Better Auth's `baseURL` is already set, you can leave this one out. In production, set at least one of the two.
 - `loginPage` is your existing sign-in page; see step 5.
 
-Every option is in the [options reference](options.md).
+Every option is in the [options reference](options.md). Defaults to know about:
+
+- Only users with a **verified email** receive assertions, and admin-impersonation sessions and anonymous users are refused ([account policy](users-and-access.md#account-policy)).
+- The NameID follows each SP's `nameIdFormat`: the email for `emailAddress`, an opaque per-SP ID for `persistent`, and a one-time ID for `transient` ([NameID](users-and-access.md#nameid)).
+- Requests the IdP can't satisfy get a **signed SAML error Response**: IsPassive without a session, an unsatisfiable RequestedAuthnContext, or a Subject mismatch ([flows](flows.md#requests-the-idp-cant-satisfy)).
 
 ## 4. Create the tables
 

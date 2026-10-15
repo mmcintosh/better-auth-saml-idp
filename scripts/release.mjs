@@ -52,7 +52,7 @@ run("git", ["push", "-u", "origin", branch], { stdio: ["ignore", "ignore", "inhe
 // The README is packed into the tarball, so the npm page shows it as it is now until the next release.
 const docsCheck = [
   "**Before merging: do the docs cover everything in this section?**",
-  "- [ ] README: features, both option tables, the events row, the table of contents, and a usage section for anything new",
+  "- [ ] README: features, the Quick Start, requirements and the verified-with table, where they change (the full reference is in docs/guide/)",
   "- [ ] Reference pages: options, errors, security, schema, observability (docs/guide/), and the threat model (docs/security.md)",
   "- [ ] A guide page for a new feature, linked from docs/guide/README.md",
   "- [ ] `pnpm docs:check` passes",
