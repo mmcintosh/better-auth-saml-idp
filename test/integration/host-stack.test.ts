@@ -34,7 +34,13 @@ describe(`host stack (${isWorkerd ? "workerd: withCloudflare + Drizzle/D1" : "no
       "drizzle-orm": await pkgVersion("drizzle-orm"),
     };
     console.log("VERSIONS", JSON.stringify(versions));
-    if (!isWorkerd) expect(versions["better-auth"]).toMatch(/^1\.7\.\d+$/);
+    // The version package.json asks for (scripts/use-better-auth.sh rewrites it for CI's other rows
+    // and the canary), so a stray second copy of Better Auth can't pass for the one under test.
+    if (!isWorkerd) {
+      const { readFileSync } = await import("node:fs");
+      const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
+      expect(versions["better-auth"]).toBe(pkg.devDependencies["better-auth"]);
+    }
   });
 
   it("passes validateSchema with the plugin's table", async () => {
