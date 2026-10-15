@@ -4,6 +4,14 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Documentation
+
+- **Better Auth 1.7.10 recommended.** Better Auth 1.7.7 fixed a critical account takeover in Magic Link ([GHSA-965c-763c-88jm](https://github.com/better-auth/better-auth/security/advisories/GHSA-965c-763c-88jm)). The plugin isn't affected and still supports 1.7.5, but an app that uses Magic Link with social or Generic OAuth sign-in should run 1.7.7 or later. The README, [getting started](docs/guide/getting-started.md) and [docs/security.md](docs/security.md) say so. docs/security.md also no longer calls `better-auth-cloudflare` 0.4 unreleased.
+
+### Examples
+
+- The examples (Next.js, Workers + D1, Workers + Neon) and the development setup run Better Auth 1.7.10. CI still tests 1.7.5, the lowest supported version, alongside the latest 1.7.x.
+
 ## [1.6.0] - 2026-10-14
 
 A signing key the plugin makes, stores and rotates itself, so a deployment needs no key made by hand, and Microsoft 365 users provisioned straight from Better Auth.

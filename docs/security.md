@@ -22,7 +22,9 @@ betterAuth({
 });
 ```
 
-- **Minimum versions:** `better-auth` ≥ 1.7.5 and < 1.8. On Workers, `better-auth-cloudflare` 0.3.1 with verification values and rate limits in the database (`verification: { storeInDatabase: true }`, `rateLimit: { storage: "database" }`), or 0.4 once released.
+- **Minimum versions:** `better-auth` ≥ 1.7.5 and < 1.8; 1.7.10 recommended.
+  - Better Auth 1.7.7 fixed a critical account takeover in Magic Link ([GHSA-965c-763c-88jm](https://github.com/better-auth/better-auth/security/advisories/GHSA-965c-763c-88jm)): if your app uses Magic Link together with social or Generic OAuth sign-in, run Better Auth 1.7.7 or later. The plugin itself isn't affected, and still supports 1.7.5.
+  - On Workers, `better-auth-cloudflare` 0.3.1 with verification values and rate limits in the database (`verification: { storeInDatabase: true }`, `rateLimit: { storage: "database" }`), or 0.4.0 (released 2026-10-12).
   - `better-auth-cloudflare` 0.3.1 combined with `better-auth` ≥ 1.7.3 silently breaks every verification consume (better-auth-cloudflare #72).
   - 0.4 turns that misconfiguration into a startup error. The plugin's own tests assert that it fails loudly.
 - **Keep single-use state in the database.** `verification.storeInDatabase: true` routes consumes through the database's lock-guarded `DELETE … RETURNING`.

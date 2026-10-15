@@ -166,7 +166,7 @@ pnpm add better-auth-saml-idp
 
 ### Requirements
 
-- `better-auth` and `@better-auth/core` `>=1.7.5 <1.8.0` (peer dependencies)
+- `better-auth` and `@better-auth/core` `>=1.7.5 <1.8.0` (peer dependencies). 1.7.10 is recommended: if your app uses Magic Link with social or Generic OAuth sign-in, run 1.7.7 or later ([advisory](https://github.com/better-auth/better-auth/security/advisories/GHSA-965c-763c-88jm); the plugin itself isn't affected)
 - A real database adapter (D1/Drizzle, Postgres, MySQL, SQLite…). Replay protection depends on UNIQUE constraints.
 - `verification.storeInDatabase: true` whenever secondary storage (for example KV) is configured
 - On Workers: `better-auth-cloudflare` and the `nodejs_compat` flag. With Better Auth ≥ 1.7.3, set `verification: { storeInDatabase: true }` and `rateLimit: { storage: "database" }`: with KV configured, `better-auth-cloudflare` 0.4.0 fails every request without them, naming the fix, and 0.3.1 silently breaks single-use values ([better-auth-cloudflare #72](https://github.com/zpg6/better-auth-cloudflare/issues/72)).

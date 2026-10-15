@@ -83,6 +83,8 @@ One-time setup (done 2026-09-27):
 3. GitHub **Settings → Environments → `npm`**: the maintainer is a required reviewer, and only `v*` tags may deploy, so every publish waits for an approval.
 4. `publishConfig.provenance` stops local `npm publish`: publishing is CI-only.
 
+**When to release.** Changes collect under `[Unreleased]`, and a release is cut when there's something worth announcing, usually every week or two, not after each merge. A security fix in the plugin is released at once. Changes that touch only development, CI or the examples don't need a release of their own.
+
 Each release:
 
 1. Keep CHANGELOG.md's `[Unreleased]` section up to date as changes land.
