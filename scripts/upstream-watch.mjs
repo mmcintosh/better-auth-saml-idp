@@ -50,7 +50,7 @@ const note = (key, fingerprint, summary) => {
   return summary;
 };
 
-// Better Auth against the peer range's upper bound (">=1.7.5 <1.8.0").
+// Better Auth against the peer range's upper bound (">=1.7.8 <1.8.0").
 {
   const range = pkg.peerDependencies?.["better-auth"] ?? "";
   const upper = /<\s*(\d+\.\d+\.\d+)/.exec(range)?.[1];

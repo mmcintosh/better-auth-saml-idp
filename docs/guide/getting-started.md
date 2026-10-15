@@ -11,9 +11,8 @@ npm install better-auth-saml-idp
 # or: pnpm add / yarn add / bun add
 ```
 
-Requirements: `better-auth` `>=1.7.5 <1.8.0` (1.7.10 recommended; see below), and a real database (replay protection relies on UNIQUE constraints). On Cloudflare Workers, also `better-auth-cloudflare` and the `nodejs_compat` flag. With Better Auth ≥ 1.7.3, set `verification: { storeInDatabase: true }` and `rateLimit: { storage: "database" }`: with KV configured, `better-auth-cloudflare` 0.4.0 fails every request without them, naming the fix, and 0.3.1 silently breaks single-use values ([better-auth-cloudflare #72](https://github.com/zpg6/better-auth-cloudflare/issues/72)). See [Cloudflare Workers](cloudflare-workers.md).
+Requirements: `better-auth` `>=1.7.8 <1.8.0`, and a real database (replay protection relies on UNIQUE constraints). On Cloudflare Workers, also `better-auth-cloudflare` and the `nodejs_compat` flag. With Better Auth ≥ 1.7.3, set `verification: { storeInDatabase: true }` and `rateLimit: { storage: "database" }`: with KV configured, `better-auth-cloudflare` 0.4.0 fails every request without them, naming the fix, and 0.3.1 silently breaks single-use values ([better-auth-cloudflare #72](https://github.com/zpg6/better-auth-cloudflare/issues/72)). See [Cloudflare Workers](cloudflare-workers.md).
 
-Better Auth 1.7.7 fixed a critical account takeover in Magic Link ([GHSA-965c-763c-88jm](https://github.com/better-auth/better-auth/security/advisories/GHSA-965c-763c-88jm)): if your app uses Magic Link together with social or Generic OAuth sign-in, run Better Auth 1.7.7 or later. The plugin itself isn't affected, and still supports 1.7.5.
 
 ## 2. Create a signing key
 

@@ -4,7 +4,7 @@ Turn your [Better Auth](https://www.better-auth.com) server into a **SAML 2.0 Id
 
 [![CI](https://github.com/mmcintosh/better-auth-saml-idp/actions/workflows/ci.yml/badge.svg)](https://github.com/mmcintosh/better-auth-saml-idp/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/better-auth-saml-idp)](https://www.npmjs.com/package/better-auth-saml-idp)
-[![Better Auth](https://img.shields.io/badge/better--auth-%E2%89%A51.7.5%20%3C1.8-black)](https://www.better-auth.com)
+[![Better Auth](https://img.shields.io/badge/better--auth-%E2%89%A51.7.8%20%3C1.8-black)](https://www.better-auth.com)
 [![Runs on](https://img.shields.io/badge/runs%20on-Workers%20%7C%20Node%2022%2B%20%7C%20Bun%20%7C%20Deno-f38020)](docs/guide/README.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -166,7 +166,7 @@ pnpm add better-auth-saml-idp
 
 ### Requirements
 
-- `better-auth` and `@better-auth/core` `>=1.7.5 <1.8.0` (peer dependencies). 1.7.10 is recommended: if your app uses Magic Link with social or Generic OAuth sign-in, run 1.7.7 or later ([advisory](https://github.com/better-auth/better-auth/security/advisories/GHSA-965c-763c-88jm); the plugin itself isn't affected)
+- `better-auth` and `@better-auth/core` `>=1.7.8 <1.8.0` (peer dependencies). Better Auth 1.7.7 fixed three security advisories, a critical Magic Link account takeover among them, and 1.7.8 a SAML replay check in `@better-auth/sso`; see [versioning](docs/guide/versioning.md#better-auth-compatibility)
 - A real database adapter (D1/Drizzle, Postgres, MySQL, SQLite…). Replay protection depends on UNIQUE constraints.
 - `verification.storeInDatabase: true` whenever secondary storage (for example KV) is configured
 - On Workers: `better-auth-cloudflare` and the `nodejs_compat` flag. With Better Auth ≥ 1.7.3, set `verification: { storeInDatabase: true }` and `rateLimit: { storage: "database" }`: with KV configured, `better-auth-cloudflare` 0.4.0 fails every request without them, naming the fix, and 0.3.1 silently breaks single-use values ([better-auth-cloudflare #72](https://github.com/zpg6/better-auth-cloudflare/issues/72)).
@@ -596,7 +596,7 @@ pnpm pack:check    # dist build, publint, Are the Types Wrong
 scripts/use-better-auth.sh latest-1.7   # run the suite against another Better Auth version
 ```
 
-CI runs all of these, plus a gitleaks scan of the whole history, on Node 24 with Better Auth 1.7.5 and the latest 1.7.x, and on Node 22 with 1.7.5. It also builds and starts the [Next.js example](examples/nextjs/README.md) and signs in through it. [CONTRIBUTING.md](CONTRIBUTING.md) has the rest: the adapter matrix, fuzzing, e2e, conventions and releasing.
+CI runs all of these, plus a gitleaks scan of the whole history, on Node 24 with Better Auth 1.7.8 and the latest 1.7.x, and on Node 22 with 1.7.8. It also builds and starts the [Next.js example](examples/nextjs/README.md) and signs in through it. [CONTRIBUTING.md](CONTRIBUTING.md) has the rest: the adapter matrix, fuzzing, e2e, conventions and releasing.
 
 ## License
 
