@@ -29,7 +29,7 @@ jobs:
           latest="$(npm view better-auth@latest version)"
           echo "version=$v" >> "$GITHUB_OUTPUT"
           # Compares major.minor.patch only: 1.8.0-beta.0 runs while latest is 1.7.x, and stops once 1.8.0 is out.
-          node -e 'const [v,min,latest,tag]=process.argv.slice(1);const p=s=>s.split(/[.-]/).slice(0,3).map(Number);const cmp=(a,b)=>{a=p(a);b=p(b);return a[0]-b[0]||a[1]-b[1]||a[2]-b[2]};process.exit(cmp(v,min)>=0&&(tag==="latest"||cmp(v,latest)>0)?0:1)' "$v" 1.7.5 "$latest" "${{ matrix.tag }}" \
+          node -e 'const [v,min,latest,tag]=process.argv.slice(1);const p=s=>s.split(/[.-]/).slice(0,3).map(Number);const cmp=(a,b)=>{a=p(a);b=p(b);return a[0]-b[0]||a[1]-b[1]||a[2]-b[2]};process.exit(cmp(v,min)>=0&&(tag==="latest"||cmp(v,latest)>0)?0:1)' "$v" 1.7.8 "$latest" "${{ matrix.tag }}" \
             && echo "run=true" >> "$GITHUB_OUTPUT" || echo "run=false" >> "$GITHUB_OUTPUT"
       - if: steps.ver.outputs.run == 'true'
         run: sfw scripts/use-better-auth.sh ${{ steps.ver.outputs.version }}

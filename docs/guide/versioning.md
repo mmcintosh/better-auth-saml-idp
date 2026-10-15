@@ -15,7 +15,7 @@ Releases follow [SemVer](https://semver.org/). With an IdP, "breaking" also cove
 - Removing or renaming an export, an option, an endpoint path or an error code.
 - Changing a default in a way an SP can notice: signing algorithm, what gets signed, NameID values, attribute encoding, bindings.
 - A schema change that isn't purely additive, such as a renamed field or a new required field without a default.
-- Dropping a Better Auth version, or a Node version, from the supported range.
+- Dropping a Better Auth version, or a Node version, from the supported range (except raising the Better Auth floor for security, [below](#better-auth-compatibility)).
 
 **Minor** (`1.1.0`): new things you can opt into.
 
@@ -30,11 +30,12 @@ Releases follow [SemVer](https://semver.org/). With an IdP, "breaking" also cove
 
 ## Better Auth compatibility
 
-The plugin declares a bounded peer range on `better-auth`, currently `>=1.7.5 <1.8`:
+The plugin declares a bounded peer range on `better-auth`, currently `>=1.7.8 <1.8`:
 
 - CI tests every change at the **lowest** version in the range and at the **latest** release in it.
 - The [upstream canary](../../.github/workflows/upstream-canary.yml) tests Better Auth's `latest` tag and its prerelease tags (`next`, `beta`) weekly, and opens an issue when something breaks. A prerelease tag is skipped once `latest` has caught up with it.
 - A new Better Auth minor gets support in a plugin **minor** release once it passes, which widens the range. The range is never widened without testing.
+- **The floor rises for security.** When a Better Auth release fixes a security advisory, or a security bug in a path the plugin's hosts run, the floor can move up to it within the same Better Auth minor in a plugin **minor** release, not a major. The changelog says which fixes and why. This is the one exception to "dropping a Better Auth version is major" above.
 - `better-auth-cloudflare` isn't a dependency; the Workers example and CI run a known-good version of it (see [Cloudflare Workers](cloudflare-workers.md)).
 
 ## Support windows

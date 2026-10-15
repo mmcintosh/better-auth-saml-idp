@@ -4,6 +4,18 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Changed
+
+- **Better Auth 1.7.8 is now the minimum** (the peer range is `>=1.7.8 <1.8.0`, was `>=1.7.5`). 1.7.7 fixed three Better Auth security advisories: a critical Magic Link account takeover ([GHSA-965c-763c-88jm](https://github.com/better-auth/better-auth/security/advisories/GHSA-965c-763c-88jm)), an OAuth Proxy sign-in as another user (GHSA-r4xp-prcw-77qf), and rate limits exceeded under concurrency on Drizzle and Postgres (GHSA-44jh-23m7-hpcf). 1.7.8 stopped `@better-auth/sso` accepting a reused SAML assertion under `generateId: "uuid"`. The plugin's own code isn't affected by any of them, but the Better Auth it runs in is, and npm refuses to install the plugin next to an older one. Upgrade Better Auth (and its `@better-auth/*` packages) to 1.7.8 or later; 1.7.10 is the latest. This is a minor release under a new rule in the [versioning policy](docs/guide/versioning.md#better-auth-compatibility): the floor may rise for security within a Better Auth minor (D-081).
+
+### Documentation
+
+- docs/security.md no longer calls `better-auth-cloudflare` 0.4 unreleased. [CONTRIBUTING](CONTRIBUTING.md#releasing-maintainers) says when releases are cut (every week or two, and at once for a security fix), and `pnpm release` now requires the sentence that opens each release, saying why it exists and who should upgrade.
+
+### Examples
+
+- The examples (Next.js, Workers + D1, Workers + Neon) and the development setup run Better Auth 1.7.10. CI tests 1.7.8, the lowest supported version, alongside the latest 1.7.x.
+
 ### Project
 
 - The upstream canary also tests Better Auth's `beta` tag, where Better Auth publishes its prereleases (1.8.0-beta.0 on 2026-10-15). It had tested only `latest` and `next`, and `next` still points at 0.8.7-beta.5, so it would never have tried 1.8 before its release. A prerelease tag is skipped once `latest` has caught up with it.

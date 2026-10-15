@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "better-auth": "1.7.5",
+    "better-auth": "1.7.10",
     "better-auth-saml-idp": "workspace:*",
     "hono": "^4.13.10",
     "pg": "^8.23.1"
