@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Project
+
+- The upstream canary also tests Better Auth's `beta` tag, where Better Auth publishes its prereleases (1.8.0-beta.0 on 2026-10-15). It had tested only `latest` and `next`, and `next` still points at 0.8.7-beta.5, so it would never have tried 1.8 before its release. A prerelease tag is skipped once `latest` has caught up with it.
+
 ## [1.6.0] - 2026-10-14
 
 A signing key the plugin makes, stores and rotates itself, so a deployment needs no key made by hand, and Microsoft 365 users provisioned straight from Better Auth.

@@ -33,7 +33,7 @@ Releases follow [SemVer](https://semver.org/). With an IdP, "breaking" also cove
 The plugin declares a bounded peer range on `better-auth`, currently `>=1.7.5 <1.8`:
 
 - CI tests every change at the **lowest** version in the range and at the **latest** release in it.
-- The [upstream canary](../../.github/workflows/upstream-canary.yml) tests Better Auth's `latest` and `next` tags weekly and opens an issue when something breaks.
+- The [upstream canary](../../.github/workflows/upstream-canary.yml) tests Better Auth's `latest` tag and its prerelease tags (`next`, `beta`) weekly, and opens an issue when something breaks. A prerelease tag is skipped once `latest` has caught up with it.
 - A new Better Auth minor gets support in a plugin **minor** release once it passes, which widens the range. The range is never widened without testing.
 - `better-auth-cloudflare` isn't a dependency; the Workers example and CI run a known-good version of it (see [Cloudflare Workers](cloudflare-workers.md)).
 
