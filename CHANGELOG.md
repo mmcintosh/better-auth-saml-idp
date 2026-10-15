@@ -14,7 +14,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ### Examples
 
-- The examples (Next.js, Workers + D1, Workers + Neon) and the development setup run Better Auth 1.7.10. CI tests 1.7.8, the lowest supported version, alongside the latest 1.7.x.
+- The examples (Next.js, Workers + D1, Workers + Neon, and the experimental CharDB examples) and the development setup run Better Auth 1.7.10. CI tests 1.7.8, the lowest supported version, alongside the latest 1.7.x.
 
 ### Project
 
