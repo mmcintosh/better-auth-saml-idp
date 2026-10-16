@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-16
+
+Better Auth 1.7.8 is now the minimum, which keeps installs off Better Auth versions with known security advisories, and Next.js apps that bundle the plugin get a clear error instead of failing every SAML request; everyone on 1.6.x should upgrade, along with Better Auth.
+
 ### Changed
 
 - **Better Auth 1.7.8 is now the minimum** (the peer range is `>=1.7.8 <1.8.0`, was `>=1.7.5`). 1.7.7 fixed three Better Auth security advisories: a critical Magic Link account takeover ([GHSA-965c-763c-88jm](https://github.com/better-auth/better-auth/security/advisories/GHSA-965c-763c-88jm)), an OAuth Proxy sign-in as another user (GHSA-r4xp-prcw-77qf), and rate limits exceeded under concurrency on Drizzle and Postgres (GHSA-44jh-23m7-hpcf). 1.7.8 stopped `@better-auth/sso` accepting a reused SAML assertion under `generateId: "uuid"`. The plugin's own code isn't affected by any of them, but the Better Auth it runs in is, and npm refuses to install the plugin next to an older one. Upgrade Better Auth (and its `@better-auth/*` packages) to 1.7.8 or later; 1.7.10 is the latest. This is a minor release under a new rule in the [versioning policy](docs/guide/versioning.md#better-auth-compatibility): the floor may rise for security within a Better Auth minor (D-081).
