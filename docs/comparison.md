@@ -1,6 +1,6 @@
 # Comparison with other SAML identity providers
 
-How `better-auth-saml-idp` compares with eleven SAML 2.0 identity providers, checked against each product's official documentation (and, for the open-source ones, their source code) on **2026-09-25**. **Not documented** means the research found no statement either way; it is not the same as *no*. SaaS products are *n/a* for self-hosting rows.
+How `better-auth-saml-idp` compares with eleven SAML 2.0 identity providers, checked against each product's official documentation (and, for the open-source ones, their source code) on **2026-10-15**. **Not documented** means the research found no statement either way; it is not the same as *no*. SaaS products are *n/a* for self-hosting rows.
 
 Our own column links to the tests that prove each entry. The roadmap derived from this comparison is on the [comparison page](https://mmcintosh.github.io/better-auth-saml-idp/comparison/#roadmap), and what is still open in the [README](../README.md#-whats-next).
 
@@ -9,7 +9,7 @@ Our own column links to the tests that prove each entry. The roadmap derived fro
 - **Replay protection you can check.** AuthnRequest replay is rejected by a database unique key and tested under concurrency across separate instances. Most peers don't document replay handling for inbound requests.
 - **Strict identity by default.** Only verified email addresses get assertions; admin-impersonation sessions and anonymous users are refused. The user and session are re-read from the database right before signing.
 - **Honest protocol answers.** IsPassive, RequestedAuthnContext, Subject and NameIDPolicy are honoured, and failures go back as signed SAML status Responses. authentik, Logto and Ory Polis show HTML errors instead.
-- **Runs where your app runs.** A Better Auth plugin that runs on Cloudflare Workers and Node, verified live against Cloudflare Access, Okta, Auth0, Salesforce, AWS IAM Identity Center and Google Workspace. Every other self-hosted option here is a separate server.
+- **Runs where your app runs.** A Better Auth plugin that runs on Cloudflare Workers and Node, verified live against Microsoft 365, Google Workspace, Okta, Auth0, Salesforce, AWS IAM Identity Center and Cloudflare Access. Every other self-hosted option here is a separate server.
 
 ## Where we trail
 
@@ -17,7 +17,7 @@ Our own column links to the tests that prove each entry. The roadmap derived fro
 
 ## Feature matrix
 
-Products: **better-auth-saml-idp** (This plugin, 1.1); **Shibboleth IdP** (Reference, 5.2.3); **SimpleSAMLphp** (Reference, 2.5.3); **Keycloak** (Reference, 26.7.4); **Zitadel** (Open source, main, Sep 2026); **authentik** (Open source, main, Sep 2026); **Logto** (Open source, SAML apps); **Ory Polis** (Open source, SAML Federation (enterprise)); **Microsoft Entra ID** (Commercial, non-gallery apps); **Okta** (Commercial, custom SAML apps); **Google Workspace** (Commercial, custom SAML apps); **Auth0** (Commercial, SAML2 Web App addon).
+Products: **better-auth-saml-idp** (This plugin, 1.7); **Shibboleth IdP** (Reference, 5.2.3); **SimpleSAMLphp** (Reference, 2.5.3.1); **Keycloak** (Reference, 26.8.1); **Zitadel** (Open source, 4.19.5); **authentik** (Open source, 2026.8.4); **Logto** (Open source, 1.45, SAML apps); **Ory Polis** (Open source, SAML Federation (enterprise)); **Microsoft Entra ID** (Commercial, non-gallery apps); **Okta** (Commercial, custom SAML apps); **Google Workspace** (Commercial, custom SAML apps); **Auth0** (Commercial, SAML2 Web App addon).
 
 ### Flows
 
@@ -25,7 +25,7 @@ Products: **better-auth-saml-idp** (This plugin, 1.1); **Shibboleth IdP** (Refer
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | SP-initiated SSO | ✅ Yes<br><sub>HTTP-Redirect and HTTP-POST in, POST out</sub> | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes<br><sub>brokered to an upstream IdP</sub> | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
 | IdP-initiated SSO | ✅ Yes<br><sub>opt-in per SP; RelayState allow-list</sub> | ✅ Yes | ✅ Yes | ✅ Yes<br><sub>per client</sub> | ❌ No | ✅ Yes | ❌ No | 🟡 Partial<br><sub>OIDC-initiated only</sub> | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
-| Single Logout | ✅ Yes<br><sub>SP- and IdP-initiated, front-channel propagation to every participating SP; node-saml interop</sub> | ✅ Yes<br><sub>docs call it best-effort</sub> | 🟡 Partial<br><sub>front-channel only</sub> | ✅ Yes<br><sub>front and back channel</sub> | 🟡 Partial<br><sub>responds, ends nothing</sub> | ✅ Yes<br><sub>front and back channel</sub> | ❌ No | ❌ No | ✅ Yes<br><sub>Redirect only</sub> | ✅ Yes<br><sub>back-channel is Early Access</sub> | ❔ Not documented | 🟡 Partial<br><sub>no multi-app logout</sub> |
+| Single Logout | ✅ Yes<br><sub>SP- and IdP-initiated, front-channel propagation to every participating SP; node-saml interop; verified live with Microsoft 365</sub> | ✅ Yes<br><sub>docs call it best-effort</sub> | 🟡 Partial<br><sub>front-channel only</sub> | ✅ Yes<br><sub>front and back channel</sub> | 🟡 Partial<br><sub>responds, ends nothing</sub> | ✅ Yes<br><sub>front and back channel</sub> | ❌ No | ❌ No | ✅ Yes<br><sub>Redirect only</sub> | ✅ Yes<br><sub>back-channel is Early Access</sub> | ❔ Not documented | 🟡 Partial<br><sub>no multi-app logout</sub> |
 
 ### Bindings
 
@@ -40,9 +40,9 @@ Products: **better-auth-saml-idp** (This plugin, 1.1); **Shibboleth IdP** (Refer
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Response / Assertion signing choice | ✅ Yes<br><sub>per SP, with a global default; both signed by default</sub> | ✅ Yes<br><sub>per SP</sub> | ✅ Yes<br><sub>per SP</sub> | ✅ Yes<br><sub>per client</sub> | ❌ No<br><sub>always both</sub> | ✅ Yes<br><sub>per SP</sub> | ❌ No<br><sub>response only</sub> | ❌ No<br><sub>always both</sub> | ✅ Yes | ✅ Yes | 🟡 Partial<br><sub>one checkbox</sub> | 🟡 Partial<br><sub>one or the other</sub> |
 | Encrypted assertions | ✅ Yes<br><sub>AES-256-GCM + RSA-OAEP, per SP; verified live with Cloudflare Access, Okta and Auth0, and with node-saml and samlify</sub> | ✅ Yes<br><sub>on by default</sub> | ✅ Yes<br><sub>per SP</sub> | ✅ Yes<br><sub>AES-256-GCM default</sub> | ❌ No | ✅ Yes | ✅ Yes | ❌ No | ✅ Yes<br><sub>needs P1</sub> | ✅ Yes | ❔ Not documented | ✅ Yes<br><sub>via Actions</sub> |
-| Verifies and can require signed AuthnRequests | ✅ Yes<br><sub>HTTP-Redirect and HTTP-POST (XSW-hardened), per SP; verified live with Cloudflare Access, Okta, Auth0 (POST) and Salesforce; node-saml POST; multiple SP certs</sub> | ✅ Yes | ✅ Yes | ✅ Yes | 🟡 Partial<br><sub>instance-wide switch</sub> | ✅ Yes | ✅ Yes | ❌ No<br><sub>checks the key embedded in the request</sub> | ✅ Yes | ✅ Yes | ❔ Not documented | 🟡 Partial<br><sub>can verify; requiring not documented</sub> |
+| Verifies and can require signed AuthnRequests | ✅ Yes<br><sub>HTTP-Redirect and HTTP-POST (XSW-hardened), per SP; verified live with Cloudflare Access, Okta, Auth0 (POST) and Salesforce; node-saml POST; multiple SP certs</sub> | ✅ Yes | ✅ Yes | ✅ Yes | 🟡 Partial<br><sub>instance-wide switch</sub> | ✅ Yes | ✅ Yes<br><sub>per app, since 1.44</sub> | ❌ No<br><sub>checks the key embedded in the request</sub> | ✅ Yes | ✅ Yes | ❔ Not documented | 🟡 Partial<br><sub>can verify; requiring not documented</sub> |
 | SHA-256 default, SHA-1 only by opt-in | ✅ Yes<br><sub>opt-in logs a warning</sub> | ✅ Yes | ✅ Yes | ✅ Yes | 🟡 Partial<br><sub>accepts SHA-1 inbound</sub> | ✅ Yes | 🟡 Partial<br><sub>fixed SHA-256</sub> | ✅ Yes<br><sub>fixed SHA-256</sub> | ✅ Yes | ✅ Yes | ❔ Not documented | ❌ No<br><sub>SHA-1 is the default</sub> |
-| Signing key rotation | 🟡 Partial<br><sub>extra certs published; zero-downtime procedure verified live</sub> | 🟡 Partial<br><sub>manual</sub> | ✅ Yes<br><sub>two-key rollover</sub> | ✅ Yes<br><sub>active and passive keys</sub> | ✅ Yes<br><sub>automatic</sub> | 🟡 Partial<br><sub>manual</sub> | 🟡 Partial<br><sub>one active at a time</sub> | 🟡 Partial<br><sub>single key</sub> | ✅ Yes<br><sub>expiry emails</sub> | ✅ Yes | ✅ Yes<br><sub>two certificates</sub> | 🟡 Partial<br><sub>tenant-wide key</sub> |
+| Signing key rotation | ✅ Yes<br><sub>a managed key rotated through the API: publish the next key, switch after 24 hours, retire, with expiry warnings; or a PEM key by hand. Zero-downtime procedure verified live</sub> | 🟡 Partial<br><sub>manual</sub> | ✅ Yes<br><sub>two-key rollover</sub> | ✅ Yes<br><sub>active and passive keys</sub> | ✅ Yes<br><sub>automatic</sub> | 🟡 Partial<br><sub>manual</sub> | 🟡 Partial<br><sub>one active at a time</sub> | 🟡 Partial<br><sub>single key</sub> | ✅ Yes<br><sub>expiry emails</sub> | ✅ Yes | ✅ Yes<br><sub>two certificates</sub> | 🟡 Partial<br><sub>tenant-wide key</sub> |
 | Signed IdP metadata | ✅ Yes<br><sub>optional (signMetadata)</sub> | 🟡 Partial<br><sub>left to federations</sub> | ✅ Yes<br><sub>optional</sub> | ❔ Not documented | ✅ Yes | ✅ Yes | ❔ Not documented | ❔ Not documented | ❔ Not documented | ❔ Not documented | ❔ Not documented | ❔ Not documented |
 
 ### Replay and protocol fidelity
@@ -60,7 +60,7 @@ Products: **better-auth-saml-idp** (This plugin, 1.1); **Shibboleth IdP** (Refer
 | NameID formats per SP | ✅ Yes<br><sub>email, persistent (per-SP HMAC), transient, unspecified</sub> | ✅ Yes | ✅ Yes | ✅ Yes | ❌ No<br><sub>fixed; labelled email, carries username</sub> | ✅ Yes | ✅ Yes | 🟡 Partial<br><sub>passes upstream NameID</sub> | ✅ Yes | ✅ Yes | 🟡 Partial | ✅ Yes |
 | Attribute mapping | ✅ Yes<br><sub>per SP: declarative map (JSON-friendly) or a function</sub> | ✅ Yes<br><sub>declarative + scripts</sub> | ✅ Yes | ✅ Yes<br><sub>mappers + scripts</sub> | 🟡 Partial<br><sub>fixed set + Actions</sub> | ✅ Yes<br><sub>Python mappings</sub> | ✅ Yes<br><sub>declarative</sub> | 🟡 Partial | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
 | Per-SP access control | ✅ Yes<br><sub>authorize() hook, deny = no assertion</sub> | ✅ Yes | 🟡 Partial<br><sub>via authproc filters</sub> | 🟡 Partial<br><sub>via conditional flows</sub> | ✅ Yes<br><sub>per project</sub> | ✅ Yes<br><sub>policy bindings</sub> | ❔ Not documented | 🟡 Partial<br><sub>routing only</sub> | ✅ Yes<br><sub>app assignment</sub> | ✅ Yes<br><sub>app assignment</sub> | ✅ Yes<br><sub>per OU or group</sub> | ❔ Not documented |
-| MFA and step-up for SAML | ✅ Yes<br><sub>host's Better Auth 2FA; step-up via authnContext levels (prompt=login + acr_values)</sub> | ✅ Yes | 🟡 Partial<br><sub>via modules</sub> | ✅ Yes | 🟡 Partial<br><sub>MFA, no step-up</sub> | 🟡 Partial<br><sub>ForceAuthn step-up</sub> | 🟡 Partial<br><sub>MFA, no step-up</sub> | ❌ No<br><sub>delegated upstream</sub> | ✅ Yes<br><sub>Conditional Access (P1)</sub> | ✅ Yes<br><sub>policies</sub> | ❔ Not documented | 🟡 Partial |
+| MFA and step-up for SAML | ✅ Yes<br><sub>host's Better Auth 2FA or passkeys; step-up via authnContext levels (prompt=login + acr_values); Microsoft 365 relying on it verified live</sub> | ✅ Yes | 🟡 Partial<br><sub>via modules</sub> | ✅ Yes | 🟡 Partial<br><sub>MFA, no step-up</sub> | 🟡 Partial<br><sub>ForceAuthn step-up</sub> | 🟡 Partial<br><sub>MFA, no step-up</sub> | ❌ No<br><sub>delegated upstream</sub> | ✅ Yes<br><sub>Conditional Access (P1)</sub> | ✅ Yes<br><sub>policies</sub> | ❔ Not documented | 🟡 Partial |
 
 ### Operations
 
@@ -87,6 +87,7 @@ Products: **better-auth-saml-idp** (This plugin, 1.1); **Shibboleth IdP** (Refer
 - **Encrypted assertions:** test/interop/encryption-interop.test.ts, test/unit/encrypt.test.ts
 - **Verifies and can require signed AuthnRequests:** test/integration/security.test.ts, review-findings.test.ts #2
 - **SHA-256 default, SHA-1 only by opt-in:** `test/unit/options.test.ts`
+- **Signing key rotation:** test/integration/managed-signing-key.test.ts, tenant-keys.test.ts
 - **Rejects replayed AuthnRequest IDs:** `test/integration/security.test.ts (R2)`
 - **ForceAuthn, IsPassive, RequestedAuthnContext:** `test/integration/review-findings.test.ts #12`
 - **SAML error status Responses:** `test/integration/review-findings.test.ts`
@@ -107,18 +108,18 @@ From [HubSpot's SSO setup guide](https://knowledge.hubspot.com/account-security/
 
 ## Sources
 
-- **better-auth-saml-idp** (1.1): [Repository](https://github.com/mmcintosh/better-auth-saml-idp), [Decision log](https://github.com/mmcintosh/better-auth-saml-idp/blob/main/DECISIONS.md)
+- **better-auth-saml-idp** (1.7): [Repository](https://github.com/mmcintosh/better-auth-saml-idp), [Decision log](https://github.com/mmcintosh/better-auth-saml-idp/blob/main/DECISIONS.md)
 - **Shibboleth IdP** (5.2.3): [Relying party config](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199508680), [Metadata config](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199508402), [Replay cache](https://shibboleth.atlassian.net/wiki/spaces/IDP5/pages/3199509576)
-- **SimpleSAMLphp** (2.5.3): [IdP setup](https://simplesamlphp.org/docs/stable/simplesamlphp-idp.html), [SP remote reference](https://simplesamlphp.org/docs/stable/simplesamlphp-reference-sp-remote.html), [Key rollover](https://simplesamlphp.org/docs/stable/saml/keyrollover.html)
-- **Keycloak** (26.7.4): [SAML client config](https://www.keycloak.org/docs/latest/server_admin/index.html#_client-saml-configuration), [SAML step-up](https://www.keycloak.org/docs/latest/server_admin/index.html#_step-up-authentication-saml)
-- **Zitadel** (main, Sep 2026): [SAML guide](https://zitadel.com/docs/guides/integrate/login/saml), [zitadel/saml library](https://github.com/zitadel/saml)
-- **authentik** (main, Sep 2026): [SAML provider](https://docs.goauthentik.io/add-secure-apps/providers/saml/), [SAML single logout](https://docs.goauthentik.io/add-secure-apps/providers/saml/saml_single_logout/)
-- **Logto** (SAML apps): [SAML apps](https://docs.logto.io/integrate-logto/saml-app), [SAML app setup](https://docs.logto.io/integrate-logto/saml-app/setup)
+- **SimpleSAMLphp** (2.5.3.1): [IdP setup](https://simplesamlphp.org/docs/stable/simplesamlphp-idp.html), [SP remote reference](https://simplesamlphp.org/docs/stable/simplesamlphp-reference-sp-remote.html), [Key rollover](https://simplesamlphp.org/docs/stable/saml/keyrollover.html)
+- **Keycloak** (26.8.1): [SAML client config](https://www.keycloak.org/docs/latest/server_admin/index.html#_client-saml-configuration), [SAML step-up](https://www.keycloak.org/docs/latest/server_admin/index.html#_step-up-authentication-saml)
+- **Zitadel** (4.19.5): [SAML guide](https://zitadel.com/docs/guides/integrate/login/saml), [zitadel/saml library](https://github.com/zitadel/saml)
+- **authentik** (2026.8.4): [SAML provider](https://docs.goauthentik.io/add-secure-apps/providers/saml/), [SAML single logout](https://docs.goauthentik.io/add-secure-apps/providers/saml/saml_single_logout/)
+- **Logto** (1.45, SAML apps): [SAML apps](https://docs.logto.io/integrate-logto/saml-app), [SAML app setup](https://docs.logto.io/integrate-logto/saml-app/setup)
 - **Ory Polis** (SAML Federation (enterprise)): [SAML Federation](https://www.ory.com/docs/polis/saml-federation), [npm library](https://www.ory.com/docs/polis/guides/npm-library)
 - **Microsoft Entra ID** (non-gallery apps): [SAML SSO protocol](https://learn.microsoft.com/en-us/entra/identity-platform/single-sign-on-saml-protocol), [Signing options](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/certificate-signing-options), [Token encryption](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/howto-saml-token-encryption)
 - **Okta** (custom SAML apps): [SAML app reference](https://help.okta.com/oie/en-us/content/topics/apps/aiw-saml-reference.htm), [Signing certificates](https://developer.okta.com/docs/guides/updating-saml-cert/main/)
 - **Google Workspace** (custom SAML apps): [Custom SAML app](https://knowledge.workspace.google.com/admin/apps/set-up-your-own-custom-saml-app), [SAML certificates](https://knowledge.workspace.google.com/admin/apps/maintain-saml-certificates)
 - **Auth0** (SAML2 Web App addon): [SAML assertions](https://auth0.com/docs/authenticate/protocols/saml/saml-configuration/customize-saml-assertions), [Sign and encrypt](https://auth0.com/docs/authenticate/protocols/saml/saml-sso-integrations/sign-and-encrypt-saml-requests)
 
-Research method: three parallel reviews of vendor documentation (and source code where the docs were silent), 2026-09-25. Corrections welcome as issues or pull requests.
+Research method: three parallel reviews of vendor documentation (and source code where the docs were silent), 2026-10-15. Corrections welcome as issues or pull requests.
 

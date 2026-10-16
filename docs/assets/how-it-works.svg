@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 262" width="880" height="262" role="img" aria-labelledby="t d">
+  <title id="t">How better-auth-saml-idp signs a user in</title>
+  <desc id="d">A service provider such as Microsoft 365 sends the user to your app with a SAML request. The user signs in with Better Auth as usual. The plugin sends a signed SAML assertion back, and the user is signed in to the service provider.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#3b4252"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1f2328; }
+    .h { font-size: 19px; font-weight: 600; }
+    .s { font-size: 14px; fill: #59636e; }
+    .l { font-size: 14.5px; }
+    .n { font-size: 13px; font-weight: 700; fill: #ffffff; }
+  </style>
+  <rect x="0" y="0" width="880" height="262" rx="14" fill="#ffffff" stroke="#d1d9e0"/>
+
+  <!-- Service provider -->
+  <rect x="28" y="64" width="250" height="172" rx="12" fill="#f6f8fa" stroke="#d1d9e0"/>
+  <text x="153" y="104" text-anchor="middle" class="h">Service provider</text>
+  <text x="153" y="134" text-anchor="middle" class="s">Microsoft 365 · Google Workspace</text>
+  <text x="153" y="156" text-anchor="middle" class="s">Okta · Salesforce · AWS</text>
+  <text x="153" y="178" text-anchor="middle" class="s">Cloudflare Access · Auth0 …</text>
+  <text x="153" y="214" text-anchor="middle" class="l">④ the user is signed in</text>
+
+  <!-- Your app -->
+  <rect x="602" y="64" width="250" height="172" rx="12" fill="#fff8f1" stroke="#f38020" stroke-width="1.5"/>
+  <text x="727" y="104" text-anchor="middle" class="h">Your app</text>
+  <text x="727" y="134" text-anchor="middle" class="s">Better Auth</text>
+  <text x="727" y="156" text-anchor="middle" class="s">+ better-auth-saml-idp</text>
+  <text x="727" y="178" text-anchor="middle" class="s">your users and database</text>
+  <text x="727" y="214" text-anchor="middle" class="l">② the user signs in as usual</text>
+
+  <!-- ① request -->
+  <line x1="286" y1="112" x2="592" y2="112" stroke="#3b4252" stroke-width="2" marker-end="url(#a)"/>
+  <text x="440" y="98" text-anchor="middle" class="l">① SAML request: “who is this?”</text>
+
+  <!-- ③ assertion -->
+  <line x1="594" y1="188" x2="288" y2="188" stroke="#3b4252" stroke-width="2" marker-end="url(#a)"/>
+  <text x="440" y="214" text-anchor="middle" class="l">③ signed SAML assertion</text>
+
+  <text x="440" y="42" text-anchor="middle" class="s">Your Better Auth server becomes the identity provider: users sign in once, with the account they already have.</text>
+</svg>
