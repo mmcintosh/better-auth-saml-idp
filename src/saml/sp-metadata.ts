@@ -104,7 +104,7 @@ export async function serviceProviderFromMetadata(
 
   // At most MAX_METADATA_CERTIFICATES of each kind: SPs publish one or two, a few during a
   // rotation. Every signing certificate is tried on every signed request, so a metadata host
-  // must not choose that count (review 4, R4-2).
+  // must not choose that count.
   const certsFor = (use: "signing" | "encryption") => {
     const all = [
       ...new Set(

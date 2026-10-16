@@ -15,7 +15,7 @@ export const MAX_REQUEST_BYTES = 64 * 1024;
  * Most elements and attributes (namespace declarations included) an inbound protocol message may
  * have. A signed AuthnRequest or LogoutRequest has about 15 elements. Without a cap, a
  * schema-valid 64 KiB message made signature verification cost ~200 ms per SP certificate
- * (xml-crypto re-parses, looks up IDs and canonicalises for each one; review 4, R4-4).
+ * (xml-crypto re-parses, looks up IDs and canonicalises for each one).
  */
 export const MAX_MESSAGE_ELEMENTS = 200;
 export const MAX_MESSAGE_ATTRIBUTES = 1000;
@@ -52,7 +52,7 @@ export const invalid = (detail: string) => new SamlRequestError("INVALID_SAML_RE
 /** Attacker-controlled text in debug logs: bounded length, no control characters. */
 export function logSafe(s: string, max = 120): string {
   // C0 and C1 controls, and the Unicode bidi and invisible formatting characters that can make a
-  // log line or a SIEM view read differently from what it contains (R4-L6), and the Unicode line
+  // log line or a SIEM view read differently from what it contains, and the Unicode line
   // and paragraph separators, which some log viewers break lines on (pre-release review).
   // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping control characters is the point
   const clean = s.replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2028\u2029\u2060-\u2069\ufeff]/g, "?");
@@ -322,7 +322,7 @@ export async function parseAuthnRequest(
       throw invalid("Subject BaseID/EncryptedID is not supported");
     const nameIdEl = child(subjectEl, NS_ASSERTION, "NameID")[0];
     if (nameIdEl) {
-      // Bounded like every other stored value: the Subject lands in the pending row (R4-L2).
+      // Bounded like every other stored value: the Subject lands in the pending row.
       const nameId = (nameIdEl.textContent ?? "").trim();
       const format = nameIdEl.getAttribute("Format")?.trim() || undefined;
       if (nameId.length > 1024 || (format?.length ?? 0) > 256) throw invalid("Subject NameID or Format too long");
@@ -335,7 +335,7 @@ export async function parseAuthnRequest(
   if (rac) {
     const comparison = ((rac.getAttribute("Comparison") ?? "exact").trim() || "exact") as RequestedAuthnContext["comparison"];
     const classRefs = child(rac, NS_ASSERTION, "AuthnContextClassRef").map((e) => (e.textContent ?? "").trim());
-    // Bounded before it's stored with the pending request, as the Subject is (R4-L2; review 5 R5-5).
+    // Bounded before it's stored with the pending request, as the Subject is.
     if (classRefs.length > 16 || classRefs.some((c) => c.length > 1024)) throw invalid("RequestedAuthnContext too large");
     requestedAuthnContext = {
       comparison,

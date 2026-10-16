@@ -46,9 +46,9 @@ export const GENERATED_KEY_BITS = 3072;
 export const GENERATED_CERT_DAYS = 730;
 const PURPOSE = "better-auth-saml-idp/tenant-signing-key";
 const MAX_CACHE_ENTRIES = 1000;
-/** Retired rows kept per tenant (their history is in the audit log): reads stay bounded (R7-1). */
+/** Retired rows kept per tenant (their history is in the audit log): reads stay bounded. */
 export const KEEP_RETIRED = 5;
-/** Warn this long before a tenant certificate expires, as for the root key (D-058, R7-2). */
+/** Warn this long before a tenant certificate expires, as for the root key (D-058). */
 export const EXPIRY_WARNING_MS = 30 * 86_400_000;
 
 /** A tenant key certificate that has expired or expires within 30 days; undefined otherwise. */
@@ -251,7 +251,7 @@ export class TenantKeyStore {
   async load(adapter: Adapter, tenantId: string): Promise<TenantKeyRow[]> {
     const hit = this.rows.get(tenantId);
     if (hit && hit.expires > this.now()) return hit.rows;
-    // Newest first: with retired rows pruned (KEEP_RETIRED) a tenant has at most nine rows (R7-1).
+    // Newest first: with retired rows pruned (KEEP_RETIRED) a tenant has at most nine rows.
     const found = (await adapter.findMany({ model: TENANT_KEY_MODEL, where: [{ field: "tenantId", value: tenantId }], limit: 50, sortBy: { field: "createdAt", direction: "desc" } })) as TenantKeyRow[];
     const rows = found.filter((r) => r.tenantId === tenantId);
     if (this.cacheMs > 0) {
@@ -286,7 +286,7 @@ export class TenantKeyStore {
     if (!loaded) {
       const pem = await decryptTenantKey(secret, own);
       loaded = { key: checkKeyPair(pem, own.certificate).key, pem };
-      // Once per key and isolate, when it is loaded (R7-2).
+      // Once per key and isolate, when it is loaded.
       const expiring = expiryWarning(own);
       if (expiring) warn?.(`[saml-idp] ${ownerLabel(tenantId)}: ${expiring}`);
       if (this.keys.size >= MAX_CACHE_ENTRIES) this.keys.clear();

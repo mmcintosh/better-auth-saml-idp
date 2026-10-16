@@ -14,7 +14,7 @@ export async function findManyIn(adapter: Adapter, model: string, field: string,
     const slice = values.slice(i, i + IN_BATCH);
     const wanted = new Set(slice);
     const rows = (await adapter.findMany({ model, where: [{ field, value: slice, operator: "in" }], limit: slice.length * perValue + perValue })) as Record<string, unknown>[];
-    // A case-insensitive collation must not widen the match (R4-L8).
+    // A case-insensitive collation must not widen the match.
     for (const r of rows) if (wanted.has(String(r[field]))) out.push(r);
   }
   return out;

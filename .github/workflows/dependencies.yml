@@ -3,7 +3,7 @@
 #   the package alone (scripts/audit-runtime.mjs: at the workspace root, `pnpm audit --prod` also
 #   covers the examples'), on every push and PR, and GitHub's dependency review on what a PR adds;
 # - the examples' production dependencies (Next.js, Hono, …) are audited too, but only REPORTED:
-#   an advisory there must not block a release of a package it isn't part of (review 6 R6-5);
+#   an advisory there must not block a release of a package it isn't part of;
 # - everything in the lockfile, dev tooling included, is scanned by OSV-Scanner and REPORTED
 #   under Security > Code scanning without blocking (dev tools don't ship).
 name: Dependencies

@@ -51,7 +51,7 @@ export function loginRedirectUrl(ctx: GenericEndpointContext, state: PluginState
   login.searchParams.set("callbackURL", `${base}${RESUME_PATH}?rid=${rid}`);
   // ForceAuthn: the page must ask for credentials even if the user is signed in, or the resume
   // step refuses the old session with REAUTHENTICATION_REQUIRED. `prompt=login`, as in OpenID
-  // Connect, so the host's page can tell (R4-L5).
+  // Connect, so the host's page can tell.
   if (opts.reauthenticate) login.searchParams.set("prompt", "login");
   // Step-up (D-047): the authentication class needed, as OpenID Connect's acr_values names it.
   if (opts.acr) login.searchParams.set("acr_values", opts.acr);
@@ -80,7 +80,7 @@ export async function bindingValue(ctx: GenericEndpointContext, create: boolean)
 
 /** Session check, IsPassive, or park the request and send the user to sign in. `identity`: the route's, which is the SP's. */
 async function proceed(ctx: GenericEndpointContext, state: PluginState, identity: IdpIdentity, sp: ResolvedServiceProvider, req: ValidatedRequest) {
-  // The session store, not the cookie cache: a revoked session must not get an assertion (R4-2).
+  // The session store, not the cookie cache: a revoked session must not get an assertion.
   const session = await getAuthoritativeSessionFromCtx(ctx);
   if (session && !req.forceAuthn) return issueResponse(ctx, state, sp, session as any, req);
   if (req.isPassive)
@@ -106,7 +106,7 @@ const ssoMetadata = (operationId: string, summary: string) => ({
  * the login page; `/resume?rid=` picks it up afterwards (R1). Shared with IdP-initiated SSO.
  */
 export async function parkForLogin(ctx: GenericEndpointContext, state: PluginState, req: ValidatedRequest, opts: { acr?: string } = {}): Promise<never> {
-  // Step-up (D-047, review 5 R5-1/R5-2): every park of a request with a RequestedAuthnContext
+  // Step-up (D-047): every park of a request with a RequestedAuthnContext
   // tells the login page the level to deliver, whatever sent the user there (no session yet,
   // the SP's ForceAuthn, authorize()'s reauthenticate, or step-up itself). One round is then
   // always enough for a page that honours acr_values, which keeps the loop guard fair.
@@ -173,7 +173,7 @@ async function handleSso(ctx: SsoContext, state: PluginState, tenantKey?: string
     sp = await prepareSp(ctx, state, sp); // the SP's signing certificates may come from metadata
     const signed = checkRequestSignature(raw, sp, { allowInsecureSha1: options.signing.allowInsecureSha1 }, xml);
     // A signed request must say where it was meant to go, or it can be replayed to another
-    // endpoint (Bindings §3.4.5.2 / §3.5.5.2; SLO already required it). R4-L1.
+    // endpoint (Bindings §3.4.5.2 / §3.5.5.2; SLO already required it).
     if (signed && info.destination === undefined) throw new SamlRequestError("INVALID_SAML_REQUEST", "a signed AuthnRequest must carry Destination");
     const acsUrl = resolveAcsUrl(sp, info.acsUrl);
     if (!acsUrl) return fail(ctx, state, "ACS_URL_NOT_ALLOWED", `SP ${sp.id}`, { spId: sp.id, ...tenantOf(sp) });

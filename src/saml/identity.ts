@@ -1,8 +1,8 @@
 // Which IdP speaks (D-052): the root IdP, or a tenant's. Everything the IdP signs or advertises
 // (Issuer, signing key, SSO and SLO URLs, metadata) comes from an IdpIdentity, and this is the
 // one module that reads `options.entityId` and the signing key for that purpose; a unit test
-// fails if another source file does (multi-tenant design §5.8). A hard-wired use elsewhere
-// would issue one tenant's messages under another identity.
+// fails if another source file does. A hard-wired use elsewhere would issue one
+// tenant's messages under another identity.
 import type { ResolvedSamlIdpOptions, ResolvedServiceProvider, ResolvedSigning, ResolvedSigningSettings } from "../types";
 import { idpBaseURL, METADATA_PATH, SSO_PATH } from "./idp";
 import { SLO_PATH } from "./logout";

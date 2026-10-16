@@ -80,7 +80,7 @@ const fingerprint = (pem: string) => new X509Certificate(pem).fingerprint256;
 /**
  * Everything the learned certificates depend on: a registry SP's URL, signature pins, entity ID
  * or encryption settings can change at runtime, and certificates learned under the old values
- * must not carry over (e.g. after re-pinning a compromised metadata key; review 2, R2-MD-1).
+ * must not carry over (e.g. after re-pinning a compromised metadata key).
  */
 function cacheKey(sp: ResolvedServiceProvider): string {
   const md = sp.metadata;

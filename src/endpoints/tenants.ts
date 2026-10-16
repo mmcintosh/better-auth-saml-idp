@@ -2,7 +2,7 @@
 // identity), switch it off and on, and remove it. Mounted with the registry API, under the same
 // manager check (`samlTenant` in `samlIdpStatements` with `registry.permissions`). Nothing makes
 // a tenant automatically (maintainer decision 1), and an organization's own administrators can't
-// manage one while tenants share the signing key (multi-tenant design §5.1).
+// manage one while tenants share the signing key.
 import { X509Certificate } from "node:crypto";
 import type { GenericEndpointContext } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware, sensitiveSessionMiddleware } from "better-auth/api";
@@ -64,13 +64,13 @@ function record(ctx: GenericEndpointContext, state: PluginState, row: TenantRow,
   };
 }
 
-/** The tenant row of exactly this organization (a case-insensitive collation must not widen it, R4-L8). */
+/** The tenant row of exactly this organization (a case-insensitive collation must not widen it). */
 async function findTenant(ctx: GenericEndpointContext, organizationId: string): Promise<TenantRow | null> {
   const row = (await adapterOf(ctx).findOne({ model: TENANT_MODEL, where: [{ field: "organizationId", value: organizationId }] })) as TenantRow | null;
   return row && row.organizationId === organizationId ? row : null;
 }
 
-/** Was this key a deleted tenant's? Exact match, whatever the collation (R4-L8). */
+/** Was this key a deleted tenant's? Exact match, whatever the collation. */
 async function retired(ctx: GenericEndpointContext, tenantKey: string): Promise<boolean> {
   const row = (await adapterOf(ctx).findOne({ model: RETIRED_KEY_MODEL, where: [{ field: "tenantKey", value: tenantKey }] })) as { tenantKey?: string } | null;
   return row?.tenantKey === tenantKey;
@@ -78,7 +78,7 @@ async function retired(ctx: GenericEndpointContext, tenantKey: string): Promise<
 
 export function tenantEndpoints(state: PluginState) {
   const audit = (ctx: GenericEndpointContext, what: string) => ctx.context.logger.info(`[saml-idp] tenants: ${what}`);
-  /** Logged, and a `tenant.changed` event (its handler and the audit log, review 6 I-2). */
+  /** Logged, and a `tenant.changed` event (its handler and the audit log). */
   const changedBy = (
     ctx: GenericEndpointContext,
     userId: string,
@@ -110,7 +110,7 @@ export function tenantEndpoints(state: PluginState) {
   const keysOf = async (ctx: GenericEndpointContext, tenantIds: string[]) => {
     const by = new Map<string, TenantKeyRow[]>();
     if (!state.tenantKeys || tenantIds.length === 0) return by;
-    // The listed tenants' rows only, in the query (R7-3), in batches for D1; a tenant has at most nine (R7-1).
+    // The listed tenants' rows only, in the query, in batches for D1; a tenant has at most nine.
     const rows = (await findManyIn(adapterOf(ctx), TENANT_KEY_MODEL, "tenantId", tenantIds, 10)) as TenantKeyRow[];
     for (const r of rows) by.set(r.tenantId, [...(by.get(r.tenantId) ?? []), r]);
     return by;
@@ -153,18 +153,18 @@ export function tenantEndpoints(state: PluginState) {
         const org = (await adapterOf(ctx).findOne({ model: "organization", where: [{ field: "id", value: organizationId }] })) as { id?: unknown; createdAt?: unknown } | null;
         if (org == null || String(org.id) !== organizationId) throw fail("BAD_REQUEST", "INVALID_TENANT", { issues: [`organizationId: no organization "${organizationId}"`] });
         // The tenant is bound to this organization, not just its id, which a database may hand
-        // out again after a delete (R6-1): its creation time is kept with the tenant.
+        // out again after a delete: its creation time is kept with the tenant.
         const organizationCreatedAt = instant(org.createdAt);
         if (Number.isNaN(organizationCreatedAt)) throw fail("BAD_REQUEST", "INVALID_TENANT", { issues: [`organizationId: organization "${organizationId}" has no createdAt`] });
         // The key names the tenant in its URLs and entity ID, which SPs pin: by default the
-        // organization's id, which never changes (a slug can, and can be claimed; design §1).
+        // organization's id, which never changes (a slug can, and can be claimed).
         const tenantKey = ctx.body.tenantKey ?? organizationId;
         if (!TENANT_KEY.test(tenantKey))
           throw fail("BAD_REQUEST", "INVALID_TENANT", {
             issues: [`tenantKey: must be 1-64 characters of A-Z a-z 0-9 _ -${ctx.body.tenantKey === undefined ? " (the organization id isn't; choose a tenantKey)" : ""}`],
           });
         // A key names another organization's URLs by default: taking it would make a URL that
-        // looks like that organization's name this one (review 6 I-3).
+        // looks like that organization's name this one.
         if (tenantKey !== organizationId) {
           // A key that can't be an id here (text in a serial id column) makes some databases throw: no such organization.
           const other = (await adapterOf(ctx)
@@ -172,7 +172,7 @@ export function tenantEndpoints(state: PluginState) {
             .catch(() => null)) as { id?: unknown } | null;
           if (other != null && String(other.id) === tenantKey) throw fail("BAD_REQUEST", "INVALID_TENANT", { issues: ["tenantKey: is another organization's id"] });
         }
-        // A deleted tenant's key is never used again: its SPs still trust its entity ID (R6-2).
+        // A deleted tenant's key is never used again: its SPs still trust its entity ID.
         if (await retired(ctx, tenantKey)) throw fail("CONFLICT", "TENANT_KEY_RETIRED");
         // With per-tenant keys a new tenant signs with its own key from the start (D-058): made
         // before the tenant, so a failure leaves nothing behind. No SP trusts it yet, so it is
@@ -237,7 +237,7 @@ export function tenantEndpoints(state: PluginState) {
         const inCode = state.directory.codeSps().some((sp) => sp.tenantId === row.organizationId);
         const stored = (await adapterOf(ctx).findMany({ model: SP_MODEL, where: [{ field: "tenantId", value: row.organizationId }], limit: 1 })) as StoredSpRow[];
         if (inCode || stored.length > 0) throw fail("CONFLICT", "TENANT_HAS_SERVICE_PROVIDERS");
-        // Retire the key first (R6-2): SPs configured for this tenant still trust its entity ID,
+        // Retire the key first: SPs configured for this tenant still trust its entity ID,
         // so no other tenant may ever have it. Already retired: an earlier delete stopped here.
         if (!(await retired(ctx, row.tenantKey)))
           await adapterOf(ctx).create({ model: RETIRED_KEY_MODEL, data: { tenantKey: row.tenantKey, organizationId: row.organizationId, retiredAt: new Date(), retiredBy: user.id } });
@@ -399,9 +399,9 @@ const BACKFILL_PAGE = 500;
  * and `lookupKey` on rows saved before, which no lookup finds until then. Server-only (no URL):
  * call `auth.api.samlIdpBackfillServiceProviderKeys()` once from a script or a deploy step.
  * Each row's key comes from its own config; rows whose config doesn't parse are skipped, and rows
- * whose write fails are listed in `failed` (and logged): one bad row doesn't stop the rest
- * (review 6 I-1). Reads the table in pages, however large. Safe to run again: rows that already
- * have a key are left alone. On MongoDB, use `backfillMongoServiceProviderKeys` (R6-4).
+ * whose write fails are listed in `failed` (and logged): one bad row doesn't stop the rest.
+ * Reads the table in pages, however large. Safe to run again: rows that already
+ * have a key are left alone. On MongoDB, use `backfillMongoServiceProviderKeys`.
  */
 export const backfillEndpoint = (state: PluginState) =>
   createAuthEndpoint.serverOnly({ method: "POST" }, async (ctx) => {
@@ -424,7 +424,7 @@ export const backfillEndpoint = (state: PluginState) =>
         } catch (e) {
           failed.push(row.spId);
           // MongoDB builds the UNIQUE lookupKey index before any write, and can't while two
-          // documents lack the key (R6-4).
+          // documents lack the key.
           mongoIndex ||= (e as { code?: unknown })?.code === 11000;
           ctx.context.logger.error(`[saml-idp] backfill: SP ${row.spId} could not be given a lookup key`, e);
         }
@@ -451,7 +451,7 @@ export interface MongoDbLike {
 }
 
 /**
- * The registry upgrade's backfill on MongoDB (review 6 R6-4). Better Auth's MongoDB adapter builds
+ * The registry upgrade's backfill on MongoDB. Better Auth's MongoDB adapter builds
  * a model's indexes before its first write, and the UNIQUE index on `lookupKey` can't be built
  * while two or more documents lack the key, so `samlIdpBackfillServiceProviderKeys` can't write
  * there. This writes the same keys through the driver itself, with the `Db` you gave
@@ -487,7 +487,7 @@ export async function backfillMongoServiceProviderKeys(
 
 /**
  * When an organization is deleted through Better Auth (`/organization/delete`), its tenant is
- * switched off, so the tenant list shows it (review 6 R6-1). Its SPs and key stay: the host's
+ * switched off, so the tenant list shows it. Its SPs and key stay: the host's
  * administrators decide what to remove. Routing and issuance don't depend on this: they check
  * the organization themselves, so a delete made straight in the database is covered too.
  */

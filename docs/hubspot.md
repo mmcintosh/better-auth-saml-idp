@@ -1,6 +1,6 @@
 # Service provider: HubSpot
 
-> **Status: not yet verified against a live HubSpot portal.** HubSpot SSO generally needs a paid HubSpot subscription; check your plan in HubSpot's knowledge base ("Set up single sign-on (SSO)"). The flow below uses only what the plugin already implements and tests. The HubSpot values are placeholders: copy the real ones from **your** portal. The Phase 3 live-login evidence is currently provided by Keycloak, SimpleSAMLphp and the hosted SPs; see [testing-with-sps.md](testing-with-sps.md).
+> **Status: not yet verified against a live HubSpot portal.** HubSpot SSO generally needs a paid HubSpot subscription; check your plan in HubSpot's knowledge base ("Set up single sign-on (SSO)"). The flow below uses only what the plugin already implements and tests. The HubSpot values are placeholders: copy the real ones from **your** portal. Live sign-ins are verified with Keycloak, SimpleSAMLphp and the hosted SPs instead; see [testing-with-sps.md](testing-with-sps.md).
 
 ## 1. Get HubSpot's SP values
 

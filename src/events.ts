@@ -280,7 +280,7 @@ function deliver(sink: Sink, options: Emitter, full: SamlIdpEvent): void {
   const handler = options.events?.[name] as ((e: SamlIdpEvent) => unknown) | undefined;
   // Denials without a signed-in user go to the handler but not the table: anyone can generate
   // them, naming any SP (its entity ID is public), and the table mustn't grow at an attacker's
-  // pace (R4-3). Session ends are stored only when SPs were left signed in, and never for expiry
+  // pace. Session ends are stored only when SPs were left signed in, and never for expiry
   // (every expired session would write a row).
   const audit =
     options.auditLog &&

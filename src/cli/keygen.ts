@@ -18,7 +18,7 @@ export interface KeygenOptions {
 /**
  * Create `path` with `mode`. With --force an existing file (or symlink) is removed first, and the
  * new file is always created exclusively ("wx"): a reused file would keep its old permissions,
- * and a symlink would redirect the key elsewhere (review 2, R2-CLI-1).
+ * and a symlink would redirect the key elsewhere.
  */
 function writeNew(path: string, data: string, mode: number, force: boolean) {
   // No check-then-write: the exclusive create is the check, so nothing can slip in between.

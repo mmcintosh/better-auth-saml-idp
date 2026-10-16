@@ -47,7 +47,7 @@ function metadataResponse(idp: Idp, options: ResolvedSamlIdpOptions, identity: I
 /**
  * A tenant's metadata (D-052): `/saml2/idp/metadata/<tenantKey>`. An unknown key, a disabled
  * tenant and an organization that isn't a tenant all get this same answer, so the URL can't be
- * used to learn which of them it is (multi-tenant design §5.2).
+ * used to learn which of them it is (docs/guide/multi-tenant.md).
  */
 const notFound = () => new Response("Not Found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
 

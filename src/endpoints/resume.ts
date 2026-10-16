@@ -22,7 +22,7 @@ export const resumeEndpoint = (state: PluginState) =>
     },
     async (ctx) => {
       if (!/^[A-Za-z0-9_-]{43}$/.test(ctx.query.rid)) return fail(ctx, state, "PENDING_REQUEST_NOT_FOUND", "malformed rid");
-      // The session store, not the cookie cache: a revoked session must not get an assertion (R4-2).
+      // The session store, not the cookie cache: a revoked session must not get an assertion.
       const session = await getAuthoritativeSessionFromCtx(ctx);
       if (!session) {
         // Not consumed: the user can sign in and come back to the same URL.

@@ -64,7 +64,7 @@ export function moveKeyRow(ctx: GenericEndpointContext, row: TenantKeyRow, to: T
   return adapterOf(ctx).update({ model: TENANT_KEY_MODEL, where: [{ field: "id", value: row.id }], update: { state: to, stateKey: stateKeyOf(row.tenantId, to), ...update } });
 }
 
-/** Keep the newest KEEP_RETIRED retired rows of an owner (R7-1); the audit log has the rest. */
+/** Keep the newest KEEP_RETIRED retired rows of an owner; the audit log has the rest. */
 export async function pruneRetiredRows(ctx: GenericEndpointContext, owner: string): Promise<void> {
   const retiredRows = (await keyRows(ctx, owner)).filter((k) => k.state === "retired").sort((a, b) => date(b.createdAt).getTime() - date(a.createdAt).getTime());
   for (const old of retiredRows.slice(KEEP_RETIRED)) await adapterOf(ctx).delete({ model: TENANT_KEY_MODEL, where: [{ field: "id", value: old.id }] });

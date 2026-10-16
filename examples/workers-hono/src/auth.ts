@@ -221,7 +221,7 @@ function buildAuth(env: Env, origin: string) {
         databaseHooks: {
           session: { create: { before: async (session, ctx) => ({ data: { ...session, authMethod: authMethodOf(ctx?.path) } }) } },
         },
-        // ADDENDUM-01: single-use state and rate limits in the database, never KV.
+        // Single-use state and rate limits in the database, never KV (KV is eventually consistent).
         verification: { storeInDatabase: true },
         rateLimit: { enabled: env.RATE_LIMIT !== "off", storage: "database" },
         advanced: {

@@ -26,8 +26,8 @@ function resolveSource(source: AttributeSource, user: SamlIdpUser, context: Attr
   if ("value" in source) return Array.isArray(source.value) ? [...source.value] : source.value;
   if ("organization" in source) {
     const only = source.only;
-    // Scope: the `only` allow-list; else the SP's own organization when it has a rule (review 4:
-    // otherwise a member could create "Administrators" and send it); else every membership.
+    // Scope: the `only` allow-list; else the SP's own organization when it has a rule
+    // (otherwise a member could create "Administrators" and send it); else every membership.
     const orgs = only
       ? context.organizations.filter((o) => only.includes(o.id) || only.includes(o.slug))
       : context.organization
@@ -65,7 +65,7 @@ function resolveSource(source: AttributeSource, user: SamlIdpUser, context: Attr
 const NO_ORGS: AttributeContext = { organizations: [], organization: undefined };
 
 /**
- * Mapped user fields that the user can set themselves (R4-L9): Better Auth's `additionalFields`
+ * Mapped user fields that the user can set themselves: Better Auth's `additionalFields`
  * default to `input: true`, so `/update-user` accepts them and the SP would receive whatever the
  * user chose (a "department" or "role" the SP trusts). Core fields and `input: false` are fine.
  */

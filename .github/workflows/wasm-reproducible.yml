@@ -1,6 +1,6 @@
 # The shipped wasm/xsd.wasm is a binary: prove it is exactly what the source builds. Rebuilds
 # libxml2 + wasm-validator/c/xsdv.c in the digest-pinned emscripten image (wasm-validator/build.sh)
-# and fails if a single byte differs from the committed file (review 4).
+# and fails if a single byte differs from the committed file.
 #
 # Runs when the binary or its source changes, weekly (so a silently changed download would show),
 # and by hand. It pulls a ~1 GB image and compiles libxml2, so not on every push.

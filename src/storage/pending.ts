@@ -1,6 +1,6 @@
 
 /**
- * Pending AuthnRequests (ADDENDUM-01 R1): Better Auth verification values, written with
+ * Pending AuthnRequests: Better Auth verification values, written with
  * `createVerificationValue` and read back ONLY through `consumeVerificationValue`, the same
  * single-use path magic links and 2FA use. The plugin never finds-then-deletes itself and
  * never touches secondary storage directly, so it inherits whatever atomic path the host

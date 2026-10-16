@@ -30,7 +30,7 @@ export const sessionKeyOf = (sessionId: string) => sha256b64url(`saml-idp:slo\u0
 /**
  * The SessionIndex issued to one SP for one session: a keyed MAC over (session id, SP id).
  * Per SP, so SPs can't use it to link a user across SPs, and one SP's value can't
- * authenticate a LogoutRequest in another SP's name (review 2, R2-SLO-2).
+ * authenticate a LogoutRequest in another SP's name.
  */
 export const sessionIndexOf = (secret: string, sessionId: string, spId: string) =>
   `_${base64url(new Uint8Array(createHmac("sha256", secret).update(`saml-idp:session\u0000${sessionId}\u0000${spId}`).digest())).slice(0, 32)}`;
@@ -98,7 +98,7 @@ export async function listUserParticipants(adapter: Adapter, userId: string, now
   const found = (await adapter.findMany({ model: PARTICIPANT_MODEL, where: [{ field: "userId", value: userId }], limit: MAX_PARTICIPANTS + 1 })) as ParticipantRow[];
   const participants = found
     .slice(0, MAX_PARTICIPANTS)
-    // Exact match, as findRow does (R4-L8): a case-insensitive collation must not widen it.
+    // Exact match, as findRow does: a case-insensitive collation must not widen it.
     .filter((r) => r.userId === userId && new Date(r.expiresAt).getTime() > now.getTime())
     .map(({ spId, nameId, nameIdFormat, sessionIndex, endedAt, expiresAt }) => ({
       spId,
@@ -125,7 +125,7 @@ export async function userOfSessionIndex(adapter: Adapter, spId: string, session
     ],
     limit: 2,
   })) as ParticipantRow[];
-  // Exact match, as findRow does (R4-L8): a case-insensitive collation must not widen it.
+  // Exact match, as findRow does: a case-insensitive collation must not widen it.
   const row = found.find((r) => r.sessionIndex === sessionIndex && r.spId === spId && !r.endedAt);
   return row?.userId ?? null;
 }
@@ -149,7 +149,7 @@ export function consumeEndingBySlo(sessionId: string): boolean {
   return at !== undefined && Date.now() - at <= ENDING_TTL_MS;
 }
 
-/** A deleted user's rows, NameIDs included, go with the user (review 5 R5-3). */
+/** A deleted user's rows, NameIDs included, go with the user. */
 export async function forgetUserParticipants(adapter: Adapter, userId: string): Promise<void> {
   await adapter.deleteMany({ model: PARTICIPANT_MODEL, where: [{ field: "userId", value: userId }] });
 }

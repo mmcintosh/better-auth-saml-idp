@@ -29,7 +29,7 @@ jobs:
         with: { mode: firewall-free }
       - run: sfw pnpm install --frozen-lockfile
       - run: pnpm typecheck && pnpm lint && pnpm test && pnpm test:wasm && pnpm pack:check
-      # The published package's runtime dependencies only, not the examples' (review 6 R6-5).
+      # The published package's runtime dependencies only, not the examples'.
       - run: node scripts/audit-runtime.mjs --audit-level low
 
   # Build the tarball and its SBOM. No secrets and no write access here.
@@ -57,7 +57,7 @@ jobs:
           if case "$REF" in refs/tags/v*) true ;; *) false ;; esac; then
             [ "$REF_NAME" = "v$version" ] || { echo "::error::tag $REF_NAME doesn't match package.json version $version"; exit 1; }
             [ "$private" = false ] || { echo "::error::package.json is still \"private\": true"; exit 1; }
-            # Only commits already on main are released, whoever pushed the tag (R4-L10).
+            # Only commits already on main are released, whoever pushed the tag.
             git fetch --quiet origin main
             git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::tag $REF_NAME is not on main"; exit 1; }
           fi
@@ -84,7 +84,7 @@ jobs:
         with: { name: release, path: out/, retention-days: 30 }
 
   # Publish the tested tarball. Runs only for tags, in the `npm` environment: add required
-  # reviewers to it (Settings > Environments) so every release needs an approval (R4-L10).
+  # reviewers to it (Settings > Environments) so every release needs an approval.
   publish:
     needs: package
     if: startsWith(github.ref, 'refs/tags/v')
@@ -114,7 +114,7 @@ jobs:
         run: case "$VERSION" in *-*) echo "tag=next" >> "$GITHUB_OUTPUT" ;; *) echo "tag=latest" >> "$GITHUB_OUTPUT" ;; esac
       # A signed SLSA provenance of the tarball, also attached to the GitHub release as
       # <tarball>.sigstore.json, so the release itself carries its signature. Before staging on
-      # npm: if it fails, nothing is staged, and a re-run starts clean (review 6).
+      # npm: if it fails, nothing is staged, and a re-run starts clean.
       - id: attest
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with: { subject-path: "out/*.tgz" }

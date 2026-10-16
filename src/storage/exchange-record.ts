@@ -1,7 +1,7 @@
 /**
  * Exchangeable assertions (D-071): one Better Auth verification value per assertion issued to an
  * SP with `tokenExchange`, written with `createVerificationValue` and read back ONLY through
- * `consumeVerificationValue` (the pending-request pattern, ADDENDUM-01 R1), so each assertion is
+ * `consumeVerificationValue` (the pending-request pattern), so each assertion is
  * exchanged at most once, whichever instance gets it first. No row exists for any other SP.
  */
 import { sha256b64url } from "./pending";

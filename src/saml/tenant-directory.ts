@@ -2,13 +2,13 @@
 // up by the key in a request's URL or by an SP's organization id, and cached per isolate, misses
 // too, for `tenants.cacheSeconds` (as stored SPs are, D-027), so a request naming an unknown
 // tenant doesn't cost a database read each time. A tenant is used only while it is enabled and its
-// organization is still the one it was made for (review 6 R6-1, D-053): same id and same
+// organization is still the one it was made for (D-053): same id and same
 // `createdAt`. An organization deleted, even straight from the database, and an id handed out
 // again to a new organization (serial ids on SQLite and D1 do that) both leave the tenant unused.
 import { isEnabled } from "./sp-directory";
 
 export const TENANT_MODEL = "samlIdpTenant";
-/** Keys of deleted tenants, never used again (R6-2). */
+/** Keys of deleted tenants, never used again. */
 export const RETIRED_KEY_MODEL = "samlIdpRetiredTenantKey";
 /** A tenant key, as it may appear in a URL path segment. */
 export const TENANT_KEY = /^[A-Za-z0-9_-]{1,64}$/;
@@ -18,7 +18,7 @@ export interface TenantRow {
   id: string;
   organizationId: string;
   tenantKey: string;
-  /** The organization's `createdAt` when the tenant was made (R6-1). */
+  /** The organization's `createdAt` when the tenant was made. */
   organizationCreatedAt: Date | string | number;
   enabled: boolean | number | string;
   createdAt: Date;
@@ -62,7 +62,7 @@ export class TenantDirectory {
 
   /**
    * The row whose column is exactly `value`: a case-insensitive or PAD SPACE collation (MySQL)
-   * would otherwise return tenant "acme" for the key "ACME " (as for stored SPs, review 2). Then
+   * would otherwise return tenant "acme" for the key "ACME " (as for stored SPs). Then
    * the tenant only if it's enabled and its organization is the one it was made for.
    */
   private async tenant(adapter: Adapter, field: "tenantKey" | "organizationId", value: string): Promise<Tenant | undefined> {

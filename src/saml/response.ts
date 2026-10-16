@@ -99,7 +99,7 @@ function attributeStatement(attributes: Record<string, SamlAttributeValue>): str
 /** ` InResponseTo="…"`, or nothing for an unsolicited Response (Profiles §4.1.4.2, §4.1.5). */
 const inResponseToAttr = (requestId: string | undefined) => (requestId === undefined ? "" : ` InResponseTo="${escapeXml(requestId)}"`);
 
-/** The unsigned Response document, with every field from SPEC §6 step 7. */
+/** The unsigned Response document, with every field the Response and its Assertion carry. */
 export function buildResponseXml(options: ResolvedSamlIdpOptions, identity: IdpIdentity, input: BuildResponseInput) {
   const responseId = newSamlId();
   const assertionId = newSamlId();

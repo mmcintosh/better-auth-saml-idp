@@ -173,7 +173,7 @@ type Refusal = { code: SamlIdpErrorCode; detail: string };
 
 /**
  * Immediately before signing: re-read the user (and, where the database holds sessions, the
- * session) from the database (ADDENDUM-01 R3), then apply the account policy. A session served
+ * session) from the database, then apply the account policy. A session served
  * from a KV cache can outlive revocation (better-auth-cloudflare #61); the database is the
  * source of truth. An IdP vouches for identities, so the defaults are strict: unverified email,
  * impersonation and anonymous users are refused (review finding #1).
@@ -191,7 +191,7 @@ async function eligiblePrincipal(
   // Re-read the session from its authoritative store right before signing:
   // - the database whenever it holds sessions, even with secondary storage in front: KV is
   //   eventually consistent, so a revocation elsewhere may not have reached this location's copy;
-  // - otherwise secondary storage, the only record (R4-2: this case used to be skipped).
+  // - otherwise secondary storage, the only record (this case used to be skipped).
   // Stateless hosts have no server-side record; their signed cookie is the session.
   const opts = ctx.context.options as { secondaryStorage?: unknown; session?: { storeSessionInDatabase?: boolean } };
   const sessionsInDatabase = !opts.secondaryStorage || opts.session?.storeSessionInDatabase === true;
@@ -357,7 +357,7 @@ export async function issueResponse(
       const target = stepUpTarget(requested, levels.levels);
       const noContext = { code: "Responder" as const, subCode: "NoAuthnContext" as const, message: "The requested authentication context is not available" };
       // "maximum": the session is already stronger than asked, and signing in again can't lower
-      // what current() reports, so a round would be a dead end (review 5 R5-4).
+      // what current() reports, so a round would be a dead end.
       if (!target || requested.comparison === "maximum") return samlError(ctx, state, identity, request, noContext, user.id);
       if (request.isPassive)
         return samlError(ctx, state, identity, request, { code: "Responder", subCode: "NoPassive", message: "Stepping up authentication needs the user" }, user.id);
@@ -442,7 +442,7 @@ export async function issueResponse(
   if (state.options.sessionTracking) {
     // Logout must be able to reach this SP later (D-028), and a session that ends without it
     // must be able to name it (D-043). If it can't be recorded, don't issue: a later logout
-    // would skip this SP and still report Success (review 3, R3-2).
+    // would skip this SP and still report Success.
     try {
       await recordParticipant(ctx.context.adapter as any, session.session.id, user.id, { spId: sp.id, nameId, nameIdFormat: sp.nameIdFormat, sessionIndex }, new Date(session.session.expiresAt));
     } catch (e) {

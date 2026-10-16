@@ -67,7 +67,7 @@ async function hostManager(ctx: GenericEndpointContext, state: PluginState, user
 
 /**
  * The actor of a registry request. Every route needs a non-impersonated user as the database has
- * it now (R4-L3), not banned. Host managers may do anything; with `delegated`, a user who holds one
+ * it now, not banned. Host managers may do anything; with `delegated`, a user who holds one
  * of `tenants.delegation.roles` in an enabled tenant's organization may act on that tenant's SPs.
  * Memberships are read from the database on every request, never from the session's active
  * organization, so a demoted administrator loses access at once.
@@ -84,7 +84,7 @@ export async function access(
   // An admin acting as another user must not manage SPs under that identity.
   if (s.session.impersonatedBy) throw fail("FORBIDDEN", "REGISTRY_NOT_ALLOWED");
   // Decide on the user as the database has it now, as issuance does: with sessions in secondary
-  // storage, the session's copy of the user can predate a ban or a demotion (R4-L3).
+  // storage, the session's copy of the user can predate a ban or a demotion.
   const user = (await ctx.context.internalAdapter.findUserById(s.user.id)) as Record<string, unknown> | null;
   if (!user || isBanned(user, new Date())) throw fail("FORBIDDEN", "REGISTRY_NOT_ALLOWED");
   if (await hostManager(ctx, state, user, s.session, action, resource)) return { user: user as { id: string }, tenants: null };
@@ -95,7 +95,7 @@ export async function access(
     if (!m.roles.some((r) => delegation.roles.includes(r))) continue;
     // Only an enabled tenant whose organization is still the one it was made for (D-053), and
     // that signs with its own key: one still on the shared key would let its administrator have
-    // assertions for another identity's SPs signed with that key (review 7 R7-5, design §5.1).
+    // assertions for another identity's SPs signed with that key.
     if (!(await state.tenants.byOrganization(ctx.context.adapter as any, m.id))) continue;
     const keys = state.tenantKeys ? await state.tenantKeys.load(ctx.context.adapter as any, m.id) : [];
     if (keys.some((k) => k.state === "active")) tenants.add(m.id);
@@ -130,7 +130,7 @@ function delegatedIssues(
     const field = typeof source === "string" ? source : "field" in source ? source.field : undefined;
     if (field !== undefined && !allowed.has(field)) issues.push(`serviceProvider.attributes.${name}: the user field "${field}" isn't one a tenant's administrator may send (${[...allowed].join(", ")})`);
     // `only` names organizations: others than the tenant's would tell it its members' other
-    // memberships. Without it, a tenant SP's organization attributes cover the tenant (R7-4).
+    // memberships. Without it, a tenant SP's organization attributes cover the tenant.
     if (typeof source === "object" && "organization" in source && source.only !== undefined)
       issues.push(`serviceProvider.attributes.${name}.only: a tenant's administrator can't name organizations; the tenant's own is the scope`);
   }
@@ -175,7 +175,7 @@ const codeRecord = (sp: ResolvedServiceProvider, state: PluginState, others: rea
 
 type Overlappable = Pick<ResolvedServiceProvider, "id" | "entityId" | "acsUrls" | "tenantId">;
 
-/** The host-administrator overlap warning (multi-tenant design §5.1 c). */
+/** The host-administrator overlap warning (docs/guide/multi-tenant.md). */
 function overlapWarnings(sp: Overlappable, others: readonly Overlappable[], state: PluginState): string[] {
   const other = others.find((o) => o.id !== sp.id && overlaps(sp, o));
   return other ? [overlapWarning(other, state.options.tenants?.perTenantKeys === true)] : [];
@@ -206,7 +206,7 @@ function parsed(row: StoredSpRow, state: PluginState) {
 /**
  * A stored row as a record. Invalid rows (edited by hand, or options tightened since) are
  * returned with their issues and are not used for sign-in: the same checks the directory
- * applies when it loads a row (R4-L8), so `valid` means used.
+ * applies when it loads a row, so `valid` means used.
  */
 function view(row: StoredSpRow, state: PluginState, authOptions: unknown, others: readonly Overlappable[] = []): ServiceProviderRecord {
   const { config, r } = parsed(row, state);
@@ -262,7 +262,7 @@ async function validate(ctx: GenericEndpointContext, state: PluginState, input: 
 
 /**
  * The row whose spId is exactly `id`. A case-insensitive collation (MySQL's default) would
- * otherwise return "abc" for "ABC", and update or delete would act on that row (R4-L8).
+ * otherwise return "abc" for "ABC", and update or delete would act on that row.
  */
 const findRow = async (ctx: GenericEndpointContext, id: string) => {
   const row = (await adapterOf(ctx).findOne({ model: SP_MODEL, where: [{ field: "spId", value: id }] })) as StoredSpRow | null;
@@ -294,7 +294,7 @@ export function registryEndpoints(state: PluginState) {
   };
   /**
    * Before validation, which would say whether a named organization is a tenant: a delegated
-   * administrator naming anything but its own tenants gets the same 403 (review 7 R7-6).
+   * administrator naming anything but its own tenants gets the same 403.
    */
   const scopeFirst = (actor: Actor, input: Record<string, unknown>) => {
     if (actor.tenants && !(typeof input.tenant === "string" && actor.tenants.has(input.tenant)))
@@ -333,7 +333,7 @@ export function registryEndpoints(state: PluginState) {
           limit: MAX_LIST,
           sortBy: { field: "spId", direction: "asc" },
         })) as StoredSpRow[];
-        // Exact match, as findRow does (R4-L8): a collation must not widen the filter.
+        // Exact match, as findRow does: a collation must not widen the filter.
         const listed = tenantId === undefined ? rows : rows.filter((r) => (r.tenantId ?? "") === tenantId);
         const code = state.directory.codeSps().filter((sp) => tenantId === undefined || (sp.tenantId ?? "") === tenantId);
         // Overlaps are judged against everything listed, plus the rest when filtered. Never for a
@@ -408,8 +408,8 @@ export function registryEndpoints(state: PluginState) {
         const user = actor.user;
         const row = await findRow(ctx, ctx.body.id);
         if (!row || !inScope(actor, row.tenantId)) throw fail("NOT_FOUND", "SERVICE_PROVIDER_NOT_FOUND");
-        // Only switching it on or off: no re-validation, so an invalid row can still be disabled
-        // (review 5 R5-8). Its config is untouched.
+        // Only switching it on or off: no re-validation, so an invalid row can still be disabled.
+        // Its config is untouched.
         if (ctx.body.serviceProvider === undefined) {
           if (ctx.body.enabled === undefined) throw fail("BAD_REQUEST", "INVALID_SERVICE_PROVIDER", { issues: ["send serviceProvider, enabled, or both"] });
           const toggle = { enabled: ctx.body.enabled, updatedAt: new Date(), updatedBy: user.id };
@@ -490,7 +490,7 @@ export function registryEndpoints(state: PluginState) {
                 limit: ctx.query?.limit ?? 100,
                 sortBy: { field: "at", direction: "desc" },
               })) as Record<string, unknown>[];
-              // Exact tenant match, whatever the collation (R4-L8).
+              // Exact tenant match, whatever the collation.
               const mine = tenantId === undefined ? rows : rows.filter((r) => (r.tenantId ?? "") === tenantId);
               return ctx.json({
                 events: mine.map((r) => {

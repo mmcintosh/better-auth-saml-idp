@@ -99,7 +99,7 @@ export function verifyEnvelopedSignature(
 
   if (certs.length === 0) return { present: true, valid: undefined, ...names };
   let problem = "signature does not verify with any configured certificate";
-  // Pick the certificate before the expensive part (review 4, R4-2). xml-crypto validates the
+  // Pick the certificate before the expensive part. xml-crypto validates the
   // Reference (re-parse, ID lookups, canonicalising the whole document) before it looks at the
   // key, so trying N certificates cost N full verifications. Canonicalise SignedInfo once, with
   // xml-crypto's own code, check the SignatureValue against each key (a cheap RSA operation), and
