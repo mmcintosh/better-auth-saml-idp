@@ -17,7 +17,7 @@ Rename tables or columns with the [`schema` option](options.md#schema).
 
 ## `samlIdpSeenRequest` (always)
 
-Replay protection ([ADDENDUM-01 R2](../../DECISIONS.md)): one row per (SP, AuthnRequest ID) seen, and per LogoutRequest ID.
+Replay protection: one row per (SP, AuthnRequest ID) seen, and per LogoutRequest ID.
 
 | Field | Type | Key | Description |
 |---|---|---|---|

@@ -144,7 +144,7 @@ export const samlIdp = (options: SamlIdpOptions) => {
         ? {
             databaseHooks: {
               // A deleted user's participant rows (NameID included) are removed with the user, after
-              // the session hook below has reported them (review 5 R5-3). Never blocks the delete.
+              // the session hook below has reported them. Never blocks the delete.
               user: {
                 delete: {
                   after: async (user: { id?: string }) => {
@@ -158,7 +158,7 @@ export const samlIdp = (options: SamlIdpOptions) => {
               session: {
                 // Participants live as long as the session: when Better Auth extends a session,
                 // extend its participant rows, so the expiry sweep can't drop SPs a later logout
-                // must reach (review 2, R2-SLO-1).
+                // must reach.
                 update: {
                   after: async (session: { id?: string; expiresAt?: Date | string }) => {
                     if (!session?.id || !session.expiresAt) return;

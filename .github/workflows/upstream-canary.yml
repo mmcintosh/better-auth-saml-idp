@@ -1,4 +1,4 @@
-# ADDENDUM-01 R4: weekly run against Better Auth's latest, next and beta tags. Failures open an
+# Weekly run against Better Auth's latest, next and beta tags. Failures open an
 # issue; they never block PRs. Better Auth publishes its prereleases under `beta` (1.8.0-beta.0 on
 # 2026-10-15); `next` has pointed at a stale 0.8.7-beta.5 since 2026-09-24. So the job skips any
 # tag older than the pinned minimum, and a prerelease tag once latest has caught up with it.

@@ -12,8 +12,8 @@ export const MAX_XML_DEPTH = 100;
 /**
  * Namespaces in XML §6.3 ("Attributes Unique"): no element may carry two attributes with the same
  * expanded name, e.g. p:x and q:x with p and q bound to one URI. xmldom 0.9 silently keeps one;
- * xml-crypto's xmldom 0.8 keeps both, so the two would read different documents (review 3,
- * R3-7). Scan start tags, tracking namespace declarations through the element stack.
+ * xml-crypto's xmldom 0.8 keeps both, so the two would read different documents.
+ * Scan start tags, tracking namespace declarations through the element stack.
  */
 function assertUniqueExpandedAttributes(xml: string): void {
   // A hand-written scanner, linear in the input: each construct is found with indexOf from where
@@ -27,7 +27,7 @@ function assertUniqueExpandedAttributes(xml: string): void {
   const n = xml.length;
   const isSpace = (c: number) => c === 0x20 || c === 0x09 || c === 0x0a || c === 0x0d;
   // Characters no XML name may contain but that xmldom treats as separators (NUL, VT, FF, U+0080
-  // and the like, found by review 4's parser differential, R4-L7). Refused, so the scanner and
+  // and the like, found by a parser differential test). Refused, so the scanner and
   // the parsers can't split a tag into different attributes.
   // biome-ignore lint/suspicious/noControlCharactersInRegex: matching control characters is the point
   const NOT_IN_NAME = /[\u0000-\u001f\u007f-\u009f\s]/;

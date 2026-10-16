@@ -267,7 +267,7 @@ async function handleSlo(ctx: SloContext, state: PluginState, tenantKey?: string
   try {
     // A participant's answer to our LogoutRequest: continue the chain whatever it says. Matched to
     // its hop by RelayState wherever it arrives, even at a URL whose tenant was disabled since the
-    // chain started (review 6 I-4), and checked against its own tenant's SLO URL: the rest of the
+    // chain started, and checked against its own tenant's SLO URL: the rest of the
     // chain and the originator's answer aren't lost.
     if (input.SAMLResponse !== undefined && (isPost || input.cid === undefined)) {
       const raw = rawFrom(ctx, isPost, "SAMLResponse");

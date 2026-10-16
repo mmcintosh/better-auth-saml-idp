@@ -25,7 +25,7 @@ export function usersCanCreateOrganizations(plugins: readonly { id: string; opti
 
 /**
  * What in this SP's configuration a user could satisfy with an organization they created
- * themselves (review 4, R4-1): a rule by slug (a slug nobody has taken yet can be claimed), and
+ * themselves: a rule by slug (a slug nobody has taken yet can be claimed), and
  * organization attributes without an `only` allow-list (any name or slug the user chose).
  */
 const warnedClaimable = new Set<string>();

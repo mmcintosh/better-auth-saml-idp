@@ -130,7 +130,7 @@ export const rateLimits = sqliteTable("rate_limits", {
   lastRequest: integer("last_request").notNull(),
 });
 
-// saml-idp (ADDENDUM-01 R2)
+// saml-idp: replay protection
 export const samlIdpSeenRequests = sqliteTable(
   "saml_idp_seen_requests",
   {

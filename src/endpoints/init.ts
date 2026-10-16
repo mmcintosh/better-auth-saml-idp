@@ -31,7 +31,7 @@ export function idpInitiatedRelayState(sp: ResolvedServiceProvider, requested: s
  */
 export function isDriveByCrossSite(ctx: GenericEndpointContext, opts: { sameSiteToo?: boolean } = {}): boolean {
   const headers = ctx.request?.headers ?? ctx.headers;
-  // `sameSiteToo` (sign-out everywhere, R4-L4): a sibling subdomain, such as another app or user
+  // `sameSiteToo` (sign-out everywhere): a sibling subdomain, such as another app or user
   // content on one, must not end every session without a click. IdP-initiated sign-in keeps
   // same-site navigations: host apps redirect there, and the worst a drive-by can do is sign the
   // user in as themselves.
@@ -93,7 +93,7 @@ export const initEndpoint = (state: PluginState) =>
         // Issued under the SP's tenant identity (D-052); the URL stays the same for every tenant.
         ...tenantOf(sp),
       };
-      // The session store, not the cookie cache: a revoked session must not get an assertion (R4-2).
+      // The session store, not the cookie cache: a revoked session must not get an assertion.
       const session = await getAuthoritativeSessionFromCtx(ctx);
       if (session) return issueResponse(ctx, state, sp, session as any, req);
       return parkForLogin(ctx, state, req);

@@ -158,7 +158,7 @@ export interface TenantOptions {
    */
   minPublishedSeconds?: number | undefined;
   /**
-   * Phase 3 (D-059), with `keys: "per-tenant"` only: an organization's own administrators manage
+   * Delegated administration (D-059), with `keys: "per-tenant"` only: an organization's own administrators manage
    * their tenant's SPs through the registry API. Membership is read from the database on every
    * request, never from the session's active organization, so a demotion takes effect at once.
    */
@@ -209,7 +209,7 @@ export type AttributeSource =
    * Which organizations: those in `only` (ids or slugs) when set; otherwise the SP's own
    * `organization` when it has a rule; otherwise all of the user's (roles then as "slug:role").
    * Users can create organizations by default and name them anything ("Administrators"), so
-   * without a rule, set `only` (review 4, R4-1).
+   * without a rule, set `only`.
    */
   | { organization: "slugs" | "names" | "ids" | "roles"; only?: string[] };
 export type AttributeMap = Record<string, AttributeSource>;
@@ -723,7 +723,7 @@ export interface ResolvedSamlIdpOptions {
         perTenantKeys: boolean;
         keyEncryptionSecret: string | undefined;
         minPublishedMs: number;
-        /** Phase 3 (D-059): delegated SP management; undefined when off. */
+        /** Delegated SP management (D-059); undefined when off. */
         delegation: { roles: string[]; userFields: string[]; allowMetadataUrl: boolean } | undefined;
       }
     | undefined;

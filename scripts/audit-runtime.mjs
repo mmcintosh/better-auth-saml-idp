@@ -1,5 +1,5 @@
 // Audits what `npm install better-auth-saml-idp` brings in: the package's production dependencies,
-// at the versions pinned in pnpm-lock.yaml, and nothing else (review 6 R6-5, D-053).
+// at the versions pinned in pnpm-lock.yaml, and nothing else (D-053).
 //   node scripts/audit-runtime.mjs [pnpm audit options, e.g. --audit-level low]
 //
 // At the root of this workspace, `pnpm audit --prod` also covers the examples' production

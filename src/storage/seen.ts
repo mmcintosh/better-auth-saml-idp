@@ -1,7 +1,7 @@
 import { sha256b64url } from "./pending";
 
 /**
- * Seen AuthnRequest IDs (ADDENDUM-01 R2). A replay is detected by the INSERT failing on the
+ * Seen AuthnRequest IDs. A replay is detected by the INSERT failing on the
  * UNIQUE `key` column (a hash of spId + requestId). The follow-up read only classifies the
  * failure, so adapter-specific error codes need not be parsed. Never uses KV / secondary
  * storage.

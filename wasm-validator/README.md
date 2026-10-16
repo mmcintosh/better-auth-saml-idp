@@ -224,7 +224,7 @@ What the suite covers, identically in both runtimes:
 
 ## Benchmarks
 
-The input is the same 290-byte AuthnRequest used in the Phase 0 validator benchmark.
+The input is the same 290-byte AuthnRequest used in the validator benchmark (DECISIONS.md D-003).
 In the tables, "xmllint" means `@authenio/samlify-node-xmllint` 2.0.0
 (node-xmllint 1.0.0). Both validators ran in the same run.
 
@@ -298,7 +298,7 @@ roughly 10–15× faster.
 4. **The trap path isn't exercised by a test.** No input tried here makes
    libxml2 trap. Deep nesting hits libxml2's depth limit and returns an error.
 5. **Error text includes element names and values from the input**, for
-   example `'yesterday' is not a valid value…`. Per SPEC §7 logging rules the
+   example `'yesterday' is not a valid value…`. Under the plugin's logging rules the
    plugin should route it through its logger and not echo it to clients
    verbatim.
 6. The build downloads the tarball from download.gnome.org. It's cached in

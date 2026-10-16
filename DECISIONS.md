@@ -87,6 +87,7 @@ A running log of the non-obvious choices, with the options considered and the ev
 - [D-080](#d-080-a-signing-key-the-plugin-makes-and-keeps-2026-10-13): A signing key the plugin makes and keeps (2026-10-13)
 - [D-081](#d-081-the-better-auth-floor-rises-for-security-in-a-minor-release-2026-10-15): The Better Auth floor rises for security, in a minor release (2026-10-15)
 - [D-082](#d-082-up-to-date-before-170-vitest-5-and-two-overrides-gone-2026-10-15): Up to date before 1.7.0: Vitest 5, and two overrides gone (2026-10-15)
+- [D-083](#d-083-clean-up-after-170-internal-references-out-of-the-code-and-docs-2026-10-16): Clean-up after 1.7.0: internal references out of the code and docs (2026-10-16)
 
 ---
 
@@ -2235,3 +2236,11 @@ Everything brought current before the release, so it ships on what users will in
 - **xml-crypto 6.4.0** in the lockfile (the range stays `^6.3.3`, which new installs already resolve to 6.4.0). It deprecates several APIs ahead of 7.0; the plugin uses none of them (only the synchronous `computeSignature` and `checkSignature`), and the integration and interop tests print no deprecation warnings.
 - **Patch and minor updates** for development and the examples, including better-auth-cloudflare 0.4.1 and better-auth-scim-provisioning 1.3.0 in the Workers example. The published ranges for runtime dependencies are unchanged.
 - **Checked:** lint, typecheck, pack:check, `pnpm test` (1597 passed, node and workerd), test:wasm (83 passed), docs:check, pnpm audit.
+
+## D-083: Clean-up after 1.7.0: internal references out of the code and docs (2026-10-16)
+
+As D-055, for what has built up since. Everything removed is in git history.
+
+- **`docs/design/multi-tenant.md`** is removed. It was the design as written before phase 1, with effort estimates and notes for the maintainer; the [multi-tenant guide](docs/guide/multi-tenant.md) documents what was built, and D-052, D-058 and D-059 record the decisions. Entries above that name the file are unchanged.
+- **References to documents that aren't in the repository** are gone from the source, the docs, the examples and the workflows: the review finding IDs (`review 6 R6-1`, `R4-L8` …), `ADDENDUM-01 R1`–`R4`, `SPEC §6`, the design's section numbers and the project's phases. Several were in the published type declarations, where users read them in their editor. Each comment keeps its reason, and points to a D-0xx entry or a guide page where one explains more. The entries in this file keep their IDs as they were.
+- **The `review-3-baseline` tag** is removed from GitHub: a marker for a review, not a release.

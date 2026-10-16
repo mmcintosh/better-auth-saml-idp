@@ -125,7 +125,7 @@ export class SpDirectory {
     const row = (await adapter.findOne({ model: SP_MODEL, where: [{ field, value }] })) as StoredSpRow | null;
     let sp = this.fromRow(row, log);
     // Exact match only: a case-insensitive or PAD SPACE collation (e.g. MySQL) could return a row
-    // for "HTTPS://SP.example " when "https://sp.example" was stored (review 2).
+    // for "HTTPS://SP.example " when "https://sp.example" was stored.
     if (sp && (field === "entityId" ? sp.entityId : sp.id) !== value) sp = undefined;
     this.remember(key, sp, cacheMs);
     return sp;

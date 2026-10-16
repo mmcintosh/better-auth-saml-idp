@@ -700,7 +700,7 @@ export function resolveOptions(input: SamlIdpOptions): ResolvedSamlIdpOptions {
 
   const tenants = o.tenants?.enabled ? o.tenants : undefined;
   if (tenants) {
-    // Multi-tenant design §5.1: under one shared key, only the Issuer string tells tenants apart,
+    // Under one shared key, only the Issuer string tells tenants apart,
     // so an organization's own administrators must not manage its SPs until each tenant has its key.
     if (tenants.delegation !== undefined && tenants.keys !== "per-tenant")
       issues.push('tenants.delegation: requires tenants.keys: "per-tenant"; with a shared signing key only the host\'s administrators may manage tenant SPs');

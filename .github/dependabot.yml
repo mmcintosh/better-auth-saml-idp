@@ -1,6 +1,6 @@
 # Weekly, grouped updates, each version at least 3 days old (cooldown, D-073: most npm malware is
 # found and pulled within days). Security updates aren't delayed. Better Auth itself is excluded: the peer range is deliberate
-# (ADDENDUM-01 R4) and new minors are tried by the upstream canary instead.
+# (docs/guide/versioning.md) and new minors are tried by the upstream canary instead.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -48,7 +48,7 @@ updates:
       - dependency-name: ip-address
       - dependency-name: http-cache-semantics
       - dependency-name: postcss-selector-parser
-  # e2e container images, pinned by digest (R4-L10).
+  # e2e container images, pinned by digest.
   - package-ecosystem: docker-compose
     directory: /e2e
     schedule: { interval: weekly }

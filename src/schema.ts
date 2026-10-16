@@ -1,7 +1,7 @@
 import type { BetterAuthPluginDBSchema } from "better-auth/db";
 
 /**
- * Seen AuthnRequest IDs, for replay protection (ADDENDUM-01 R2).
+ * Seen AuthnRequest IDs, for replay protection.
  *
  * `key` is a hash of (spId, requestId) with a UNIQUE constraint; a replay is detected by the
  * INSERT failing on it. The row `id` is left entirely to Better Auth (`generateId` may be
@@ -93,10 +93,10 @@ function tenantRegistrySchema() {
  * row are tenants; the host's administrators create them. `tenantKey` names the tenant in its
  * URLs and entity ID, so it never changes once set. `organizationCreatedAt` is the organization's
  * `createdAt` when the tenant was made: it binds the tenant to that organization, not just to an
- * id that a database may hand out again after a delete (review 6 R6-1, D-053).
+ * id that a database may hand out again after a delete (D-053).
  *
  * `samlIdpRetiredTenantKey`: the key of every deleted tenant, so it is never used again. SPs
- * configured for a deleted tenant still trust its entity ID (review 6 R6-2, D-053).
+ * configured for a deleted tenant still trust its entity ID (D-053).
  */
 function tenantSchema() {
   return {

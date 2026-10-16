@@ -1,4 +1,4 @@
-// The example's admin pages (/admin…), in real Chromium on workerd (review 5 R5-7): the admin
+// The example's admin pages (/admin…), in real Chromium on workerd: the admin
 // gate, the sidebar's navigation, the IdP details, and the add → save → disable → delete cycle on
 // the registry API, with the pages' own CSP enforced (no inline code at all).
 import { expect, test } from "@playwright/test";

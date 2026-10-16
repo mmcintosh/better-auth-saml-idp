@@ -1,4 +1,4 @@
-# ADDENDUM-01 R4: bounded peer range, tested at the pinned minimum and the latest 1.7.x.
+# The bounded peer range (docs/guide/versioning.md), tested at the pinned minimum and the latest 1.7.x.
 name: CI
 # Runners are pinned to ubuntu-24.04 in every workflow (not ubuntu-latest, which moves to
 # Ubuntu 26 from 2026-10-19): the wasm reproducibility check and the e2e Docker stack should
