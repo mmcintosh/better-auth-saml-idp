@@ -67,6 +67,26 @@ A running log of the non-obvious choices, with the options considered and the ev
 - [D-060](#d-060-review-7-phases-2-and-3-before-release-2026-09-29): Review 7, phases 2 and 3 before release (2026-09-29)
 - [D-061](#d-061-review-8-a-fresh-look-before-110-2026-09-29): Review 8, a fresh look before 1.1.0 (2026-09-29)
 - [D-062](#d-062-relaystate-cap-4096-for-cloudflare-access-2026-10-02): RelayState cap 4096, for Cloudflare Access (2026-10-02)
+- [D-063](#d-063-nameidformat-short-names-found-with-google-workspace-2026-10-04): nameIdFormat short names, found with Google Workspace (2026-10-04)
+- [D-064](#d-064-benchmark-on-workers-and-d1-2026-10-04): Benchmark on Workers and D1 (2026-10-04)
+- [D-065](#d-065-external-review-of-112-2026-10-05): External review of 1.1.2 (2026-10-05)
+- [D-066](#d-066-chardb-examples-on-chardb-main-2026-10-05): CharDB examples on CharDB main (2026-10-05)
+- [D-067](#d-067-upstream-watch-2026-10-05): Upstream watch (2026-10-05)
+- [D-068](#d-068-prisma-7-in-the-adapter-matrix-xml-crypto-633-2026-10-05): Prisma 7 in the adapter matrix; xml-crypto 6.3.3 (2026-10-05)
+- [D-069](#d-069-cloudflarevitest-plugin-vitest-5-held-2026-10-06): @cloudflare/vitest-plugin; Vitest 5 held (2026-10-06)
+- [D-070](#d-070-npm-12-for-the-release-job-2026-10-06): npm 12 for the release job (2026-10-06)
+- [D-071](#d-071-assertion-exchange-for-oauth-tokens-2026-10-06): Assertion exchange for OAuth tokens (2026-10-06)
+- [D-072](#d-072-ci-required-before-anything-reaches-main-2026-10-06): CI required before anything reaches main (2026-10-06)
+- [D-073](#d-073-socket-firewall-and-a-wait-before-taking-new-versions-2026-10-06): Socket Firewall, and a wait before taking new versions (2026-10-06)
+- [D-074](#d-074-samlify-leaves-the-published-package-2026-10-08): samlify leaves the published package (2026-10-08)
+- [D-075](#d-075-microsoft-365-domain-federation-live-and-the-class-sent-in-the-audit-log-2026-10-08): Microsoft 365 domain federation, live, and the class sent in the audit log (2026-10-08)
+- [D-076](#d-076-a-logoutrequest-without-the-sessions-cookie-ends-the-session-its-sessionindex-names-2026-10-11): A LogoutRequest without the session's cookie ends the session its SessionIndex names (2026-10-11)
+- [D-077](#d-077-microsoft-365-in-a-test-tenant-mfa-both-ways-one-tenant-per-issuer-and-per-sp-answers-from-authncontextcurrent-2026-10-11): Microsoft 365 in a test tenant: MFA both ways, one tenant per issuer, and per-SP answers from `authnContext.current()` (2026-10-11)
+- [D-078](#d-078-a-workers--neon-hyperdrive-example-2026-10-11): A Workers + Neon (Hyperdrive) example (2026-10-11)
+- [D-079](#d-079-microsoft-365-a-user-created-after-federating-signs-in-at-once-2026-10-13): Microsoft 365: a user created after federating signs in at once (2026-10-13)
+- [D-080](#d-080-a-signing-key-the-plugin-makes-and-keeps-2026-10-13): A signing key the plugin makes and keeps (2026-10-13)
+- [D-081](#d-081-the-better-auth-floor-rises-for-security-in-a-minor-release-2026-10-15): The Better Auth floor rises for security, in a minor release (2026-10-15)
+- [D-082](#d-082-up-to-date-before-170-vitest-5-and-two-overrides-gone-2026-10-15): Up to date before 1.7.0: Vitest 5, and two overrides gone (2026-10-15)
 
 ---
 
@@ -2204,3 +2224,14 @@ Better Auth 1.7.7 fixed three advisories (GHSA-965c-763c-88jm, critical: Magic L
 - **A new rule in the versioning policy:** raising the floor within the same Better Auth minor, for a Better Auth security advisory or a security bug in a path the plugin's hosts run, is a plugin **minor** release. The rule that dropping a Better Auth version is a major now points to this exception. Read literally, the old rule made a security floor a 2.0, which would have kept the floor on vulnerable versions for no one's benefit (the package had no known users outside the maintainer's own projects).
 - **Considered:** keeping the floor and recommending 1.7.10 in the docs. Rejected: a security product shouldn't leave the vulnerable versions inside its supported range.
 - **Testing:** CI's lowest row and the canary's minimum move to 1.7.8. The development setup and the examples run 1.7.10. `scripts/use-better-auth.sh` now moves the Workers example's `@better-auth/passkey` too, whose 1.7.10 requires `better-auth ^1.7.10`.
+
+## D-082: Up to date before 1.7.0: Vitest 5, and two overrides gone (2026-10-15)
+
+Everything brought current before the release, so it ships on what users will install.
+
+- **The `@better-auth/utils` override is gone.** It pinned 0.4.2 because Better Auth 1.7 did (D-010). From 1.7.8, the new floor, Better Auth requires 0.5.0, so the override was forcing the tests onto an older version than any supported Better Auth installs. Without it, the lockfile has 0.5.0 only.
+- **The `sharp` override is gone.** Miniflare now requires sharp 0.35.5 itself; `pnpm why` shows that version only, and `pnpm audit` is clean.
+- **Vitest 5** (D-069's hold): @cloudflare/vitest-plugin supports it from 1.4.x. 1.4.2 can't read Vitest 5's filesystem module cache, so both Vitest configs turn it off (`fsModuleCache: false`); 1.4.3 fixes that but is under the one-day minimum release age (D-073). Remove the setting when Dependabot brings 1.4.3. Dependabot no longer ignores Vitest majors.
+- **xml-crypto 6.4.0** in the lockfile (the range stays `^6.3.3`, which new installs already resolve to 6.4.0). It deprecates several APIs ahead of 7.0; the plugin uses none of them (only the synchronous `computeSignature` and `checkSignature`), and the integration and interop tests print no deprecation warnings.
+- **Patch and minor updates** for development and the examples, including better-auth-cloudflare 0.4.1 and better-auth-scim-provisioning 1.3.0 in the Workers example. The published ranges for runtime dependencies are unchanged.
+- **Checked:** lint, typecheck, pack:check, `pnpm test` (1597 passed, node and workerd), test:wasm (83 passed), docs:check, pnpm audit.

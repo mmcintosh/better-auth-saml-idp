@@ -8,6 +8,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 - **Better Auth 1.7.8 is now the minimum** (the peer range is `>=1.7.8 <1.8.0`, was `>=1.7.5`). 1.7.7 fixed three Better Auth security advisories: a critical Magic Link account takeover ([GHSA-965c-763c-88jm](https://github.com/better-auth/better-auth/security/advisories/GHSA-965c-763c-88jm)), an OAuth Proxy sign-in as another user (GHSA-r4xp-prcw-77qf), and rate limits exceeded under concurrency on Drizzle and Postgres (GHSA-44jh-23m7-hpcf). 1.7.8 stopped `@better-auth/sso` accepting a reused SAML assertion under `generateId: "uuid"`. The plugin's own code isn't affected by any of them, but the Better Auth it runs in is, and npm refuses to install the plugin next to an older one. Upgrade Better Auth (and its `@better-auth/*` packages) to 1.7.8 or later; 1.7.10 is the latest. This is a minor release under a new rule in the [versioning policy](docs/guide/versioning.md#better-auth-compatibility): the floor may rise for security within a Better Auth minor (D-081).
 
+### Fixed
+
+- **Next.js: a clear error when the plugin is bundled.** A Next.js app (Turbopack, the default) that bundles the plugin answered 500 to every SAML request with a `TypeError` ("The \"path\" argument must be of type string … Received an instance of URL"): the bundler rewrites the path to the plugin's XSD validator (`wasm/xsd.wasm`) into a web path the server can't read. The error now says what to do, and [getting started](docs/guide/getting-started.md#1-install) and [troubleshooting](docs/guide/troubleshooting.md) say it up front: add `serverExternalPackages: ["better-auth-saml-idp"]` to `next.config`. The Next.js example already did; a copy of it built without the setting, installed from the packed tarball, reproduced the failure and now shows the message.
+
 ### Documentation
 
 - docs/security.md no longer calls `better-auth-cloudflare` 0.4 unreleased. [CONTRIBUTING](CONTRIBUTING.md#releasing-maintainers) says when releases are cut (every week or two, and at once for a security fix), and `pnpm release` now requires the sentence that opens each release, saying why it exists and who should upgrade.
@@ -15,10 +19,13 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 ### Examples
 
 - The examples (Next.js, Workers + D1, Workers + Neon, and the experimental CharDB examples) and the development setup run Better Auth 1.7.10. CI tests 1.7.8, the lowest supported version, alongside the latest 1.7.x.
+- **The CharDB examples** run the plugin's current release (1.6.0, was 1.2.0) and Better Auth 1.7.10 (was 1.7.6, below the new minimum), with CharDB's generated migration `v3` for the plugin's newer index (`samlIdpSessionParticipant_sessionIndex_idx`). A CharDB deployment of the example applies it on upgrade.
+- **The Workers example** uses better-auth-scim-provisioning 1.3.0 and better-auth-cloudflare 0.4.1.
 
 ### Project
 
 - The upstream canary also tests Better Auth's `beta` tag, where Better Auth publishes its prereleases (1.8.0-beta.0 on 2026-10-15). It had tested only `latest` and `next`, and `next` still points at 0.8.7-beta.5, so it would never have tried 1.8 before its release. A prerelease tag is skipped once `latest` has caught up with it.
+- **Up to date before the release** ([D-082](DECISIONS.md#d-082-up-to-date-before-170-vitest-5-and-two-overrides-gone-2026-10-15)): Vitest 5 (its hold lifted, now that @cloudflare/vitest-plugin supports it); the `@better-auth/utils` override removed (it held the tests on 0.4.2 while every supported Better Auth requires 0.5.0) and the `sharp` override removed (no longer needed); xml-crypto 6.4.0 in the lockfile, which new installs already get (the published range stays `^6.3.3`; the plugin uses none of what it deprecates); patch and minor updates for development and the examples. The upstream watch reports Better Auth's `beta` prereleases too, and the decision log's index lists every decision again (it stopped at D-062).
 
 ## [1.6.0] - 2026-10-14
 

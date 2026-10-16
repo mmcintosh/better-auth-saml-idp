@@ -9,6 +9,8 @@ const globalSetup = [here("../test/support/global-setup.ts")];
 export default defineConfig({
   root: here("."),
   test: {
+    // @cloudflare/vitest-plugin 1.4.2 can't read Vitest 5's filesystem module cache (fixed in 1.4.3).
+    fsModuleCache: false,
     projects: [
       { test: { name: "node", root: here("."), globalSetup, include: ["test/**/*.test.ts"], environment: "node" } },
       {

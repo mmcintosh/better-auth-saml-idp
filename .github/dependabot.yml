@@ -14,9 +14,6 @@ updates:
     ignore:
       - dependency-name: better-auth
       - dependency-name: "@better-auth/*"
-      # Vitest 5 waits for @cloudflare/vitest-plugin to support it (listed in the upstream watch).
-      - dependency-name: vitest
-        update-types: ["version-update:semver-major"]
   # The CharDB examples: Bun projects outside the pnpm workspace, so Dependabot keeps their bun.lock
   # in step itself. They stay on TypeScript 5: CharDB's Vite plugin uses the TypeScript JS API
   # (ts.ScriptTarget), which TypeScript 7's native compiler doesn't ship (2026-10-04). Better Auth is
