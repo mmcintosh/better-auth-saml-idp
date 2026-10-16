@@ -3,7 +3,7 @@ version: "3.8" # needed by docker-compose v1; ignored by the v2 plugin
 # They never call the IdP server-to-server; only the browser does, as in real SSO.
 services:
   keycloak:
-    image: quay.io/keycloak/keycloak:26.8@sha256:27b3230fbabb8c9ff3c66c864cf09dcd8a41aca82e5100679d109ef0eeb05741
+    image: quay.io/keycloak/keycloak:26.8@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244
     command: start-dev
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
