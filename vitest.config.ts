@@ -16,6 +16,8 @@ export default defineConfig(async () => {
   const migrations = await readD1Migrations("test/support/d1/migrations");
   return {
     test: {
+      // @cloudflare/vitest-plugin 1.4.2 can't read Vitest 5's filesystem module cache (fixed in 1.4.3).
+      fsModuleCache: false,
       projects: [
         { resolve: wasmLoader("node"), test: { name: "node", testTimeout, globalSetup, include: ["test/**/*.test.ts"], environment: "node" } },
         {

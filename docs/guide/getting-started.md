@@ -13,6 +13,12 @@ npm install better-auth-saml-idp
 
 Requirements: `better-auth` `>=1.7.8 <1.8.0`, and a real database (replay protection relies on UNIQUE constraints). On Cloudflare Workers, also `better-auth-cloudflare` and the `nodejs_compat` flag. With Better Auth ≥ 1.7.3, set `verification: { storeInDatabase: true }` and `rateLimit: { storage: "database" }`: with KV configured, `better-auth-cloudflare` 0.4.0 fails every request without them, naming the fix, and 0.3.1 silently breaks single-use values ([better-auth-cloudflare #72](https://github.com/zpg6/better-auth-cloudflare/issues/72)). See [Cloudflare Workers](cloudflare-workers.md).
 
+**Next.js:** keep the plugin out of the server bundle. It reads its XSD validator (`wasm/xsd.wasm`) from its package at runtime, and a bundled copy can't find it, so every SAML request fails:
+
+```ts title="next.config.ts"
+const nextConfig = { serverExternalPackages: ["better-auth-saml-idp"] };
+```
+
 
 ## 2. Create a signing key
 

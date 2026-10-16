@@ -73,6 +73,10 @@ An IdP-initiated sign-in: Cloudflare Access doesn't accept unsolicited Responses
 
 The first SAML request in an isolate compiles the XSD validator (WebAssembly). Use Workers Paid; see [Cloudflare Workers](cloudflare-workers.md#requirements).
 
+## Next.js: "can't read its XSD validator"
+
+Every SAML request answers 500 and the log says `better-auth-saml-idp: can't read its XSD validator (wasm/xsd.wasm) … the package was bundled`. Next.js bundled the plugin, which reads the validator from its own package directory. Add `serverExternalPackages: ["better-auth-saml-idp"]` to `next.config` and rebuild ([Getting started](getting-started.md#1-install)). In earlier versions the same failure was a `TypeError` ("The \"path\" argument must be of type string … Received an instance of URL").
+
 ## Still stuck
 
 Run `npx better-auth-saml-idp smoke` against the deployment to rule out the IdP side, and open an issue with the `decode --json` output. Remove personal data first: the NameID and attributes.

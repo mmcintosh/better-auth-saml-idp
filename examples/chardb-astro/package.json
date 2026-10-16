@@ -24,7 +24,7 @@
     "migrations:generate": "bun --env-file=.dev.vars node_modules/@chardb/core/dist/cli/bin.mjs migrations generate"
   },
   "dependencies": {
-    "better-auth": "1.7.6",
+    "better-auth": "1.7.10",
     "@chardb/core": "file:../../vendor/chardb-core-0.1.0-main-e6cf5c9.tgz",
     "@chardb/react": "file:../../vendor/chardb-react-0.1.0-main-e6cf5c9.tgz",
     "drizzle-orm": "0.45.3",
@@ -32,7 +32,7 @@
     "react-dom": "19.3.0",
     "uuidv7": "1.2.1",
     "zod": "4.6.5",
-    "better-auth-saml-idp": "^1.2.0",
+    "better-auth-saml-idp": "^1.6.0",
     "astro": "7.3.6",
     "@astrojs/react": "7.0.1"
   },
