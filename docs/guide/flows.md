@@ -16,6 +16,7 @@ All paths are relative to your Better Auth base path (for example `/api/auth`).
 | GET, POST | `/saml2/idp/slo` | [Single Logout](single-logout.md) messages from SPs. |
 | GET | `/saml2/idp/logout?returnTo=` | IdP-initiated Single Logout. |
 | GET, POST | `/saml-idp/service-providers/*` | [Registry API](service-providers.md#registry-api). |
+| GET, POST | `/saml-idp/signing-keys/*` | The [managed signing key](signing-and-encryption.md#a-key-the-plugin-manages): list, rotate, activate, retire (with `signing.managed` and the registry API). |
 
 ## SP-initiated SSO
 
