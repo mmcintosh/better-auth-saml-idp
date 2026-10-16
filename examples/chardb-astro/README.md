@@ -2,7 +2,7 @@
 
 > **Experimental.** [CharDB](https://github.com/zpg6/chardb) is at 0.1: read its [Plan ahead](https://docs.chardb.dev/plan-ahead) before storing data you can't recreate. This example is outside better-auth-saml-idp's [versioning promises](../../docs/guide/versioning.md): it may change or break with any CharDB release. The plugin itself is not experimental here; CharDB is.
 >
-> **Tested with:** better-auth-saml-idp 1.2.0, Better Auth 1.7.10, and CharDB 0.1.0 built from [CharDB's main branch](https://github.com/zpg6/chardb/commit/e6cf5c9) (commit `e6cf5c9`, in `../../vendor/`), which includes Better Auth 1.7 support. Published CharDB 0.1.0 requires Better Auth 1.6, and the plugin requires 1.7.8 or later. Once CharDB publishes a release for Better Auth 1.7, this example moves to it.
+> **Tested with:** better-auth-saml-idp 1.6.0, Better Auth 1.7.10, and CharDB 0.1.0 built from [CharDB's main branch](https://github.com/zpg6/chardb/commit/e6cf5c9) (commit `e6cf5c9`, in `../../vendor/`), which includes Better Auth 1.7 support. Published CharDB 0.1.0 requires Better Auth 1.6, and the plugin requires 1.7.8 or later. Once CharDB publishes a release for Better Auth 1.7, this example moves to it.
 
 The [CharDB example](../chardb/README.md) with an [Astro](https://astro.build) front end instead of a single-page React app. **The Worker is the same**: CharDB, the SAML plugin, the demo SP and the tests are identical files, and CI checks that they stay that way. What differs is the web app: Astro pages with real URLs (`/tenants`, `/service-providers`, …), a sidebar rendered to static HTML, and React islands for the interactive parts.
 
