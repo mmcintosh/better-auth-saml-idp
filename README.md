@@ -90,6 +90,7 @@ Then give the SP your metadata URL, `https://auth.example.com/api/auth/saml2/idp
 - `better-auth` and `@better-auth/core` `>=1.7.8 <1.8.0` (peer dependencies). Better Auth 1.7.7 fixed three security advisories, a critical Magic Link account takeover among them, and 1.7.8 a SAML replay check in `@better-auth/sso`; see [versioning](docs/guide/versioning.md#better-auth-compatibility).
 - A real database. Replay protection depends on UNIQUE constraints, which Better Auth's in-memory adapter doesn't enforce.
 - With secondary storage (for example KV): `verification: { storeInDatabase: true }`. On Workers also `rateLimit: { storage: "database" }`, `better-auth-cloudflare` and the `nodejs_compat` flag.
+- Next.js: `serverExternalPackages: ["better-auth-saml-idp"]` in `next.config`. The plugin reads its XSD validator from its own package, which a bundled copy can't.
 
 ## ✅ Verified with
 
