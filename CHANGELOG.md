@@ -7,6 +7,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 ### Project
 
 - **Clean-up** ([D-083](DECISIONS.md#d-083-clean-up-after-170-internal-references-out-of-the-code-and-docs-2026-10-16)): references to internal documents that aren't in the repository (review finding IDs, `ADDENDUM-01`, `SPEC`, design sections, project phases) are gone from the source, the published type declarations, the docs, the examples and the workflows, and the pre-1.0 multi-tenant design document is removed; the [multi-tenant guide](docs/guide/multi-tenant.md) documents what was built.
+- Development only: Prisma 7.10.1 brings deepmerge-ts 8 and mysql2 3.24, so the two `pnpm.overrides` that lifted them (GHSA-ggr8-5vv4-36mx, GHSA-3f6p-5ww8-9rcr, GHSA-rgwj-5xj2-c3m3) are gone, and `pnpm audit` stays clean without them. @cloudflare/vitest-plugin 1.4.3 reads Vitest 5's filesystem module cache, so both Vitest configs no longer turn it off.
 
 ## [1.7.0] - 2026-10-16
 
