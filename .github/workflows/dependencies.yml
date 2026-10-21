@@ -22,7 +22,8 @@ jobs:
         with: { node-version: 24 }
       - run: node scripts/audit-runtime.mjs --audit-level low
 
-  # The examples' dependencies: reported (a failing step in a green job), never blocking.
+  # The examples' dependencies: reported (a failing step in a green job), never blocking. Not a
+  # required check either, or a failure would still block every pull request (D-085).
   examples-audit:
     runs-on: ubuntu-24.04
     continue-on-error: true
