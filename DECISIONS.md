@@ -88,6 +88,7 @@ A running log of the non-obvious choices, with the options considered and the ev
 - [D-081](#d-081-the-better-auth-floor-rises-for-security-in-a-minor-release-2026-10-15): The Better Auth floor rises for security, in a minor release (2026-10-15)
 - [D-082](#d-082-up-to-date-before-170-vitest-5-and-two-overrides-gone-2026-10-15): Up to date before 1.7.0: Vitest 5, and two overrides gone (2026-10-15)
 - [D-083](#d-083-clean-up-after-170-internal-references-out-of-the-code-and-docs-2026-10-16): Clean-up after 1.7.0: internal references out of the code and docs (2026-10-16)
+- [D-084](#d-084-better-call-and-better-fetch-exempt-from-the-one-day-wait-2026-10-20): better-call and better-fetch exempt from the one-day wait (2026-10-20)
 
 ---
 
@@ -2244,3 +2245,13 @@ As D-055, for what has built up since. Everything removed is in git history.
 - **`docs/design/multi-tenant.md`** is removed. It was the design as written before phase 1, with effort estimates and notes for the maintainer; the [multi-tenant guide](docs/guide/multi-tenant.md) documents what was built, and D-052, D-058 and D-059 record the decisions. Entries above that name the file are unchanged.
 - **References to documents that aren't in the repository** are gone from the source, the docs, the examples and the workflows: the review finding IDs (`review 6 R6-1`, `R4-L8` …), `ADDENDUM-01 R1`–`R4`, `SPEC §6`, the design's section numbers and the project's phases. Several were in the published type declarations, where users read them in their editor. Each comment keeps its reason, and points to a D-0xx entry or a guide page where one explains more. The entries in this file keep their IDs as they were.
 - **The `review-3-baseline` tag** is removed from GitHub: a marker for a review, not a release.
+
+## D-084: better-call and better-fetch exempt from the one-day wait (2026-10-20)
+
+D-073 exempts `better-auth` and `@better-auth/*` from pnpm's one-day minimum release age, so the upstream canary and CI's latest-1.7 row can try a Better Auth release the day it ships. That exemption was incomplete.
+
+- **What happened.** Better Auth 1.7.12 (2026-10-20 11:59 UTC) requires `better-call` 1.4.4 exactly, published the evening before (2026-10-19 22:30 UTC). Moving the development setup to 1.7.12 failed with `ERR_PNPM_NO_MATURE_MATCHING_VERSION` until 22:30 UTC that day. The latest-1.7 row runs the same `pnpm add` (`scripts/use-better-auth.sh latest-1.7`), so any pull request's CI in that window would have failed two required checks, and the canary would have reported a failure that says nothing about Better Auth.
+- **Decision.** Exempt `better-call` and `@better-fetch/fetch` too. Better Auth's `package.json` pins both to exact versions, so a Better Auth release that moves either can't be installed until it is a day old, which defeats the existing exemption. Both are published by Better Auth's maintainer from the `better-auth` GitHub organisation, the same trust as the packages already exempt. Socket Firewall still checks them in CI.
+- **Not exempted:** Better Auth's other dependencies (`jose`, `kysely`, `zod`, `nanostores` …). Better Auth gives them ranges, so pnpm picks an older version that satisfies the range instead of failing, and they come from other publishers.
+- **Considered:** waiting out the day whenever this happens. Rejected: the required checks would fail on unrelated pull requests, and the canary's purpose is to see a Better Auth release on its first day.
+
