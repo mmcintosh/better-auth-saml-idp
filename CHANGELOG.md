@@ -8,6 +8,8 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 - **Clean-up** ([D-083](DECISIONS.md#d-083-clean-up-after-170-internal-references-out-of-the-code-and-docs-2026-10-16)): references to internal documents that aren't in the repository (review finding IDs, `ADDENDUM-01`, `SPEC`, design sections, project phases) are gone from the source, the published type declarations, the docs, the examples and the workflows, and the pre-1.0 multi-tenant design document is removed; the [multi-tenant guide](docs/guide/multi-tenant.md) documents what was built.
 - Development only: Prisma 7.10.1 brings deepmerge-ts 8 and mysql2 3.24, so the two `pnpm.overrides` that lifted them (GHSA-ggr8-5vv4-36mx, GHSA-3f6p-5ww8-9rcr, GHSA-rgwj-5xj2-c3m3) are gone, and `pnpm audit` stays clean without them. @cloudflare/vitest-plugin 1.4.3 reads Vitest 5's filesystem module cache, so both Vitest configs no longer turn it off.
+- Development only: the development setup and the examples run Better Auth 1.7.12 (was 1.7.10). The CharDB examples run the plugin's 1.7.0 (was 1.6.0, now deprecated). The plugin's code is unchanged: none of 1.7.11's and 1.7.12's fixes touch what it uses, and the supported range (`>=1.7.8 <1.8.0`) already includes them.
+- Development only: vite 8.3.4 (was 8.3.1), a dependency of Vitest, for three launch-editor advisories published 2026-10-20 (GHSA-587h-7wmj-h5pm, GHSA-r825-w8mm-5pxw, GHSA-698v-4r3x-3vcv). It is now a direct development dependency, so the lockfile holds one copy that Dependabot keeps current. Nothing the package ships uses it.
 
 ## [1.7.0] - 2026-10-16
 
