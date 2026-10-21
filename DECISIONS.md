@@ -89,6 +89,7 @@ A running log of the non-obvious choices, with the options considered and the ev
 - [D-082](#d-082-up-to-date-before-170-vitest-5-and-two-overrides-gone-2026-10-15): Up to date before 1.7.0: Vitest 5, and two overrides gone (2026-10-15)
 - [D-083](#d-083-clean-up-after-170-internal-references-out-of-the-code-and-docs-2026-10-16): Clean-up after 1.7.0: internal references out of the code and docs (2026-10-16)
 - [D-084](#d-084-better-call-and-better-fetch-exempt-from-the-one-day-wait-2026-10-20): better-call and better-fetch exempt from the one-day wait (2026-10-20)
+- [D-085](#d-085-examples-audit-is-no-longer-a-required-check-2026-10-21): `examples-audit` is no longer a required check (2026-10-21)
 
 ---
 
@@ -2254,4 +2255,12 @@ D-073 exempts `better-auth` and `@better-auth/*` from pnpm's one-day minimum rel
 - **Decision.** Exempt `better-call` and `@better-fetch/fetch` too. Better Auth's `package.json` pins both to exact versions, so a Better Auth release that moves either can't be installed until it is a day old, which defeats the existing exemption. Both are published by Better Auth's maintainer from the `better-auth` GitHub organisation, the same trust as the packages already exempt. Socket Firewall still checks them in CI.
 - **Not exempted:** Better Auth's other dependencies (`jose`, `kysely`, `zod`, `nanostores` …). Better Auth gives them ranges, so pnpm picks an older version that satisfies the range instead of failing, and they come from other publishers.
 - **Considered:** waiting out the day whenever this happens. Rejected: the required checks would fail on unrelated pull requests, and the canary's purpose is to see a Better Auth release on its first day.
+
+## D-085: `examples-audit` is no longer a required check (2026-10-21)
+
+`examples-audit` audits the examples' production dependencies and is meant to report, not block (`continue-on-error: true`): an advisory in Next.js or Hono must not stop a change to a package it isn't part of. But D-072 made it one of the ruleset's required checks, and `continue-on-error` keeps the workflow run green without making the job's check pass. On 2026-10-20, three vite advisories (reached through `better-auth`'s Vitest peer in the Next.js example) failed it and blocked an unrelated pull request until vite was updated.
+
+- **Ruleset 24084053** now requires 18 checks (was 19), applied by the maintainer. `examples-audit` still runs on every push and pull request and shows its result.
+- **Still required:** `runtime-audit` (what `npm install better-auth-saml-idp` brings in) and `review` (dependency review of what a pull request adds), the two that protect users.
+- **Considered:** removing `continue-on-error` and keeping it required. Rejected: every new advisory in any example would block all work until that example was updated, which the workflow's own comment rules out for this tier.
 
