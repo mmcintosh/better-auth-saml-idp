@@ -90,6 +90,7 @@ A running log of the non-obvious choices, with the options considered and the ev
 - [D-083](#d-083-clean-up-after-170-internal-references-out-of-the-code-and-docs-2026-10-16): Clean-up after 1.7.0: internal references out of the code and docs (2026-10-16)
 - [D-084](#d-084-better-call-and-better-fetch-exempt-from-the-one-day-wait-2026-10-20): better-call and better-fetch exempt from the one-day wait (2026-10-20)
 - [D-085](#d-085-examples-audit-is-no-longer-a-required-check-2026-10-21): `examples-audit` is no longer a required check (2026-10-21)
+- [D-086](#d-086-daily-upstream-watch-and-a-daily-check-of-the-demo-2026-10-22): Daily upstream watch, and a daily check of the demo (2026-10-22)
 
 ---
 
@@ -2264,3 +2265,10 @@ D-073 exempts `better-auth` and `@better-auth/*` from pnpm's one-day minimum rel
 - **Still required:** `runtime-audit` (what `npm install better-auth-saml-idp` brings in) and `review` (dependency review of what a pull request adds), the two that protect users.
 - **Considered:** removing `continue-on-error` and keeping it required. Rejected: every new advisory in any example would block all work until that example was updated, which the workflow's own comment rules out for this tier.
 
+## D-086: Daily upstream watch, and a daily check of the demo (2026-10-22)
+
+Two gaps showed up in a security sweep on 2026-10-22: Better Auth releases were only reported on Mondays, and nothing checked the deployed example IdP the README links to.
+
+- **Upstream watch runs daily** (was weekly). It comments on the "Upstream watch" issue only when something changed, so a quiet day posts nothing.
+- **New `demo-watch.yml`, daily.** It runs the package's own CLI against the demo: `inspect` (metadata schema and certificate expiry; any warning, such as a certificate inside 30 days, fails the job) and `smoke` (the security smoke test). A failure opens a "Demo watch failed" issue, or comments on the open one. It isn't a required check and never blocks pull requests: the demo's deployment is outside the package (SECURITY.md).
+- **Considered:** checking the demo from the upstream watch script. Rejected: that script needs no install or build, and the CLI does.

@@ -1,0 +1,39 @@
+# Daily check of the deployed example IdP (the demo the README links to), with the package's own
+# CLI: `inspect` (metadata schema, certificate expiry; a warning such as "expires in 30 days" fails
+# the job too) and `smoke` (the security smoke test). A failure opens one issue, or comments on the
+# open one, and never blocks PRs (D-086).
+name: Demo watch
+on:
+  schedule: [{ cron: "29 6 * * *" }]
+  workflow_dispatch:
+permissions: { contents: read, issues: write }
+env:
+  DEMO: https://better-auth-saml-idp-example.mmcintosh-f61.workers.dev
+jobs:
+  demo:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 24, cache: pnpm }
+      # Socket Firewall (D-073): blocks packages Socket has confirmed as malware before they download.
+      - uses: SocketDev/action@ba6de6cc0565af1f42295590380973573297e31f # v1.3.2
+        with: { mode: firewall-free }
+      - run: sfw pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: inspect
+        run: |
+          node dist/cli/bin.js inspect "$DEMO"
+          node dist/cli/bin.js inspect "$DEMO" --json \
+            | node -e 'const r=JSON.parse(require("fs").readFileSync(0,"utf8"));const bad=r.checks.filter(c=>c.status==="fail"||c.status==="warn");for(const c of bad)console.log(`${c.status}: ${c.message}`);process.exit(bad.length?1:0)'
+      - name: smoke
+        run: node dist/cli/bin.js smoke "$DEMO" --sp https://smoke.invalid/sp --acs https://smoke.invalid/acs
+      - if: failure()
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          run="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          open="$(gh issue list --state open --search 'in:title "Demo watch failed"' --json number --jq '.[0].number')"
+          if [ -n "$open" ]; then gh issue comment "$open" --body "Failed again: $run"
+          else gh issue create --title "Demo watch failed" --body "The daily check of $DEMO failed: $run"; fi
