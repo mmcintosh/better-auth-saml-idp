@@ -2267,8 +2267,8 @@ D-073 exempts `better-auth` and `@better-auth/*` from pnpm's one-day minimum rel
 
 ## D-086: Daily upstream watch, and a daily check of the demo (2026-10-22)
 
-Two gaps showed up in a security sweep on 2026-10-22: Better Auth releases were only reported on Mondays, and nothing checked the deployed example IdP the README links to.
+Better Auth releases were reported only on Mondays, and nothing checked the public demo.
 
-- **Upstream watch runs daily** (was weekly). It comments on the "Upstream watch" issue only when something changed, so a quiet day posts nothing.
-- **New `demo-watch.yml`, daily.** It runs the package's own CLI against the demo: `inspect` (metadata schema and certificate expiry; any warning, such as a certificate inside 30 days, fails the job) and `smoke` (the security smoke test). A failure opens a "Demo watch failed" issue, or comments on the open one. It isn't a required check and never blocks pull requests: the demo's deployment is outside the package (SECURITY.md).
-- **Considered:** checking the demo from the upstream watch script. Rejected: that script needs no install or build, and the CLI does.
+- **Upstream watch runs daily** (was weekly). It still comments only when something changed.
+- **New `demo-watch.yml`, daily.** It runs the CLI's `inspect` (warnings fail too, so a certificate within 30 days of expiry is caught) and `smoke` against the demo. A failure opens a "Demo watch failed" issue, or comments on the open one. Not a required check: the demo isn't part of the package.
+- **Considered:** checking the demo from the upstream watch script. Rejected: the CLI needs an install and a build, which that script avoids.
