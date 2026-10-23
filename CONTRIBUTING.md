@@ -95,4 +95,4 @@ Each release:
 6. Approve the staged version on npmjs.com (Staged packages, with your security key) or with `npm stage approve <id>`. Only then is it installable; npm's malware scan must finish first.
 7. Redeploy the public demo ([examples/workers-hono](examples/workers-hono/README.md)) so it runs the release.
 
-What Dependabot doesn't cover (Better Auth against the peer range, the vendored builds in `vendor/`, updates held back on purpose) is listed weekly in the **Upstream watch** issue ([upstream-watch.yml](.github/workflows/upstream-watch.yml), configured in `.github/upstream-watch.json`). A new `vendor/` build must be added there, or the job fails.
+What Dependabot doesn't cover (Better Auth against the peer range, the vendored builds in `vendor/`, updates held back on purpose) is listed daily in the **Upstream watch** issue ([upstream-watch.yml](.github/workflows/upstream-watch.yml), configured in `.github/upstream-watch.json`). A new `vendor/` build must be added there, or the job fails.

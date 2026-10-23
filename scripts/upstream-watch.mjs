@@ -1,4 +1,4 @@
-// Weekly upstream watch: what this repository depends on that Dependabot doesn't cover. Reads
+// Daily upstream watch: what this repository depends on that Dependabot doesn't cover. Reads
 // .github/upstream-watch.json and keeps one open issue ("Upstream watch") up to date with:
 // - Better Auth: its latest release against our peer range (the canary tests it; this says when a
 //   new minor needs the range widened);
@@ -142,7 +142,7 @@ const month = new Date().toISOString().slice(0, 7);
 if (config.monthly?.length) sections.push(`## Every month\n\n${config.monthly.map((m) => `- ${m}`).join("\n")}`);
 
 const body = (_prev) =>
-  `Updated weekly by [upstream-watch.yml](../blob/main/.github/workflows/upstream-watch.yml) from \`.github/upstream-watch.json\`. ` +
+  `Updated daily by [upstream-watch.yml](../blob/main/.github/workflows/upstream-watch.yml) from \`.github/upstream-watch.json\`. ` +
   `A comment means something changed since the last run.\n\n${sections.join("\n\n")}\n\n` +
   `<!-- upstream-watch-state ${JSON.stringify({ month, items: state })} -->\n`;
 
