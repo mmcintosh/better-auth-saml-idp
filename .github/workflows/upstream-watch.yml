@@ -1,9 +1,9 @@
-# Weekly: what Dependabot doesn't cover (Better Auth against the peer range, vendored builds of
+# Daily: what Dependabot doesn't cover (Better Auth against the peer range, vendored builds of
 # unreleased upstream code, updates held back on purpose). Keeps one open "Upstream watch" issue
-# up to date and comments when something changed (scripts/upstream-watch.mjs). Never blocks PRs.
+# up to date and comments only when something changed (scripts/upstream-watch.mjs). Never blocks PRs.
 name: Upstream watch
 on:
-  schedule: [{ cron: "17 6 * * 1" }]
+  schedule: [{ cron: "17 6 * * *" }]
   workflow_dispatch:
 permissions: { contents: read, issues: write }
 jobs:

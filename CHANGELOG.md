@@ -12,6 +12,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 - Development only: vite 8.3.4 (was 8.3.1), a dependency of Vitest, for three launch-editor advisories published 2026-10-20 (GHSA-587h-7wmj-h5pm, GHSA-r825-w8mm-5pxw, GHSA-698v-4r3x-3vcv). It is now a direct development dependency, so the lockfile holds one copy that Dependabot keeps current. Nothing the package ships uses it.
 - Development only: `better-call` and `@better-fetch/fetch`, which Better Auth pins to exact versions, are exempt from pnpm's one-day minimum release age like Better Auth itself, so CI and the canary can install a new Better Auth release on its first day ([D-084](DECISIONS.md#d-084-better-call-and-better-fetch-exempt-from-the-one-day-wait-2026-10-20)).
 - Development only: `examples-audit` (the examples' dependencies) is no longer a required check, so an advisory there is reported without blocking pull requests ([D-085](DECISIONS.md#d-085-examples-audit-is-no-longer-a-required-check-2026-10-21)).
+- Development only: the Upstream watch runs daily (was weekly), and a new daily Demo watch runs the CLI's `inspect` and `smoke` against the demo, opening an issue if either fails ([D-086](DECISIONS.md#d-086-daily-upstream-watch-and-a-daily-check-of-the-demo-2026-10-22)).
 
 ## [1.7.0] - 2026-10-16
 
