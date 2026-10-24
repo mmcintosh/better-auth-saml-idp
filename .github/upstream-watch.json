@@ -34,5 +34,20 @@
   "monthly": [
     "Is the public demo (examples/workers-hono) running the latest release? Redeploy it if not (its README has the command)."
   ],
-  "overrides": []
+  "overrides": [
+    {
+      "selector": "undici@>=7.15.0 <7.30.1",
+      "via": "miniflare@beta",
+      "dependency": "undici",
+      "fixedIn": "7.30.1",
+      "why": "GHSA-xjj6-f33q-929c (high), GHSA-4qv8-2p9j-2685 and GHSA-f72v-6w45-q472; the beta miniflare that wrangler and @cloudflare/vitest-plugin use pins undici 7.29.1 (development only)."
+    },
+    {
+      "selector": "zod@<4.6.6",
+      "via": "@cloudflare/vitest-plugin",
+      "dependency": "zod",
+      "fixedIn": "4.6.6",
+      "why": "GHSA-mrhx-c7xc-m3w5 (high); @cloudflare/vitest-plugin pins zod 4.6.5 (development only)."
+    }
+  ]
 }

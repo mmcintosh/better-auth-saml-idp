@@ -112,8 +112,8 @@ const note = (key, fingerprint, summary) => {
 }
 
 // pnpm overrides: each must be listed, with the package that brings the dependency in ("via",
-// optionally "name@major" for that major's newest stable release). When that release requires a
-// version at or above "fixedIn", the override can go.
+// optionally "name@major" for that major's newest stable release, or "name@tag" for a dist-tag).
+// When that release requires a version at or above "fixedIn", the override can go.
 {
   const overrides = pkg.pnpm?.overrides ?? {};
   const listed = config.overrides ?? [];
@@ -122,10 +122,10 @@ const note = (key, fingerprint, summary) => {
   const lines = [];
   for (const o of listed) {
     if (!(o.selector in overrides)) throw new Error(`.github/upstream-watch.json lists override ${o.selector}, which package.json doesn't have`);
-    const [, viaName, major] = /^(@?[^@]+)(?:@(\d+))?$/.exec(o.via) ?? [];
+    const [, viaName, major, tag = "latest"] = /^(@?[^@]+)(?:@(?:(\d+)|([a-z][\w-]*)))?$/.exec(o.via) ?? [];
     const meta = await npm(viaName);
     const stable = Object.keys(meta.versions).filter((v) => /^\d+\.\d+\.\d+$/.test(v) && (!major || num(v)[0] === Number(major)));
-    const version = major ? stable.reduce((a, b) => (lt(a, b) ? b : a)) : meta["dist-tags"].latest;
+    const version = major ? stable.reduce((a, b) => (lt(a, b) ? b : a)) : meta["dist-tags"][tag];
     const range = meta.versions[version]?.dependencies?.[o.dependency] ?? "(not a dependency any more)";
     const min = /\d+\.\d+\.\d+/.exec(range)?.[0];
     const fixed = o.fixedIn && min && !lt(min, o.fixedIn);
