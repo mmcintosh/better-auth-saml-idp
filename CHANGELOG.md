@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Changed
+
+- **zod 4.6.6 is now the minimum** (was 4.6.5). zod 4.6.5 can run out of memory validating very large collections ([GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)). A fresh install already got 4.6.7; this keeps an older lockfile from holding 4.6.5.
+
 ### Project
 
 - **Clean-up** ([D-083](DECISIONS.md#d-083-clean-up-after-170-internal-references-out-of-the-code-and-docs-2026-10-16)): references to internal documents that aren't in the repository (review finding IDs, `ADDENDUM-01`, `SPEC`, design sections, project phases) are gone from the source, the published type declarations, the docs, the examples and the workflows, and the pre-1.0 multi-tenant design document is removed; the [multi-tenant guide](docs/guide/multi-tenant.md) documents what was built.
@@ -13,6 +17,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 - Development only: `better-call` and `@better-fetch/fetch`, which Better Auth pins to exact versions, are exempt from pnpm's one-day minimum release age like Better Auth itself, so CI and the canary can install a new Better Auth release on its first day ([D-084](DECISIONS.md#d-084-better-call-and-better-fetch-exempt-from-the-one-day-wait-2026-10-20)).
 - Development only: `examples-audit` (the examples' dependencies) is no longer a required check, so an advisory there is reported without blocking pull requests ([D-085](DECISIONS.md#d-085-examples-audit-is-no-longer-a-required-check-2026-10-21)).
 - Development only: the Upstream watch runs daily (was weekly), and a new daily Demo watch runs the CLI's `inspect` and `smoke` against the demo, opening an issue if either fails ([D-086](DECISIONS.md#d-086-daily-upstream-watch-and-a-daily-check-of-the-demo-2026-10-22)).
+- Development only: advisories published 2026-10-23 for undici (GHSA-xjj6-f33q-929c, GHSA-4qv8-2p9j-2685, GHSA-f72v-6w45-q472) and fast-uri (GHSA-333x-w4r6-6crp, GHSA-w74x-v6f9-j3xg, GHSA-wjr9-j795-jxcr, GHSA-xhq7-xmqj-769h), and the zod one above. The miniflare that wrangler and @cloudflare/vitest-plugin use pins undici 7.29.1, and @cloudflare/vitest-plugin pins zod 4.6.5, so two `pnpm.overrides` lift them to 7.30.1 and 4.6.7, and the Upstream watch says when they can go (its `via` can now name a dist-tag, such as `miniflare@beta`). fast-uri, through Prisma's CLI, is 3.1.9. Nothing the package ships or the demo runs used them.
 
 ## [1.7.0] - 2026-10-16
 
