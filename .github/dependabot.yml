@@ -14,6 +14,9 @@ updates:
     ignore:
       - dependency-name: better-auth
       - dependency-name: "@better-auth/*"
+      # The tests' SP stays on samlify 2.13: 2.14+ fails under @cloudflare/vitest-plugin (D-087; upstream watch).
+      - dependency-name: samlify
+        versions: [">= 2.14.0"]
   # The CharDB examples: Bun projects outside the pnpm workspace, so Dependabot keeps their bun.lock
   # in step itself. They stay on TypeScript 5: CharDB's Vite plugin uses the TypeScript JS API
   # (ts.ScriptTarget), which TypeScript 7's native compiler doesn't ship (2026-10-04). Better Auth is
@@ -31,9 +34,6 @@ updates:
       - dependency-name: better-auth
       - dependency-name: "@better-auth/*"
       - dependency-name: typescript
-        update-types: ["version-update:semver-major"]
-      # Vitest 5 waits for @cloudflare/vitest-plugin to support it (as at the root; upstream watch).
-      - dependency-name: vitest
         update-types: ["version-update:semver-major"]
   # The npm CLI the release job stages with (pinned by integrity; npm stage needs >= 11.15).
   # Only npm itself: its dependencies are bundled inside it, so updating one alone always fails.

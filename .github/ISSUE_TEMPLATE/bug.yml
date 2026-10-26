@@ -35,7 +35,7 @@ body:
     attributes:
       label: Versions
       description: better-auth-saml-idp (or commit), better-auth, better-auth-cloudflare if used
-      placeholder: "commit abc1234, better-auth 1.7.12"
+      placeholder: "commit abc1234, better-auth 1.7.13"
     validations: { required: true }
   - type: dropdown
     id: runtime
