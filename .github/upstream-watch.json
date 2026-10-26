@@ -28,7 +28,7 @@
       "name": "npm's bundled dependencies (release job)",
       "npm": "npm",
       "because": "they're bundled inside npm, so they can't be updated alone; their alerts are dismissed as tolerable risk.",
-      "takeWhen": "Dependabot proposes the newer npm (it does on its own); check its alerts close."
+      "takeWhen": "Dependabot proposes the newer npm (it does on its own, or comes by hand when it can't); check its alerts close. Once npm bundles undici 6.29.1 or later, remove allow-ghsas from the review job in dependencies.yml."
     },
     {
       "name": "samlify 2.14+ in the tests (D-087)",
