@@ -50,6 +50,10 @@ jobs:
           # with Prisma Studio, inside the Prisma 7 CLI the adapter tests use (D-068); development only.
           # npm itself (Artistic-2.0) is the release job's CLI (.github/npm-cli), run in CI, never shipped.
           allow-dependencies-licenses: pkg:npm/caniuse-lite, pkg:npm/elkjs, pkg:npm/robust-predicates, pkg:npm/npm
+          # undici 6.29.0 and ip-address 10.7.2, bundled in the release job's npm (.github/npm-cli): no npm
+          # bundles undici 6.29.1 or ip-address 10.7.4 yet. Dependabot alerts #16, #17 and #18 are
+          # dismissed for the same reason. Remove each when npm bundles its fix.
+          allow-ghsas: GHSA-xjj6-f33q-929c, GHSA-4qv8-2p9j-2685, GHSA-rxp7-6hxx-x8q5
           comment-summary-in-pr: never
 
   osv:
