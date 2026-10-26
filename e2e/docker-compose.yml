@@ -16,7 +16,7 @@ services:
     volumes:
       - ./.generated/tls:/tls:ro
   simplesamlphp:
-    image: cirrusid/simplesamlphp:v2.5.0@sha256:9ae050473c68ce13c5451839cb64257eaa17be3a4d2c9a3f87996bbe0cebb0aa
+    image: cirrusid/simplesamlphp:v2.5.3.1.20261023T014150@sha256:ae33d1faa5ce1ca0171ffb30916261bdb90bc4e734154db254c9735de8696240
     environment:
       SSP_ADMIN_PASSWORD: e2e-only
       SSP_SECRET_SALT: e2e-only-not-secret
