@@ -91,6 +91,7 @@ A running log of the non-obvious choices, with the options considered and the ev
 - [D-084](#d-084-better-call-and-better-fetch-exempt-from-the-one-day-wait-2026-10-20): better-call and better-fetch exempt from the one-day wait (2026-10-20)
 - [D-085](#d-085-examples-audit-is-no-longer-a-required-check-2026-10-21): `examples-audit` is no longer a required check (2026-10-21)
 - [D-086](#d-086-daily-upstream-watch-and-a-daily-check-of-the-demo-2026-10-22): Daily upstream watch, and a daily check of the demo (2026-10-22)
+- [D-087](#d-087-samlify-held-at-2131-in-the-tests-2026-10-25): samlify held at 2.13.1 in the tests (2026-10-25)
 
 ---
 
@@ -2272,3 +2273,12 @@ Better Auth releases were reported only on Mondays, and nothing checked the publ
 - **Upstream watch runs daily** (was weekly). It still comments only when something changed.
 - **New `demo-watch.yml`, daily.** It runs the CLI's `inspect` (warnings fail too, so a certificate within 30 days of expiry is caught) and `smoke` against the demo. A failure opens a "Demo watch failed" issue, or comments on the open one. Not a required check: the demo isn't part of the package.
 - **Considered:** checking the demo from the upstream watch script. Rejected: the CLI needs an install and a build, which that script avoids.
+
+## D-087: samlify held at 2.13.1 in the tests (2026-10-25)
+
+samlify is a development dependency only: the tests' strict service provider. The plugin hasn't used it since D-074.
+
+- **What happened.** With samlify 2.15.1, every test that builds a samlify entity fails in the workerd project with `TypeError: (0 , xml_1.default) is not a function` (46 tests, and the validator suite's samlify interop). The node project passes. Since 2.14.0 samlify ships its own `build/src/xml.js`, next to files that `require("xml")`, the npm package. @cloudflare/vitest-plugin 1.4.7 resolves a `require` by first looking for a file of that name in the requiring file's directory, and only then asks Vite, so the bare `xml` finds samlify's sibling file instead of the package. A Vite alias doesn't reach that path, and pre-bundling samlify fails on its Node built-ins.
+- **Decision.** Keep samlify at 2.13.1. Dependabot ignores 2.14.0 and later, and the upstream watch lists the hold. @better-auth/sso accepts `^2.13.1`, so a fresh install of it gets 2.15.1; on Workers that is bundled by wrangler (esbuild), which resolves `xml` correctly.
+- **Take 2.14+ when** @cloudflare/vitest-plugin resolves bare `require` specifiers as packages, or samlify renames its `xml` module. Check: `pnpm test:wasm` with the newer samlify.
+- **Same day:** the CharDB examples move to Vitest 5 (was 4), as the root did in D-082; @cloudflare/vitest-plugin 1.4.7 supports it, so Dependabot no longer ignores Vitest majors there.
