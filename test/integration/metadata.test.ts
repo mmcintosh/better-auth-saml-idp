@@ -14,7 +14,7 @@ async function fetchMetadata(overrides = {}) {
   return { res, xml: await res.text() };
 }
 
-describe("GET /saml2/idp/metadata", { timeout: 60_000 }, () => {
+describe("GET /saml2/idp/metadata", () => {
   it("serves SAML metadata with the right content type and caching", async () => {
     const { res } = await fetchMetadata();
     expect(res.status).toBe(200);
