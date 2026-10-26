@@ -6,7 +6,7 @@ const validator = libxml2Validator();
 const authnRequest = (inner = "", attrs = "") =>
   `<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_abc123" Version="2.0" IssueInstant="2026-09-24T10:00:00Z" AssertionConsumerServiceURL="https://sp.test/acs"${attrs}><saml:Issuer>https://sp.test/metadata</saml:Issuer>${inner}</samlp:AuthnRequest>`;
 
-describe("libxml2Validator", { timeout: 60_000 }, () => {
+describe("libxml2Validator", () => {
   it("accepts a schema-valid AuthnRequest", async () => {
     expect(await validator.validate(authnRequest(), "protocol")).toEqual({ valid: true });
   });
