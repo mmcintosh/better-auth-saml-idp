@@ -29,6 +29,12 @@
       "npm": "npm",
       "because": "they're bundled inside npm, so they can't be updated alone; their alerts are dismissed as tolerable risk.",
       "takeWhen": "Dependabot proposes the newer npm (it does on its own); check its alerts close."
+    },
+    {
+      "name": "samlify 2.14+ in the tests (D-087)",
+      "npm": "samlify",
+      "because": "since 2.14.0 samlify ships build/src/xml.js, and @cloudflare/vitest-plugin resolves its require(\"xml\") to that sibling file instead of the xml package, so the workerd tests fail.",
+      "takeWhen": "@cloudflare/vitest-plugin resolves bare require specifiers as packages, or samlify renames its xml module; check with pnpm test:wasm."
     }
   ],
   "monthly": [
