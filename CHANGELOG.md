@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-10-27
+
+zod 4.6.6 is now the minimum, so an older lockfile can no longer keep zod 4.6.5, which can run out of memory validating very large collections (GHSA-mrhx-c7xc-m3w5); upgrade if your lockfile still has zod 4.6.5, as nothing else changes for users.
+
 ### Changed
 
 - **zod 4.6.6 is now the minimum** (was 4.6.5). zod 4.6.5 can run out of memory validating very large collections ([GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)). A fresh install already got 4.6.7; this keeps an older lockfile from holding 4.6.5.
