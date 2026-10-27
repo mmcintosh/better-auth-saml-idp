@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { mkdir, mkdtemp, open, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -6,7 +7,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const workerName = "chardb-saml-idp";
 const filesBucket = "chardb-saml-idp-files";
 const deploymentId = "chardb.app.v1/a90a2d91-d596-4594-88b2-ba56dcb8c345";
-const pinnedWranglerVersion = "4.125.0";
+// The exact wrangler this example pins in its package.json, so the two can't drift apart.
+const pinnedWranglerVersion = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).devDependencies.wrangler;
 const wranglerModule = fileURLToPath(import.meta.resolve("wrangler"));
 const wranglerPackage = fileURLToPath(import.meta.resolve("wrangler/package.json"));
 const chardbModule = join(dirname(fileURLToPath(import.meta.resolve("@chardb/core"))), "cli", "bin.mjs");
