@@ -2282,3 +2282,4 @@ samlify is a development dependency only: the tests' strict service provider. Th
 - **Decision.** Keep samlify at 2.13.1. Dependabot ignores 2.14.0 and later, and the upstream watch lists the hold. @better-auth/sso accepts `^2.13.1`, so a fresh install of it gets 2.15.1; on Workers that is bundled by wrangler (esbuild), which resolves `xml` correctly.
 - **Take 2.14+ when** @cloudflare/vitest-plugin resolves bare `require` specifiers as packages, or samlify renames its `xml` module. Check: `pnpm test:wasm` with the newer samlify.
 - **Same day:** the CharDB examples move to Vitest 5 (was 4), as the root did in D-082; @cloudflare/vitest-plugin 1.4.7 supports it, so Dependabot no longer ignores Vitest majors there.
+- **Checked again 2026-10-27** with @cloudflare/vitest-plugin 1.4.8, whose fix for CommonJS `require` on Vite 8 looked related: samlify 2.15.1 still fails the same way in the workerd project. The hold stays.

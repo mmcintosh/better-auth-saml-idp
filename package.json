@@ -11,19 +11,19 @@
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
     "@authenio/samlify-node-xmllint": "2.0.0",
-    "@better-auth/core": "1.7.13",
-    "@better-auth/drizzle-adapter": "1.7.13",
-    "@better-auth/sso": "1.7.13",
+    "@better-auth/core": "1.7.14",
+    "@better-auth/drizzle-adapter": "1.7.14",
+    "@better-auth/sso": "1.7.14",
     "@biomejs/biome": "^2.6.3",
-    "@cloudflare/vitest-plugin": "1.4.7",
-    "@cloudflare/workers-types": "^5.20261025.1",
+    "@cloudflare/vitest-plugin": "1.4.8",
+    "@cloudflare/workers-types": "^5.20261026.1",
     "@node-saml/node-saml": "^5.1.0",
     "@playwright/test": "^1.64.1",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
     "@types/node": "^26.6.5",
     "@types/pg": "^8.23.1",
-    "better-auth": "1.7.13",
+    "better-auth": "1.7.14",
     "better-auth-cloudflare": "^0.4.1",
     "drizzle-orm": "^0.45.4",
     "esbuild": "^0.28.2",
@@ -39,7 +39,7 @@
     "typescript-5": "npm:typescript@5.9.3",
     "vite": "^8.3.5",
     "vitest": "^5.0.5",
-    "wrangler": "^4.152.0"
+    "wrangler": "^4.153.0"
   },
   "scripts": {
     "test": "vitest run",
@@ -111,12 +111,6 @@
       "default": "./dist/client.js"
     },
     "./package.json": "./package.json"
-  },
-  "pnpm": {
-    "overrides": {
-      "undici@>=7.15.0 <7.30.1": "^7.30.1",
-      "zod@<4.6.6": "^4.6.6"
-    }
   },
   "types": "./dist/index.d.ts",
   "files": [
