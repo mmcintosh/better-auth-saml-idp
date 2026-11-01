@@ -24,12 +24,12 @@
     "migrations:generate": "bun --env-file=.dev.vars node_modules/@chardb/core/dist/cli/bin.mjs migrations generate"
   },
   "dependencies": {
-    "@astrojs/react": "7.1.1",
+    "@astrojs/react": "7.1.2",
     "@chardb/core": "file:../../vendor/chardb-core-0.1.0-main-e6cf5c9.tgz",
     "@chardb/react": "file:../../vendor/chardb-react-0.1.0-main-e6cf5c9.tgz",
-    "astro": "7.4.2",
+    "astro": "7.4.4",
     "better-auth": "1.7.14",
-    "better-auth-saml-idp": "^1.7.0",
+    "better-auth-saml-idp": "^1.7.1",
     "drizzle-orm": "0.45.4",
     "react": "19.3.1",
     "react-dom": "19.3.1",
@@ -42,8 +42,8 @@
     "source-map-js": "^1.2.2"
   },
   "devDependencies": {
-    "@cloudflare/vitest-plugin": "1.4.8",
-    "@cloudflare/workers-types": "5.20261026.1",
+    "@cloudflare/vitest-plugin": "1.4.10",
+    "@cloudflare/workers-types": "5.20261028.1",
     "@msw/cloudflare": "0.2.0",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
@@ -52,6 +52,6 @@
     "typescript": "5.9.3",
     "vite": "^8.3.5",
     "vitest": "5.0.5",
-    "wrangler": "4.153.0"
+    "wrangler": "4.155.0"
   }
 }
