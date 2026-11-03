@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Documentation
+
+- README: plain headings and feature list (no emoji), and the two CharDB examples listed.
+
 ### Project
 
 - Development only: Better Auth 1.7.15 (was 1.7.14) in development and the examples. No plugin code changes.
