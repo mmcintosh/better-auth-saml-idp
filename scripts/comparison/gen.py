@@ -21,7 +21,7 @@ for g, *_ in FEATURES:
 md = [f"# Comparison with other SAML identity providers\n",
  f"How `better-auth-saml-idp` compares with eleven SAML 2.0 identity providers, checked against each product's official documentation (and, for the open-source ones, their source code) on **{CHECKED}**. "
  "**Not documented** means the research found no statement either way; it is not the same as *no*. SaaS products are *n/a* for self-hosting rows.\n",
- "Our own column links to the tests that prove each entry. The roadmap derived from this comparison is on the [comparison page](https://mmcintosh.github.io/better-auth-saml-idp/comparison/#roadmap), and what is still open in the [README](../README.md#-whats-next).\n",
+ "Our own column links to the tests that prove each entry. The roadmap derived from this comparison is on the [comparison page](https://mmcintosh.github.io/better-auth-saml-idp/comparison/#roadmap), and what is still open in the [README](../README.md#whats-next).\n",
  "## Where we lead\n"] + [f"- **{t}.** {d}" for t, d in LEADS] + ["\n## Where we trail\n"] + [f"- **{t}.** {d}" for t, d in TRAILS] + ["\n## Feature matrix\n"]
 md.append("Products: " + "; ".join(f"**{p[1]}** ({p[2]}, {p[3]})" for p in PRODUCTS) + ".\n")
 for g in groups:
@@ -54,9 +54,9 @@ def plain(d): return DID.sub("", d)
 open_items = [(t, d) for ver, title, sub, items in ROADMAP if ver != "Not planned" for t, d in items if "(done)" not in t]
 not_planned = [(t, d) for ver, title, sub, items in ROADMAP if ver == "Not planned" for t, d in items]
 covers = f"The 1.x line covers everything on the [roadmap](https://mmcintosh.github.io/better-auth-saml-idp/comparison/#roadmap) derived from a feature comparison with eleven other SAML identity providers (checked {CHECKED})"
-rm = ["## 🧭 What's next\n", covers + (", except:\n" if open_items else ".\n")]
+rm = ["## What's next\n", covers + (", except:\n" if open_items else ".\n")]
 rm += [f"- [ ] **{t}**: {plain(d)}" for t, d in open_items] + (["" ] if open_items else []) + ["**Not planned:**\n"]
-rm += [f"- 🚫 **{t}**: {plain(d)}" for t, d in not_planned]
+rm += [f"- **{t}**: {plain(d)}" for t, d in not_planned]
 rm += ["", "What shipped in each release is in the [CHANGELOG](CHANGELOG.md).", ""]
 readme_path = os.path.join(ROOT, "README.md")
 readme = open(readme_path).read()
