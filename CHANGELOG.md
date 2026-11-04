@@ -10,7 +10,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ### Project
 
-- Development only: Better Auth 1.7.15 (was 1.7.14) in development and the examples. No plugin code changes.
+- Development only: Better Auth 1.7.17 (was 1.7.14) in development and the examples. No plugin code changes.
 
 ## [1.7.1] - 2026-10-27
 
