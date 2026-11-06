@@ -4,7 +4,7 @@ Turn your [Better Auth](https://www.better-auth.com) server into a **SAML 2.0 Id
 
 [![CI](https://github.com/mmcintosh/better-auth-saml-idp/actions/workflows/ci.yml/badge.svg)](https://github.com/mmcintosh/better-auth-saml-idp/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/better-auth-saml-idp)](https://www.npmjs.com/package/better-auth-saml-idp)
-[![Better Auth](https://img.shields.io/badge/better--auth-%E2%89%A51.7.8%20%3C1.8-black)](https://www.better-auth.com)
+[![Better Auth](https://img.shields.io/badge/better--auth-%E2%89%A51.7.16%20%3C1.8-black)](https://www.better-auth.com)
 [![Runs on](https://img.shields.io/badge/runs%20on-Workers%20%7C%20Node%2022%2B%20%7C%20Bun%20%7C%20Deno-f38020)](docs/guide/README.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -87,7 +87,7 @@ Then give the SP your metadata URL, `https://auth.example.com/api/auth/saml2/idp
 
 ### Requirements
 
-- `better-auth` and `@better-auth/core` `>=1.7.8 <1.8.0` (peer dependencies). Better Auth 1.7.7 fixed three security advisories, a critical Magic Link account takeover among them, and 1.7.8 a SAML replay check in `@better-auth/sso`; see [versioning](docs/guide/versioning.md#better-auth-compatibility).
+- `better-auth` and `@better-auth/core` `>=1.7.16 <1.8.0` (peer dependencies). Better Auth 1.7.16 fixed twelve security advisories, one of them in the session check the plugin relies on; see [versioning](docs/guide/versioning.md#better-auth-compatibility).
 - A real database. Replay protection depends on UNIQUE constraints, which Better Auth's in-memory adapter doesn't enforce.
 - With secondary storage (for example KV): `verification: { storeInDatabase: true }`. On Workers also `rateLimit: { storage: "database" }`, `better-auth-cloudflare` and the `nodejs_compat` flag.
 - Next.js: `serverExternalPackages: ["better-auth-saml-idp"]` in `next.config`. The plugin reads its XSD validator from its own package, which a bundled copy can't.
@@ -166,7 +166,7 @@ pnpm e2e           # Playwright + Chromium: Keycloak, SimpleSAMLphp (Docker) and
 pnpm lint && pnpm typecheck && pnpm pack:check
 ```
 
-CI runs these on Node 24 with Better Auth 1.7.8 and the latest 1.7.x, and on Node 22 with 1.7.8, plus a gitleaks scan, the database matrix and the Next.js example. [CONTRIBUTING.md](CONTRIBUTING.md) has the rest.
+CI runs these on Node 24 with Better Auth 1.7.16 and the latest 1.7.x, and on Node 22 with 1.7.16, plus a gitleaks scan, the database matrix and the Next.js example. [CONTRIBUTING.md](CONTRIBUTING.md) has the rest.
 
 ## License and contributing
 

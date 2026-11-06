@@ -92,6 +92,7 @@ A running log of the non-obvious choices, with the options considered and the ev
 - [D-085](#d-085-examples-audit-is-no-longer-a-required-check-2026-10-21): `examples-audit` is no longer a required check (2026-10-21)
 - [D-086](#d-086-daily-upstream-watch-and-a-daily-check-of-the-demo-2026-10-22): Daily upstream watch, and a daily check of the demo (2026-10-22)
 - [D-087](#d-087-samlify-held-at-2131-in-the-tests-2026-10-25): samlify held at 2.13.1 in the tests (2026-10-25)
+- [D-088](#d-088-better-auth-floor-1716-2026-11-06): Better Auth floor 1.7.16 (2026-11-06)
 
 ---
 
@@ -2283,3 +2284,14 @@ samlify is a development dependency only: the tests' strict service provider. Th
 - **Take 2.14+ when** @cloudflare/vitest-plugin resolves bare `require` specifiers as packages, or samlify renames its `xml` module. Check: `pnpm test:wasm` with the newer samlify.
 - **Same day:** the CharDB examples move to Vitest 5 (was 4), as the root did in D-082; @cloudflare/vitest-plugin 1.4.7 supports it, so Dependabot no longer ignores Vitest majors there.
 - **Checked again 2026-10-27** with @cloudflare/vitest-plugin 1.4.8, whose fix for CommonJS `require` on Vite 8 looked related: samlify 2.15.1 still fails the same way in the workerd project. The hold stays.
+
+## D-088: Better Auth floor 1.7.16 (2026-11-06)
+
+Better Auth 1.7.16 (2026-11-03) fixed twelve security advisories. One reaches a path the plugin relies on: [GHSA-fvxx-76fc-893x](https://github.com/better-auth/better-auth/security/advisories/GHSA-fvxx-76fc-893x), a revoked session staying valid with secondary storage or the cookie cache. Before it signs a response, the plugin re-reads the session through `internalAdapter.findSession` when sessions live only in secondary storage (`src/endpoints/issue.ts`); 1.7.16 makes that read refuse a revoked session. Two of the advisories also cover `@better-auth/passkey`, which the Workers example and the demo use. The plugin doesn't call `findUserByEmail`, so the email-lookup fixes need no change here.
+
+- **The floor is 1.7.16** (`>=1.7.16 <1.8.0`) for `better-auth` and `@better-auth/core`, in a plugin minor release under D-081. better-auth-scim-provisioning 1.8.2 and better-auth-id-jag 0.6.0 already require 1.7.16.
+- **Development and the examples run 1.7.18.** It also makes "revoke all sessions" with secondary storage and `storeSessionInDatabase` revoke sessions created while it runs (better-auth#12259). Not an advisory, so the floor stays 1.7.16.
+- **CI's lowest row and the canary's minimum move to 1.7.16.** Ruleset 24084053's required checks `test (1.7.8, 22)` and `test (1.7.8, 24)` become `test (1.7.16, 22)` and `test (1.7.16, 24)`, applied by the maintainer.
+- **The R4-5 test** now asserts the `revoked-sessions-before-<userId>` marker, which every supported version writes.
+- **Docs:** the "With Better Auth ≥ 1.7.3" conditions in the Cloudflare notes are dropped; every supported version is past it.
+- **Considered:** keeping the floor and recommending 1.7.16 in the docs. Rejected for the reason in D-081.

@@ -47,7 +47,8 @@ describe.skipIf(isWorkerd)("R4-5: a revoked session served from the cookie cache
     // The admin revokes every session of the user (compromised account).
     const ctx = await auth.$context;
     await ctx.internalAdapter.deleteUserSessions(user.id);
-    // Nothing left server-side but the index and, since Better Auth 1.7.16, its revocation marker.
+    // Nothing left server-side but the index and the revocation marker (Better Auth 1.7.16, the floor).
+    expect(kv.has(`revoked-sessions-before-${user.id}`)).toBe(true);
     const left = [...kv.keys()].filter((k) => !/^(active-sessions-|revoked-sessions-before-)/.test(k));
     expect(left).toEqual([]);
 

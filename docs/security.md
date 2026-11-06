@@ -22,10 +22,11 @@ betterAuth({
 });
 ```
 
-- **Minimum versions:** `better-auth` ≥ 1.7.8 and < 1.8.
-  - 1.7.8 is the floor because of the fixes below it: 1.7.7 fixed three Better Auth advisories (a critical Magic Link account takeover, [GHSA-965c-763c-88jm](https://github.com/better-auth/better-auth/security/advisories/GHSA-965c-763c-88jm); an OAuth Proxy sign-in as another user, GHSA-r4xp-prcw-77qf; rate limits exceeded under concurrency on Drizzle and Postgres, GHSA-44jh-23m7-hpcf), and 1.7.8 stopped `@better-auth/sso` accepting a reused SAML assertion under `generateId: "uuid"`. The plugin's own code isn't affected by any of them; the host it runs in is.
+- **Minimum versions:** `better-auth` ≥ 1.7.16 and < 1.8.
+  - 1.7.16 is the floor because it fixed twelve Better Auth advisories (2026-11-03). One is in a path the plugin relies on: with secondary storage or the cookie cache, a revoked session could stay valid ([GHSA-fvxx-76fc-893x](https://github.com/better-auth/better-auth/security/advisories/GHSA-fvxx-76fc-893x)), and the plugin re-reads the session through Better Auth before it signs a response.
+  - Earlier floors: 1.7.7 fixed three Better Auth advisories (a critical Magic Link account takeover, [GHSA-965c-763c-88jm](https://github.com/better-auth/better-auth/security/advisories/GHSA-965c-763c-88jm); an OAuth Proxy sign-in as another user, GHSA-r4xp-prcw-77qf; rate limits exceeded under concurrency on Drizzle and Postgres, GHSA-44jh-23m7-hpcf), and 1.7.8 stopped `@better-auth/sso` accepting a reused SAML assertion under `generateId: "uuid"`. The plugin's own code isn't affected by those; the host it runs in is.
   - On Workers, `better-auth-cloudflare` 0.3.1 with verification values and rate limits in the database (`verification: { storeInDatabase: true }`, `rateLimit: { storage: "database" }`), or 0.4.0 (released 2026-10-12).
-  - `better-auth-cloudflare` 0.3.1 combined with `better-auth` ≥ 1.7.3 silently breaks every verification consume (better-auth-cloudflare #72).
+  - `better-auth-cloudflare` 0.3.1 silently breaks every verification consume (better-auth-cloudflare #72).
   - 0.4 turns that misconfiguration into a startup error. The plugin's own tests assert that it fails loudly.
 - **Keep single-use state in the database.** `verification.storeInDatabase: true` routes consumes through the database's lock-guarded `DELETE … RETURNING`.
   - Workers KV can't do atomic get-and-delete, compare-and-swap or counters, so KV must never hold single-use state.

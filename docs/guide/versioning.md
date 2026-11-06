@@ -30,7 +30,7 @@ Releases follow [SemVer](https://semver.org/). With an IdP, "breaking" also cove
 
 ## Better Auth compatibility
 
-The plugin declares a bounded peer range on `better-auth`, currently `>=1.7.8 <1.8`:
+The plugin declares a bounded peer range on `better-auth`, currently `>=1.7.16 <1.8`:
 
 - CI tests every change at the **lowest** version in the range and at the **latest** release in it.
 - The [upstream canary](../../.github/workflows/upstream-canary.yml) tests Better Auth's `latest` tag and its prerelease tags (`next`, `beta`) weekly, and opens an issue when something breaks. A prerelease tag is skipped once `latest` has caught up with it.
