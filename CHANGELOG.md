@@ -4,13 +4,17 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Changed
+
+- **Better Auth 1.7.16 is now the minimum** (the peer range is `>=1.7.16 <1.8.0`, was `>=1.7.8`), for `better-auth` and `@better-auth/core`. 1.7.16 fixed twelve Better Auth security advisories. One is in a path the plugin relies on: with secondary storage or the cookie cache, a revoked session could stay valid ([GHSA-fvxx-76fc-893x](https://github.com/better-auth/better-auth/security/advisories/GHSA-fvxx-76fc-893x)), and the plugin re-reads the session through Better Auth before it signs a response. No plugin code changes. Upgrade Better Auth and its `@better-auth/*` packages to 1.7.16 or later; 1.7.18 is the latest. A minor release under the versioning policy's security rule (D-081, D-088).
+
 ### Documentation
 
 - README: plain headings and feature list (no emoji), and the two CharDB examples listed.
 
 ### Project
 
-- Development only: Better Auth 1.7.17 (was 1.7.14) in development and the examples. No plugin code changes.
+- Development only: Better Auth 1.7.18 (was 1.7.14) in development and the examples, and better-auth-scim-provisioning 1.8.2 in the Workers example. CI tests 1.7.16, the new floor, and the latest 1.7.x.
 
 ## [1.7.1] - 2026-10-27
 
