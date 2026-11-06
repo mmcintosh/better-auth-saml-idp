@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-11-06
+
+Better Auth 1.7.16 is now the minimum, which keeps installs off the Better Auth versions with twelve security advisories, one of them in the session check the plugin relies on; it still requires Better Auth 1.7, and Better Auth 1.8 support comes in a later minor. Everyone should upgrade, along with Better Auth.
+
 ### Changed
 
 - **Better Auth 1.7.16 is now the minimum** (the peer range is `>=1.7.16 <1.8.0`, was `>=1.7.8`), for `better-auth` and `@better-auth/core`. 1.7.16 fixed twelve Better Auth security advisories. One is in a path the plugin relies on: with secondary storage or the cookie cache, a revoked session could stay valid ([GHSA-fvxx-76fc-893x](https://github.com/better-auth/better-auth/security/advisories/GHSA-fvxx-76fc-893x)), and the plugin re-reads the session through Better Auth before it signs a response. No plugin code changes. Upgrade Better Auth and its `@better-auth/*` packages to 1.7.16 or later; 1.7.18 is the latest. A minor release under the versioning policy's security rule (D-081, D-088).
