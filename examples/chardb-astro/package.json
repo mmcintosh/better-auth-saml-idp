@@ -29,7 +29,7 @@
     "@chardb/react": "file:../../vendor/chardb-react-0.1.0-main-e6cf5c9.tgz",
     "astro": "7.4.4",
     "better-auth": "1.7.18",
-    "better-auth-saml-idp": "^1.7.1",
+    "better-auth-saml-idp": "^1.8.0",
     "drizzle-orm": "0.45.4",
     "react": "19.3.1",
     "react-dom": "19.3.1",
