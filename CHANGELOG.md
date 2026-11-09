@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Documentation
+
+- README: links to the plugin's entry in Better Auth's Community Plugins list.
+
 ## [1.8.0] - 2026-11-06
 
 Better Auth 1.7.16 is now the minimum, which keeps installs off the Better Auth versions with twelve security advisories, one of them in the session check the plugin relies on; it still requires Better Auth 1.7, and Better Auth 1.8 support comes in a later minor. Everyone should upgrade, along with Better Auth.

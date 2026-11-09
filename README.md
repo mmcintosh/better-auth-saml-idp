@@ -16,7 +16,7 @@ Turn your [Better Auth](https://www.better-auth.com) server into a **SAML 2.0 Id
 
 The [guide](docs/guide/README.md) covers everything this page leaves out: every option, the error codes, the security controls, Single Logout, Cloudflare Workers, the CLI and troubleshooting.
 
-> **Unofficial community plugin.** Not affiliated with or endorsed by Better Auth. Stable 1.x on npm, following [semantic versioning](docs/guide/versioning.md); the [CHANGELOG](CHANGELOG.md) says what changed in each release and why.
+> **Unofficial community plugin**, listed in Better Auth's [Community Plugins](https://www.better-auth.com/docs/plugins/community-plugins). Not affiliated with or endorsed by Better Auth. Stable 1.x on npm, following [semantic versioning](docs/guide/versioning.md); the [CHANGELOG](CHANGELOG.md) says what changed in each release and why.
 
 ## Features
 
