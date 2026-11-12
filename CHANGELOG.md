@@ -10,7 +10,8 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ### Project
 
-- Development only: Better Auth 1.7.19 (was 1.7.18) in development and the examples. No plugin code changes.
+- Development only: Better Auth 1.7.22 (was 1.7.18) in development and the examples. No plugin code changes.
+- Development only: fast-xml-parser 5.12.0 (was 5.11.2), which @better-auth/sso brings into the tests, for [GHSA-474x-hrwr-fgx4](https://github.com/advisories/GHSA-474x-hrwr-fgx4). The plugin doesn't depend on it.
 
 ## [1.8.0] - 2026-11-06
 

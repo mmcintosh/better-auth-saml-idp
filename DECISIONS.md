@@ -2284,6 +2284,7 @@ samlify is a development dependency only: the tests' strict service provider. Th
 - **Take 2.14+ when** @cloudflare/vitest-plugin resolves bare `require` specifiers as packages, or samlify renames its `xml` module. Check: `pnpm test:wasm` with the newer samlify.
 - **Same day:** the CharDB examples move to Vitest 5 (was 4), as the root did in D-082; @cloudflare/vitest-plugin 1.4.7 supports it, so Dependabot no longer ignores Vitest majors there.
 - **Checked again 2026-10-27** with @cloudflare/vitest-plugin 1.4.8, whose fix for CommonJS `require` on Vite 8 looked related: samlify 2.15.1 still fails the same way in the workerd project. The hold stays.
+- **Checked again 2026-11-12** with @cloudflare/vitest-plugin 1.7.0 (1.8.0 was under a day old, below `minimumReleaseAge`): the same 46 tests fail. The hold stays.
 
 ## D-088: Better Auth floor 1.7.16 (2026-11-06)
 
