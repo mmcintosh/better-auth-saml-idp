@@ -12,6 +12,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 - Development only: Better Auth 1.7.23 (was 1.7.18) in development and the examples. No plugin code changes.
 - Development only: fast-xml-parser 5.12.0 (was 5.11.2), which @better-auth/sso brings into the tests, for [GHSA-474x-hrwr-fgx4](https://github.com/advisories/GHSA-474x-hrwr-fgx4). The plugin doesn't depend on it.
+- Development only: astro 7.4.7 (was 7.4.5) in the CharDB Astro example, for [GHSA-r3h5-4585-7x3w](https://github.com/advisories/GHSA-r3h5-4585-7x3w). The example doesn't use the affected `@astrojs/node` adapter, and the plugin doesn't depend on Astro.
 
 ## [1.8.0] - 2026-11-06
 
