@@ -2285,6 +2285,7 @@ samlify is a development dependency only: the tests' strict service provider. Th
 - **Same day:** the CharDB examples move to Vitest 5 (was 4), as the root did in D-082; @cloudflare/vitest-plugin 1.4.7 supports it, so Dependabot no longer ignores Vitest majors there.
 - **Checked again 2026-10-27** with @cloudflare/vitest-plugin 1.4.8, whose fix for CommonJS `require` on Vite 8 looked related: samlify 2.15.1 still fails the same way in the workerd project. The hold stays.
 - **Checked again 2026-11-12** with @cloudflare/vitest-plugin 1.7.0 (1.8.0 was under a day old, below `minimumReleaseAge`): the same 46 tests fail. The hold stays.
+- **Checked again 2026-11-15** with @cloudflare/vitest-plugin 1.8.2 (1.8.0 tried 2026-11-13 too): the same 46 tests fail, mostly `TypeError: (0 , xml_1.default) is not a function` from samlify's CommonJS default import of `xml`. The hold stays.
 
 ## D-088: Better Auth floor 1.7.16 (2026-11-06)
 
