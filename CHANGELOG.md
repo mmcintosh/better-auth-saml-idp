@@ -189,11 +189,11 @@ Documentation release: no code changes. The package's README and docs catch up w
 
 ## [1.2.0] - 2026-10-06
 
-Adds assertion exchange: an SP can let one OAuth client trade its assertions for tokens, once each (draft ID-JAG §4.5, MCP's Enterprise-Managed Authorization). Nothing changes for SPs that don't opt in.
+Adds assertion exchange: an SP can let one OAuth client trade its assertions for tokens, once each (draft ID-JAG section 4.5, MCP's Enterprise-Managed Authorization). Nothing changes for SPs that don't opt in.
 
 ### Added
 
-- **Assertion exchange** (D-071): an SP can let one OAuth client exchange its assertions for tokens, once each. This is RFC 8693 token exchange with a SAML 2.0 subject token, the flow in draft-ietf-oauth-identity-assertion-authz-grant §4.5 that MCP's Enterprise-Managed Authorization uses. Set `tokenExchange: { clientId }` on the SP; stored SPs also need the new server option `tokenExchange: { enabled: true }`. Each assertion to such an SP is recorded at sign-in. An authorization server on the same Better Auth instance (an ID-JAG issuer) checks it with `getSamlIdpExchange(ctx).verifyIssuedAssertion(ctx, assertionXml, { clientId })`. That checks the signature (XSW-hardened, the identity's own key), the issuer and tenant, the validity window, the SP's client, single use across instances, and the user, session and membership as they are now. Failures throw `AssertionExchangeError` with a code. A new `assertion.exchanged` event (`events.onAssertionExchanged`, audit log) records each exchange. A tenant's administrator can't set or change `tokenExchange`. Nothing changes for SPs that don't opt in. See [Exchanging assertions for OAuth tokens](docs/guide/token-exchange.md).
+- **Assertion exchange** (D-071): an SP can let one OAuth client exchange its assertions for tokens, once each. This is RFC 8693 token exchange with a SAML 2.0 subject token, the flow in draft-ietf-oauth-identity-assertion-authz-grant section 4.5 that MCP's Enterprise-Managed Authorization uses. Set `tokenExchange: { clientId }` on the SP; stored SPs also need the new server option `tokenExchange: { enabled: true }`. Each assertion to such an SP is recorded at sign-in. An authorization server on the same Better Auth instance (an ID-JAG issuer) checks it with `getSamlIdpExchange(ctx).verifyIssuedAssertion(ctx, assertionXml, { clientId })`. That checks the signature (XSW-hardened, the identity's own key), the issuer and tenant, the validity window, the SP's client, single use across instances, and the user, session and membership as they are now. Failures throw `AssertionExchangeError` with a code. A new `assertion.exchanged` event (`events.onAssertionExchanged`, audit log) records each exchange. A tenant's administrator can't set or change `tokenExchange`. Nothing changes for SPs that don't opt in. See [Exchanging assertions for OAuth tokens](docs/guide/token-exchange.md).
 
 ### Project
 
@@ -299,7 +299,7 @@ Multi-tenancy phases 2 and 3: a signing key per tenant, and delegated administra
 - **Audit log API:** `GET /saml-idp/audit` (with `auditLog.enabled`): newest first, paged with `before`, filtered by tenant in the query; a tenant's administrator sees only its own.
 - **Registry changes in the audit log:** a `service-provider.changed` event (`events.onServiceProviderChanged`) for each create, update, enable, disable and delete, with the acting user and `delegated`.
 - **Review 7 of phases 2 and 3, before release** (D-060):
-  - **R7-5 (High):** delegation now applies only to tenants that sign with their own key. A tenant still on the shared key would have let its administrator get assertions for another identity's SPs signed with that key (design §5.1).
+  - **R7-5 (High):** delegation now applies only to tenants that sign with their own key. A tenant still on the shared key would have let its administrator get assertions for another identity's SPs signed with that key (design section 5.1).
   - **R7-4 (High):** a delegated SP can't use `only` in organization attributes, which would have told a tenant's administrator its members' memberships in other organizations.
   - **R7-1:** retired tenant keys beyond the five newest are deleted, and key reads are newest first, so many rotations can't push the active key out of a bounded read (which would have refused every sign-in).
   - **R7-2:** tenant records carry `warnings` for certificates that expire within 30 days, or have, and loading such a key logs it.
