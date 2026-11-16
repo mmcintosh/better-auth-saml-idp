@@ -1,21 +1,21 @@
 # DECISIONS
 
-A running log of the non-obvious choices, with the options considered and the evidence behind each one (SPEC §11).
+A running log of the non-obvious choices, with the options considered and the evidence behind each one (SPEC section 11).
 
 ## Index
 
 - [D-001](#d-001-test-toolchain-versions-phase-0): Test toolchain versions (Phase 0)
 - [D-002](#d-002-test-keys): Test keys
-- [D-003](#d-003-schema-validator-under-workers-spec-8-open-question-3): Schema validator under Workers (SPEC §8, open question 3)
-- [D-004](#d-004-runtime-compatibility-of-samlifys-dependencies-spec-8): Runtime compatibility of samlify's dependencies (SPEC §8)
-- [D-005](#d-005-bundle-size-spec-8): Bundle size (SPEC §8)
+- [D-003](#d-003-schema-validator-under-workers-spec-section-8-open-question-3): Schema validator under Workers (SPEC section 8, open question 3)
+- [D-004](#d-004-runtime-compatibility-of-samlifys-dependencies-spec-section-8): Runtime compatibility of samlify's dependencies (SPEC section 8)
+- [D-005](#d-005-bundle-size-spec-section-8): Bundle size (SPEC section 8)
   - [addendum](#d-005-addendum-real-plugin-size-phase-1): real plugin size (Phase 1)
 - [D-006](#d-006-how-the-plugin-uses-the-schema-validator-phase-1): How the plugin uses the schema validator (Phase 1)
 - [D-007](#d-007-vendored-xsds-phase-1): Vendored XSDs (Phase 1)
 - [D-008](#d-008-node-xmllint-runs-in-emscripten-shell-mode-through-a-generated-wrapper-phase-1): node-xmllint runs in emscripten "shell" mode through a generated wrapper (Phase 1)
 - [D-009](#d-009-default-validator-is-the-custom-libxml2-wasm-build-node-xmllint-is-removed-phase-1-2026-09-24): Default validator is the custom libxml2 WASM build; node-xmllint is removed (Phase 1, 2026-09-24)
 - [D-010](#d-010-addendum-01-host-stack-and-amended-phase-0-gate-2026-09-24): ADDENDUM-01 host stack and amended Phase 0 gate (2026-09-24)
-- [D-011](#d-011-pending-requests-and-replay-storage-addendum-01-r1-r2-resolves-spec-12-q2): Pending requests and replay storage (ADDENDUM-01 R1, R2; resolves SPEC §12 Q2)
+- [D-011](#d-011-pending-requests-and-replay-storage-addendum-01-r1-r2-resolves-spec-section-12-q2): Pending requests and replay storage (ADDENDUM-01 R1, R2; resolves SPEC section 12 Q2)
 - [D-012](#d-012-sp-initiated-sso-design-phase-2): SP-initiated SSO design (Phase 2)
 - [D-013](#d-013-phase-3-gate-amended-independent-sps-in-place-of-a-live-hubspot-login-2026-09-25): Phase 3 gate amended: independent SPs in place of a live HubSpot login (2026-09-25)
 - [D-014](#d-014-example-app-and-repo-plumbing-phase-3): Example app and repo plumbing (Phase 3)
@@ -25,7 +25,7 @@ A running log of the non-obvious choices, with the options considered and the ev
 - [D-018](#d-018-signed-authnrequests-and-forceauthn-verified-live-with-cloudflare-access-2026-09-25): Signed AuthnRequests and ForceAuthn, verified live with Cloudflare Access (2026-09-25)
 - [D-019](#d-019-key-rotation-rehearsed-live-example-builds-better-auth-once-per-isolate-2026-09-25): Key rotation rehearsed live; example builds Better Auth once per isolate (2026-09-25)
 - [D-020](#d-020-encrypted-assertions-2026-09-25): Encrypted assertions (2026-09-25)
-- [D-021](#d-021-idp-initiated-sso-spec-5-stretch-roadmap-v11): IdP-initiated SSO (SPEC §5 stretch, roadmap v1.1)
+- [D-021](#d-021-idp-initiated-sso-spec-section-5-stretch-roadmap-v11): IdP-initiated SSO (SPEC section 5 stretch, roadmap v1.1)
 - [D-022](#d-022-per-sp-signing-signed-metadata-sp-registration-from-metadata-2026-09-25): Per-SP signing, signed metadata, SP registration from metadata (2026-09-25)
 - [D-023](#d-023-a-command-line-tool-not-a-debug-endpoint-2026-09-25): A command-line tool, not a debug endpoint (2026-09-25)
 - [D-024](#d-024-declarative-attribute-mapping-2026-09-25): Declarative attribute mapping (2026-09-25)
@@ -100,13 +100,13 @@ A running log of the non-obvious choices, with the options considered and the ev
 
 - **vitest 4.1.x.** `@cloudflare/vitest-pool-workers@0.22.0` has a peer dependency of `vitest ^4.1.0`. vitest 5 is out but the pool doesn't support it yet.
 - **compatibility_date `2026-08-15`.** The workerd binary bundled with pool-workers 0.22.0 (miniflare `5.20260815.0-alpha`) rejects dates after `2026-08-22`: *"This Worker requires compatibility date "2026-09-01", but the newest date supported by this server binary is "2026-08-22"."* Bump the date when pool-workers is bumped.
-- A single `vitest.config.ts` defines two projects, `node` and `workerd`, over the **same** test files. That satisfies SPEC §10 without a duplicated suite.
+- A single `vitest.config.ts` defines two projects, `node` and `workerd`, over the **same** test files. That satisfies SPEC section 10 without a duplicated suite.
 
 ## D-002: Test keys
 
 `test/support/global-setup.ts` generates throwaway RSA-2048 key pairs and self-signed SHA-256 certs with `openssl` at the start of every run and hands them to both projects through `provide`/`inject`. Nothing is written into the repo, and `.gitignore` excludes `*.pem` and `*.key`. CI needs `openssl` on the PATH, which GitHub's Ubuntu runners have.
 
-## D-003: Schema validator under Workers (SPEC §8, open question 3)
+## D-003: Schema validator under Workers (SPEC section 8, open question 3)
 
 samlify requires `setSchemaValidator`. Its only call sites are in the **inbound** parse flows (`flow.js`). For an IdP, that means the validator runs once per incoming AuthnRequest, on attacker-controlled input. It does not validate our own outgoing Responses. We verify those in tests instead.
 
@@ -136,7 +136,7 @@ Evidence (`test/spike/roundtrip.test.ts`, green on both `node` and `workerd`):
 - **The libxml2 is very old.** node-xmllint is kripken/xml.js-era libxml2 from roughly 2014 and hasn't been maintained since. It parses attacker-controlled AuthnRequests. The asm.js sandbox contains memory corruption to its own heap, so a bug can't escape into the Worker. It *can* produce a wrong validation result or a crash, which limits the schema check to defence in depth. samlify's own signature and reference checks remain the primary XSW defence.
 - **It's slow by construction.** The whole emscripten runtime is inlined inside `validateXML()`, so every call re-links the asm.js module and allocates a fresh heap. The first call in a fresh isolate is noticeably slower. The first round trip in a fresh process, including the first validation, measured 2.3–2.7 s on Node and 0.65–1.1 s on workerd.
 - **Workers plan.** A single SSO request (validate plus RSA-SHA256 sign) exceeds the Workers Free plan's 10 ms CPU limit. **The plugin needs Workers Paid** or another host. Document this.
-- The console output on failure dumps libxml2's error text, which includes element names but not the full payload. The SPEC §7 logging rules still require routing this through our logger rather than the package's `console.error`, so v1 wraps the validator.
+- The console output on failure dumps libxml2's error text, which includes element names but not the full payload. The SPEC section 7 logging rules still require routing this through our logger rather than the package's `console.error`, so v1 wraps the validator.
 
 **Mitigation built into the design:** the plugin exposes a `schemaValidator` option (default: the node-xmllint wrapper). Deployments on Node can switch to `libxml2-wasm`, which is ~30× faster and maintained. A later custom WASM build can then replace the default without an API change.
 
@@ -160,7 +160,7 @@ So on Workers, each inbound AuthnRequest costs **roughly 0.1 s of CPU warm and o
 
 > Timing caveat: workerd clamps `performance.now()` precision in tests, so its numbers are indicative only. Real CPU time will be measured on a deployed Worker in Phase 3.
 
-## D-004: Runtime compatibility of samlify's dependencies (SPEC §8)
+## D-004: Runtime compatibility of samlify's dependencies (SPEC section 8)
 
 All of the following were exercised under workerd with `nodejs_compat` (compat date 2026-08-15) in `test/spike/roundtrip.test.ts`. Nothing needed patching or shimming:
 - `@xmldom/xmldom`: parsing AuthnRequests and Responses.
@@ -169,7 +169,7 @@ All of the following were exercised under workerd with `nodejs_compat` (compat d
 - Redirect-binding inflate/deflate: `sp.createLoginRequest(…, "redirect")` → `idp.parseLoginRequest(…, "redirect")` round-trips.
 - Signature verification is real. A NameID tampered after signing is rejected with `FAILED_TO_VERIFY_SIGNATURE` on both runtimes.
 
-## D-005: Bundle size (SPEC §8)
+## D-005: Bundle size (SPEC section 8)
 
 `wrangler deploy --dry-run` of the minimal Workers in `spike/` (wrangler 4.139):
 
@@ -298,7 +298,7 @@ Open items carried over from the agent's report:
 - Sign-up writes `rateLimit` rows to the database, and metadata validates against the XSD.
 - **Negative host config:** KV secondary storage without `storeInDatabase` throws `Better Auth 1.7.x storage is not atomic: verification requires a database or secondaryStorage.getAndDelete`.
 
-## D-011: Pending requests and replay storage (ADDENDUM-01 R1, R2; resolves SPEC §12 Q2)
+## D-011: Pending requests and replay storage (ADDENDUM-01 R1, R2; resolves SPEC section 12 Q2)
 
 - **Pending AuthnRequests (R1)** are Better Auth verification values with identifier `saml-idp:pending:<rid>`, where `rid` is 256 random bits in base64url. They're written with `createVerificationValue` and read **only** via `consumeVerificationValue`. The plugin never finds-then-deletes, and never touches KV or secondary storage directly.
   - `rid` is also bound to the starting browser. The pending record holds the SHA-256 of a random value kept in a signed `saml_idp_binding` cookie, which is checked after the consume.
@@ -326,13 +326,13 @@ The cross-instance R1 test matters. `consumeVerificationValue`'s in-process lock
 
 ## D-012: SP-initiated SSO design (Phase 2)
 
-- **Response construction.** An explicit, fully escaped XML template carries every field from SPEC §6 step 7. It's signed with `xml-crypto` 6: the assertion first, then the response, with enveloped + exclusive c14n, the signature placed after `Issuer`, and `KeyInfo` carrying the cert. samlify's template engine wasn't used, so that each field is visible and auditable in one file (`src/saml/response.ts`). A strict samlify SP, with message and assertion signatures required, is the independent verifier in tests.
+- **Response construction.** An explicit, fully escaped XML template carries every field from SPEC section 6 step 7. It's signed with `xml-crypto` 6: the assertion first, then the response, with enveloped + exclusive c14n, the signature placed after `Issuer`, and `KeyInfo` carrying the cert. samlify's template engine wasn't used, so that each field is visible and auditable in one file (`src/saml/response.ts`). A strict samlify SP, with message and assertion signatures required, is the independent verifier in tests.
 - **Inbound AuthnRequest pipeline** (`src/saml/request.ts`):
   1. Size-bounded base64 decode, then DEFLATE inflate stopping at 64 KiB (a DEFLATE bomb is tested). Strict UTF-8.
   2. `precheckXml`, then the XSD check (libxml2 WASM), then a strict xmldom parse.
   3. Structural checks: the root is `samlp:AuthnRequest` with Version 2.0, it has exactly one direct `Issuer`, `IssueInstant` is within 300 s plus skew and not in the future, `Destination` (if present) equals our SSO URL, `ProtocolBinding` (if present) is HTTP-POST, and `NameIDPolicy@Format` is absent, unspecified or the SP's format.
   4. Then the SP lookup, the signature policy, the ACS allow-list and the R2 insert.
-- **Signed AuthnRequests.** HTTP-Redirect only, verified over the raw query octets (`SAMLRequest`, `RelayState`, `SigAlg`, as received) using `node:crypto` and the SP certificate. This has no XML-signature surface and so no XSW exposure. **POST-binding signed requests weren't supported in v1:** an SP that required signing and posted was rejected with `UNSIGNED_SAML_REQUEST` (SPEC §9 stretch list). They're supported since D-025. SHA-1 `SigAlg` is refused unless `allowInsecureSha1` is set.
+- **Signed AuthnRequests.** HTTP-Redirect only, verified over the raw query octets (`SAMLRequest`, `RelayState`, `SigAlg`, as received) using `node:crypto` and the SP certificate. This has no XML-signature surface and so no XSW exposure. **POST-binding signed requests weren't supported in v1:** an SP that required signing and posted was rejected with `UNSIGNED_SAML_REQUEST` (SPEC section 9 stretch list). They're supported since D-025. SHA-1 `SigAlg` is refused unless `allowInsecureSha1` is set.
 - **Issuance** (`src/endpoints/issue.ts`), right before signing:
   1. **R3:** `findUserById` (a database read) → missing or banned (admin `banned`, respecting `banExpires`) → `ACCOUNT_INACTIVE`. Where the database holds sessions (no secondary storage, or `storeSessionInDatabase`), the session row is re-read by token → missing or expired → `ACCOUNT_INACTIVE`. This covers #61: a KV-cached session is refused once its database row is gone (tested with an atomic in-memory cache standing in for KV).
   2. `authorize()` runs on the fresh user. A denial or an exception gives `ACCESS_DENIED` (403).
@@ -344,7 +344,7 @@ The cross-instance R1 test matters. `consumeVerificationValue`'s in-process lock
 
 ## D-013: Phase 3 gate amended: independent SPs in place of a live HubSpot login (2026-09-25)
 
-**Deviation from SPEC §9 Phase 3**, approved by the owner. There's no HubSpot portal with SSO available: HubSpot SSO generally needs a paid tier, and we have no entity ID or ACS URL. The gate's purpose is proof that *independent, strict* SP implementations accept our assertions, plus an external validator result. That's now covered in four tiers (`docs/testing-with-sps.md`). `docs/hubspot.md` stays as a guide marked "not yet verified live".
+**Deviation from SPEC section 9 Phase 3**, approved by the owner. There's no HubSpot portal with SSO available: HubSpot SSO generally needs a paid tier, and we have no entity ID or ACS URL. The gate's purpose is proof that *independent, strict* SP implementations accept our assertions, plus an external validator result. That's now covered in four tiers (`docs/testing-with-sps.md`). `docs/hubspot.md` stays as a guide marked "not yet verified live".
 
 | Tier | SP / validator | Evidence (2026-09-25) |
 |---|---|---|
@@ -382,7 +382,7 @@ A max-effort review of the whole codebase found 15 verified defects. The key les
 - A new `node-saml` test SP uses the **HTTP-POST binding** and **redirects cross-site after its ACS**, like Cloudflare Access, AWS and HubSpot.
 - The example app got real email verification: a dev-only `/dev/mailbox`, behind `DEV_MAILBOX`.
 - **Failing first:** before the fixes, Chromium logged `Sending form data to 'https://sp.test:9100/acs' violates … "form-action https://sp.test:9100/acs"` and the flow hung (finding 5). After the fixes, 7/7 pass, including POST-binding while signed in, which skips the login page (finding 6), and IsPassive both ways.
-- Building it also exposed a real interop issue: **node-saml DEFLATEs HTTP-POST AuthnRequests**, contrary to Bindings §3.5.4. We now accept raw DEFLATE on POST when the payload isn't XML, under the same size cap.
+- Building it also exposed a real interop issue: **node-saml DEFLATEs HTTP-POST AuthnRequests**, contrary to Bindings section 3.5.4. We now accept raw DEFLATE on POST when the payload isn't XML, under the same size cap.
 
 **Fixes.** Each has a test, and each test was proven by mutation (re-breaking the fix makes it fail) in `test/integration/review-findings.test.ts` and `security.test.ts`:
 
@@ -433,7 +433,7 @@ Smaller verified items, also fixed:
 the owner's email, name, `givenName` and `surName`, with `saml_attributes.email` (values omitted here).
 The IdP logs show the matching sequence: SSO → sign-in → resume, with the assertion auto-posted to Cloudflare.
 
-**Real-world finding: Cloudflare Access sends a RelayState longer than 80 bytes.** The first attempt failed with `RELAY_STATE_TOO_LONG`. The plugin's default follows SAML Bindings §3.4.3 ("MUST NOT exceed 80 bytes"), and none of the IdPs in the comparison research is documented as enforcing that limit. The example now sets `relayStateMaxBytes: 1024`, the plugin's hard cap, and that made the login work. **Decided (owner, 2026-09-25):** the plugin default is now **1024**, with `relayStateMaxBytes: 80` as the strict-spec opt-in. The example no longer needs to set it.
+**Real-world finding: Cloudflare Access sends a RelayState longer than 80 bytes.** The first attempt failed with `RELAY_STATE_TOO_LONG`. The plugin's default follows SAML Bindings section 3.4.3 ("MUST NOT exceed 80 bytes"), and none of the IdPs in the comparison research is documented as enforcing that limit. The example now sets `relayStateMaxBytes: 1024`, the plugin's hard cap, and that made the login work. **Decided (owner, 2026-09-25):** the plugin default is now **1024**, with `relayStateMaxBytes: 80` as the strict-spec opt-in. The example no longer needs to set it.
 
 **Not a plugin issue:** the first password attempts failed with "Invalid password". The password typed didn't match the one set at sign-up. The account was deleted and re-created.
 
@@ -508,13 +508,13 @@ The browser e2e (7/7) and the live smoke test (16/16) passed after both changes.
 
 ## D-020: Encrypted assertions (2026-09-25)
 
-**What.** A per-SP option, `serviceProviders[].encryption: { certificate, dataAlgorithm?, keyAlgorithm?, allowInsecureCbc? }`. When it's set, the `<saml:Assertion>` is sent as a `<saml:EncryptedAssertion>` (SAML Core §2.3.4) holding one `xenc:EncryptedData Type="#Element"`. Its `ds:KeyInfo` carries an `xenc:EncryptedKey` with `Recipient` (the SP's entity ID), the SP certificate's `X509Data`, and the RSA-wrapped content key. The encryptor is `src/saml/encrypt.ts`, about 150 lines on `node:crypto` (`createCipheriv`, `publicEncrypt`). It has no new dependencies.
+**What.** A per-SP option, `serviceProviders[].encryption: { certificate, dataAlgorithm?, keyAlgorithm?, allowInsecureCbc? }`. When it's set, the `<saml:Assertion>` is sent as a `<saml:EncryptedAssertion>` (SAML Core section 2.3.4) holding one `xenc:EncryptedData Type="#Element"`. Its `ds:KeyInfo` carries an `xenc:EncryptedKey` with `Recipient` (the SP's entity ID), the SP certificate's `X509Data`, and the RSA-wrapped content key. The encryptor is `src/saml/encrypt.ts`, about 150 lines on `node:crypto` (`createCipheriv`, `publicEncrypt`). It has no new dependencies.
 
 **Algorithms.**
 - **Data:**
   - `aes256-gcm` (`xmlenc11#aes256-gcm`) is the default.
   - `aes128-gcm` is also available.
-  - GCM output is a 12-byte IV, then the ciphertext, then a 16-byte tag (XML Enc 1.1 §5.2.4).
+  - GCM output is a 12-byte IV, then the ciphertext, then a 16-byte tag (XML Enc 1.1 section 5.2.4).
   - `aes256-cbc` (16-byte IV, PKCS#7 padding, which is a valid XML Enc padding) needs `allowInsecureCbc: true`, because of CBC's padding-oracle history. It logs a startup warning.
   - Every assertion gets a fresh random key and IV.
 - **Key transport:**
@@ -561,14 +561,14 @@ SPs parse the decrypted element on its own, outside the Response that declares `
 - Cloudflare's certificate is available only through the API (`saml_certificate_set.current_certificate.public_certificate`). The dashboard shows the set ID, and the SP metadata doesn't include it.
 - It's an RSA 2048 CA-style certificate: key usage *Certificate Sign, CRL Sign*, no `keyEncipherment`, valid for one year. Our startup check deliberately checks only type, size and expiry, not key usage, and that choice is what makes this certificate work.
 
-## D-021: IdP-initiated SSO (SPEC §5 stretch, roadmap v1.1)
+## D-021: IdP-initiated SSO (SPEC section 5 stretch, roadmap v1.1)
 
 `GET /saml2/idp/init?sp=<id>[&RelayState=…]` sends an **unsolicited** Response. It's off by default and enabled per SP with `allowIdpInitiated: true`, which startup validation used to reject as "not supported in this version".
 
 **Design choices:**
 - **Opt-in per SP, checked twice.** `init` refuses an SP without the opt-in (`IDP_INITIATED_NOT_ALLOWED`, 400) and an unknown or missing `sp` (`UNKNOWN_SERVICE_PROVIDER`, 400; the value isn't reflected). When the user has to sign in first, `resume` checks the opt-in again, because the configuration may change while the user signs in.
 - **GET only.** Launcher links and bookmarks are GETs. A POST from another site would carry no `SameSite=Lax` cookies, so it would always detour through the login page, and it would add surface for no use case. POST isn't routed, and `init` isn't added to `skipOriginCheck`.
-- **No request, so no `InResponseTo`.** `ValidatedRequest.requestId` is now `string | undefined`. Undefined means unsolicited, and `buildResponseXml` then omits `InResponseTo` on both the Response and `SubjectConfirmationData` (Profiles §4.1.4.2, §4.1.5). Everything else is the SP-initiated path unchanged: `issueResponse` does the R3 re-read, account policy, `authorize()`, NameID per format, attributes, `Destination`/`Recipient`/`Audience`/`NotOnOrAfter` and signing. There's no replay record (R2), because there's no request ID to record. As a safety net, a POST-binding continuation (`sso?cid=`) without a request ID is refused, since only `init` creates unsolicited requests.
+- **No request, so no `InResponseTo`.** `ValidatedRequest.requestId` is now `string | undefined`. Undefined means unsolicited, and `buildResponseXml` then omits `InResponseTo` on both the Response and `SubjectConfirmationData` (Profiles sections 4.1.4.2 and 4.1.5). Everything else is the SP-initiated path unchanged: `issueResponse` does the R3 re-read, account policy, `authorize()`, NameID per format, attributes, `Destination`/`Recipient`/`Audience`/`NotOnOrAfter` and signing. There's no replay record (R2), because there's no request ID to record. As a safety net, a POST-binding continuation (`sso?cid=`) without a request ID is refused, since only `init` creates unsolicited requests.
 - **Without a session**, the request is parked through the same code as SP-initiated SSO (`parkForLogin`, extracted from `sso.ts`): a single-use pending value bound to the browser, consumed only by `consumeVerificationValue` in `resume`. R1 is unchanged.
 - **ACS URL:** always the SP's first registered URL. There's no `acs` parameter, which is one less caller-controlled input. SPs with several ACS URLs should list the IdP-initiated one first.
 - **RelayState: allow-list, and ignore anything else.** In IdP-initiated SSO, RelayState conventionally names the SP-side landing URL, and many SPs redirect to it after sign-in. So a RelayState forwarded from the query string would turn every launcher link into an open redirect *at the SP*, behind a trusted IdP domain. New per-SP options:
@@ -799,7 +799,7 @@ The live test also found a **workerd incompatibility the stubbed tests couldn't*
 4. Finally, the originator gets a signed LogoutResponse over its configured binding (Redirect query signature, or auto-POST with an enveloped XML signature): `Success`, or `Success/PartialLogout` if a participant failed, answered for another request, had a bad signature, or has no SLO endpoint.
 5. An IdP-initiated logout ends with a redirect to `returnTo`.
 
-**Authenticating a LogoutRequest** (Profiles §4.4.4.1: it must be authenticated):
+**Authenticating a LogoutRequest** (Profiles section 4.4.4.1: it must be authenticated):
 - With SP certificates, a valid signature is required: the D-025 POST verifier, or the Redirect query check. `verifyMessageSignature` refuses an unsigned message itself, so the explicit "must be signed" check is belt-and-braces. Its mutation didn't fail a test because the next line already refuses the message.
 - Without certificates, the session ends only if a `SessionIndex` equals the value issued **to that SP** for this browser's session (per-SP keyed MAC since review 2; see D-029).
 - A signed request without `SessionIndex` must name the NameID stored for that SP and session.
@@ -856,7 +856,7 @@ The live test also found a **workerd incompatibility the stubbed tests couldn't*
 - **Info items fixed:**
   - Metadata bodies are read as a stream with a 1 MiB cap (tested with an endless body).
   - Stored-SP lookups must match the requested value exactly (unit test with a case-insensitive, PAD SPACE adapter; mutation-checked).
-  - Signed LogoutRequests and LogoutResponses need a `Destination` (Bindings §3.4.5.2 / §3.5.5.2).
+  - Signed LogoutRequests and LogoutResponses need a `Destination` (Bindings sections 3.4.5.2 and 3.5.5.2).
   - The logout drive-by page no longer talks about signing in.
 - **Info items documented, not changed:**
   - A certificate-less SP's LogoutResponse can be obtained unauthenticated (docs/security.md: SPs must check `InResponseTo`; give SLO SPs a certificate).
@@ -894,7 +894,7 @@ All six were already fixed by D-029, and their proof-of-concept tests pass again
   - Fix: fail closed. With `singleLogout` enabled, an assertion the IdP couldn't record isn't issued (`INTERNAL_ERROR`). Tested by making the participant insert fail.
 - **R3-7 (Info): two xmldom versions.** xml-crypto 6 verifies with its own xmldom 0.8, and the plugin reads with 0.9. D-025's "same xmldom" claim was wrong and is corrected.
   - The reviewer fuzzed about 60 constructs. The only divergence found: two attributes with the same expanded name (`p:x` and `q:x`, with p and q bound to one URI). xmldom 0.9 silently drops one, contradicting the "strict parse" comment, while 0.8 keeps both. It isn't exploitable, because the digest breaks and the XSD rejects it on protocol paths, but it made the strict parse dishonest.
-  - Fix: `parseXmlStrict` now runs a Namespaces-in-XML §6.3 check first. A scanner tracks namespace declarations through the element stack and rejects duplicate expanded names, so the claim holds on every path, including the CLI and metadata.
+  - Fix: `parseXmlStrict` now runs a Namespaces-in-XML section 6.3 check first. A scanner tracks namespace declarations through the element stack and rejects duplicate expanded names, so the claim holds on every path, including the CLI and metadata.
   - The scanner's regex was timed on adversarial inputs: 200 KB of unterminated tags takes under 10 ms, and a 1 MiB document takes about 320 ms in total, mostly xmldom.
   - Metadata refresh now runs the XSD check **before** the metadata signature check, like every other path.
   - Pinning xmldom to one version in this repository would prove nothing for consumers, whose install gives xml-crypto its own copy. So the test documents the two versions and asserts the mitigation instead.
@@ -1012,7 +1012,7 @@ If the stored config hadn't validated, the SP would have been unknown, not signe
 
 An Auth0 free tenant added the example Worker through an Enterprise SAML connection, with requests signed (RSA-SHA256) over HTTP-Redirect. Auth0's SP metadata is public (`/samlp/metadata?connection=…`), so Auth0 was stored in the **D1 registry** with **only `metadata.url`**: no certificates configured, and signed requests required.
 
-**Found (interop):** Auth0's AuthnRequest carries `ProtocolBinding="…:HTTP-Redirect"`. The attribute names the binding for the *Response*, which can't be HTTP-Redirect (Profiles §4.1.2), and Auth0 fills it with its request binding. The IdP refused it (`INVALID_SAML_REQUEST`).
+**Found (interop):** Auth0's AuthnRequest carries `ProtocolBinding="…:HTTP-Redirect"`. The attribute names the binding for the *Response*, which can't be HTTP-Redirect (Profiles section 4.1.2), and Auth0 fills it with its request binding. The IdP refused it (`INVALID_SAML_REQUEST`).
 
 **Fix:** HTTP-Redirect in `ProtocolBinding` is treated as "no preference", and the Response goes by HTTP-POST as always. Other bindings, such as Artifact, are still refused. This is safe because the Response is still only ever posted to an allow-listed ACS URL. Tests cover both cases.
 
@@ -1504,7 +1504,7 @@ Before the first release candidate, two independent reviews ran over everything 
 Roadmap D3 ("map RequestedAuthnContext to the host's 2FA state, as Keycloak does with levels of authentication"). The roadmap expected an upstream change: Better Auth sessions don't record how the user authenticated. Instead, the host says it: `authnContext: { levels, current }`.
 - **`levels`:** AuthnContextClassRef URIs the host's sign-in can deliver, weakest first (1–10, unique). This is the ordering SAML itself lacks.
 - **`current({ user, session })`:** the class this session achieved. It runs on the user and session re-read just before signing, and must return one of `levels`; anything else, or a throw, gives `INTERNAL_ERROR`.
-- **Matching:** `satisfiesAuthnContext` implements SAML Core §3.3.2.2.1 on that order:
+- **Matching:** `satisfiesAuthnContext` implements SAML Core section 3.3.2.2.1 on that order:
   - `exact`: the achieved class is listed;
   - `minimum`: at least as strong as a listed class;
   - `better`: stronger than a listed class;
@@ -1612,7 +1612,7 @@ From the "Reach, trust and B2B" roadmap lane: prove the plugin on the stacks mos
 
 ## D-052: Multi-tenant IdP, phase 1: an IdP identity per organization under the shared key (2026-09-28)
 
-The roadmap item "One IdP identity per organization", built as phase 1 of `docs/design/multi-tenant.md` (then `docs/review/multi-tenant-design.md`), on the maintainer's decisions in its §9: host administrators create tenants; membership is mandatory; `tenantKey` defaults to the organization id, may be chosen at creation, never changes; KMS/HSM deferred. Phases 2 (per-tenant keys) and 3 (delegation) are not built. Guide: `docs/guide/multi-tenant.md`.
+The roadmap item "One IdP identity per organization", built as phase 1 of `docs/design/multi-tenant.md` (then `docs/review/multi-tenant-design.md`), on the maintainer's decisions in its section 9: host administrators create tenants; membership is mandatory; `tenantKey` defaults to the organization id, may be chosen at creation, never changes; KMS/HSM deferred. Phases 2 (per-tenant keys) and 3 (delegation) are not built. Guide: `docs/guide/multi-tenant.md`.
 
 **What it is.** `tenants: { enabled: true }`, off by default.
 - A tenant is an organization with a `samlIdpTenant` row, created through the registry API (`/saml-idp/tenants/*`, the `samlTenant` access-control resource). Its entity ID is its metadata URL; its URLs are `/saml2/idp/{metadata,sso,slo}/<tenantKey>`. All tenants sign with `signing` (`keys: "shared"`, the only value).
@@ -1624,14 +1624,14 @@ The roadmap item "One IdP identity per organization", built as phase 1 of `docs/
 - `Destination` is checked against the URL the request arrived at. A POST continuation re-entered at another tenant's URL, or the root's, is refused.
 - A disabled or deleted tenant: its URLs answer like an unknown one; its SPs get nothing through any route (IdP-initiated included); Single Logout skips them (`PartialLogout`). Never the root identity instead.
 
-**`IdpIdentity` (design §5.8).** `src/saml/identity.ts` builds `{ tenantId, tenantKey, entityId, signing, ssoUrl, sloUrl, metadataUrl }` for the root or a tenant. Responses, error Responses, logout messages and metadata take an identity, not `options`. `test/unit/identity-lint.test.ts` fails if any other source file reads `options.entityId` or the signing key (option resolution, the CLI and the SP-metadata importer's own `options.entityId` are allowed). It's internal: not exported.
+**`IdpIdentity` (design section 5.8).** `src/saml/identity.ts` builds `{ tenantId, tenantKey, entityId, signing, ssoUrl, sloUrl, metadataUrl }` for the root or a tenant. Responses, error Responses, logout messages and metadata take an identity, not `options`. `test/unit/identity-lint.test.ts` fails if any other source file reads `options.entityId` or the signing key (option resolution, the CLI and the SP-metadata importer's own `options.entityId` are allowed). It's internal: not exported.
 
 **The rest of phase 1, as designed.**
 - Membership of the tenant's organization is implied and can't be turned off; an `organization` rule on a tenant SP may only be `{ id: <its tenant>, roles? }` (a slug or another id is refused). Issuance also refuses a tenant SP whose rule is missing (defence in depth). Organization attributes without `only` then cover the tenant's organization only.
 - Persistent NameIDs of tenant SPs: `HMAC(secret, "saml-idp:persistent\0" + tenantId + "\0" + entityId + "\0" + userId)`; the root's derivation is unchanged.
 - SLO: each participant gets its LogoutRequest from its own tenant's identity, the originator its LogoutResponse from its own, and a participant's answer is checked against its own tenant's SLO URL (it may arrive at any SLO URL; the hop is in its RelayState).
 - Startup errors: no organization plugin, no pinned base URL (samlIdp's or Better Auth's, including `BETTER_AUTH_URL`; with only Better Auth's, the plugin pins it), `tenants.delegation` (needs `keys: "per-tenant"`), `keys: "per-tenant"` (not available yet).
-- The host-administrator overlap warning (design §5.1 c): an SP with the same entity ID **and** an ACS URL as an SP in another tenant or the root. At startup for code SPs; in the registry record's `warnings` and the log for stored ones.
+- The host-administrator overlap warning (design section 5.1 c): an SP with the same entity ID **and** an ACS URL as an SP in another tenant or the root. At startup for code SPs; in the registry record's `warnings` and the log for stored ones.
 - `tenantId` in `assertion.issued`, `denied` and `logout` events and each `session.ended` participant (absent for the root IdP, so root events are unchanged), an audit-log column, `ServiceProviderInfo.tenantId` (`null` for the root; `public-api.test.ts` updated deliberately), and registry records (only with tenants on). The login page gets `tenant=<tenantKey>` on the redirect from a tenant's request.
 - Tenant metadata: 404 identical (status, content type, body) for an unknown key, a disabled tenant, an organization that isn't a tenant and a malformed key; no organization name or slug in the document.
 
@@ -1645,7 +1645,7 @@ The roadmap item "One IdP identity per organization", built as phase 1 of `docs/
 5. **The overlap warning** needs the same entity ID and a shared ACS URL: with different ACS URLs no assertion can land at the other SP.
 6. **Registry records carry `tenantId` only with tenants on**, to keep responses unchanged without them; `ServiceProviderInfo` always has it, as the design says.
 7. **A code SP's tenant must exist (and be enabled)** in the database to be used; otherwise its sign-ins are refused.
-8. **Not built from the design's lists:** `canManage` receiving `tenantId` (§5.4; for phase 3, and not knowable for every route before the row is loaded, which would turn 403s into an existence oracle), `keys` in `TenantRecord` (phase 2), the CLI's `--tenant` options (§6; not in §7's phase-1 list).
+8. **Not built from the design's lists:** `canManage` receiving `tenantId` (section 5.4; for phase 3, and not knowable for every route before the row is loaded, which would turn 403s into an existence oracle), `keys` in `TenantRecord` (phase 2), the CLI's `--tenant` options (section 6; not in section 7's phase-1 list).
 
 **Tests** (`test/integration/tenants.test.ts`, `tenants-shared-entity.test.ts`, `tenants-off.test.ts`, `test/unit/sp-directory.test.ts`, `identity-lint.test.ts`, `client.test.ts`; Node and workerd except the lint test):
 - configuration and startup errors;
@@ -1675,7 +1675,7 @@ The roadmap item "One IdP identity per organization", built as phase 1 of `docs/
 25. the audit `tenantId` column dropped; 26. tenant routes checked against `samlServiceProvider`; 27. no manager check on tenant create;
 28. SLO lookup crossing tenants; 29. `Destination` compared with the root SSO URL; 30. the `lookupKey` index entry removed (MongoDB matrix); 31. the SLO continuation's route check (a POST LogoutRequest re-entered at another tenant's SLO URL).
 
-**Not verified:** a live interop run with real SPs in two tenants (design §8, "Interop, live"); the upgrade steps on a populated MongoDB collection.
+**Not verified:** a live interop run with real SPs in two tenants (design section 8, "Interop, live"); the upgrade steps on a populated MongoDB collection.
 
 
 ## D-053: Review 6 fixes (2026-09-28)
@@ -1795,7 +1795,7 @@ Phase 2 of `docs/design/multi-tenant.md`, opt-in with `tenants.keys: "per-tenant
 - **Storage.** A `samlIdpTenantKey` row per key: `next | active | previous | retired`, with a UNIQUE `stateKey` (a hash of tenant and state for next and active), so a tenant has at most one of each on every database.
   - The cipher (XChaCha20-Poly1305) has no associated data. So the sealed plaintext is JSON naming its purpose, tenant and kid, and it must match the row. A ciphertext copied into another tenant's row, or anything else Better Auth encrypts with the same secret, is refused.
   - The limit, documented: it protects backups, dumps and read-only leaks, not a compromised Worker.
-- **Signing.** Every signature and metadata document already comes from an `IdpIdentity` (D-052, §5.8). A tenant's identity now gets its signing configuration from `TenantKeyStore`, cached per isolate for `cacheSeconds`, with decrypted keys cached by row.
+- **Signing.** Every signature and metadata document already comes from an `IdpIdentity` (D-052, section 5.8). A tenant's identity now gets its signing configuration from `TenantKeyStore`, cached per isolate for `cacheSeconds`, with decrypted keys cached by row.
   - The shared key is used only by a tenant that has never had a key of its own. Once it has had one, a missing or unusable active key throws `TenantKeyError`: sign-in and the tenant SLO URL answer `INTERNAL_ERROR`, metadata a 500, and Single Logout skips that SP (PartialLogout).
   - That also covers the moment inside `activate` between moving the old key aside and promoting the next.
   - The samlify IdP cache is keyed by the certificates too, so a rotated key gets a fresh IdP.
@@ -1831,13 +1831,13 @@ Phase 2 of `docs/design/multi-tenant.md`, opt-in with `tenants.keys: "per-tenant
 
 ## D-059: Multi-tenant IdP, phase 3: delegated administration (2026-09-29)
 
-Phase 3 of `docs/design/multi-tenant.md` (§5.4), opt-in with `tenants.delegation`, allowed only with `keys: "per-tenant"` (startup enforces it: under a shared key only the Issuer tells tenants apart, §5.1). The design's defaults were taken as they stood: roles `owner` and `admin`, user fields `email`, `name` and `id`, and no `metadata.url`.
+Phase 3 of `docs/design/multi-tenant.md` (section 5.4), opt-in with `tenants.delegation`, allowed only with `keys: "per-tenant"` (startup enforces it: under a shared key only the Issuer tells tenants apart, section 5.1). The design's defaults were taken as they stood: roles `owner` and `admin`, user fields `email`, `name` and `id`, and no `metadata.url`.
 - **Who.** One `access()` check serves every registry route.
   - A host manager (`canManage` and/or `permissions`, both when both are set) may do everything.
   - Otherwise, with `delegated` routes, the user's memberships are read from the member table on every request (`loadMemberships`, never the session's active organization), and each one holding a delegation role in an **enabled** tenant (the directory's check, D-053) adds that tenant to the actor's scope. No tenant means 403.
   - The existing rules hold for both: the user is re-read (R4-L3), not banned, and impersonation is refused. A demotion therefore takes effect at the next request.
   - `manager()` stays for host-only routes: tenant create, update and delete, and keys.
-- **Scope, per route** (§5.4's list):
+- **Scope, per route** (section 5.4's list):
   - **list:** filtered by `tenantId` in the query (required with several tenants; another tenant's, or the root's, is 403).
   - **get, update and delete:** load the row and compare its tenant. Otherwise it's 404, so another tenant's SP, or the root's, looks absent, because `spId` is global.
   - **create:** needs `tenant` in scope (403).
@@ -1850,7 +1850,7 @@ Phase 3 of `docs/design/multi-tenant.md` (§5.4), opt-in with `tenants.delegatio
 - **No leaks.**
   - Overlap warnings (D-052) are computed only for host managers: they name another tenant's SP.
   - `SERVICE_PROVIDER_EXISTS` on create still tells a tenant administrator that an `id` is taken somewhere. That's accepted: `id` is a global name, it reveals nothing about the SP, and the alternative (tenant-prefixed ids) would burden everyone.
-- **Auditing** (§5.5).
+- **Auditing** (section 5.5).
   - A `service-provider.changed` event (`events.onServiceProviderChanged`, and the audit log) for each registry create, update, enable, disable and delete, with the acting user and `delegated`. Until now registry changes only went to `logger.info`.
   - `GET /saml-idp/audit` reads the log newest first, paged with `before`, filtered by `tenantId` in the query. Tenant administrators see only their tenants'.
   - The route list with every feature on gains that one route; its snapshot was updated for exactly that line.
@@ -1875,8 +1875,8 @@ Phase 3 of `docs/design/multi-tenant.md` (§5.4), opt-in with `tenants.delegatio
 
 ## D-060: Review 7, phases 2 and 3 before release (2026-09-29)
 
-The design (§8) asks for a review of phases 2 and 3 before they ship. Done in the open, reading the diff since 1.0.2 adversarially: key handling first, then the delegation boundary. Six findings, each fixed with a test that failed first (the failure matching the finding), on Node and workerd.
-- **R7-5 (High): delegation of a tenant still on the shared key.** Per-tenant keys leave tenants made before them on the shared key until rotated (D-058). `access()` counted any enabled tenant, so such a tenant's administrator could register an SP with a root SP's entity ID and ACS URL and get assertions signed with the root key: the §5.1 attack that delegation was meant to wait for.
+The design (section 8) asks for a review of phases 2 and 3 before they ship. Done in the open, reading the diff since 1.0.2 adversarially: key handling first, then the delegation boundary. Six findings, each fixed with a test that failed first (the failure matching the finding), on Node and workerd.
+- **R7-5 (High): delegation of a tenant still on the shared key.** Per-tenant keys leave tenants made before them on the shared key until rotated (D-058). `access()` counted any enabled tenant, so such a tenant's administrator could register an SP with a root SP's entity ID and ACS URL and get assertions signed with the root key: the section 5.1 attack that delegation was meant to wait for.
   - Fix: a tenant counts only when it has an active key of its own.
   - Test: an owner of a keyless tenant gets 403, then 200 once the host rotates and activates its first key.
 - **R7-4 (High): cross-organization disclosure through `only`.** Organization attributes get all of the user's memberships, and `only` selects among them by id or slug, so a delegated SP with `{ organization: "slugs", only: [otherOrg] }` told its administrator which members also belong to another organization.
@@ -2027,7 +2027,7 @@ An outside reviewer read all of src/ at e79f168 (identical to v1.1.2's code) and
 
 ## D-071: Assertion exchange for OAuth tokens (2026-10-06)
 
-An agent that signed a person in through this IdP holds an Assertion, and draft-ietf-oauth-identity-assertion-authz-grant-04 §4.5 (used by Okta's Cross App Access and MCP's Enterprise-Managed Authorization) lets it exchange that at an OAuth token endpoint (RFC 8693, `subject_token_type=…:saml2`) for a refresh token or an ID-JAG. The token endpoint is an ID-JAG issuer on the same Better Auth instance. It can't check the Assertion itself: only this plugin holds the keys, knows its SPs and tenants, and knows what it issued. So the plugin gets one opt-in, one record and one verification function. Nothing changes for SPs that don't opt in.
+An agent that signed a person in through this IdP holds an Assertion, and draft-ietf-oauth-identity-assertion-authz-grant-04 section 4.5 (used by Okta's Cross App Access and MCP's Enterprise-Managed Authorization) lets it exchange that at an OAuth token endpoint (RFC 8693, `subject_token_type=…:saml2`) for a refresh token or an ID-JAG. The token endpoint is an ID-JAG issuer on the same Better Auth instance. It can't check the Assertion itself: only this plugin holds the keys, knows its SPs and tenants, and knows what it issued. So the plugin gets one opt-in, one record and one verification function. Nothing changes for SPs that don't opt in.
 
 - **Maintainer decisions:**
   - The SP-to-client mapping lives on the SP: `tokenExchange: { clientId }`, for code and stored SPs.
@@ -2042,7 +2042,7 @@ An agent that signed a person in through this IdP holds an Assertion, and draft-
 - **`verifyIssuedAssertion(ctx, assertionXml, { clientId, now? })`**, in order:
   1. **Strict input.** `precheckXml` at 64 KiB (no DOCTYPE or ENTITY), `parseXmlStrict`, the message-shape caps. The root must be `saml:Assertion`, Version 2.0, with an NCName ID. A Response or EncryptedAssertion is refused.
   2. **Schema.** The schema validator, kind `"protocol"`. Checked: the libxml2 build validates a standalone Assertion under that kind (the protocol XSD imports the assertion one), so no new kind was needed (the brief marked this uncertain).
-  3. **Issuer.** The root identity's entity ID, or `${base}/saml2/idp/metadata/<tenantKey>` of an enabled tenant, through `routeIdentity` as the protocol routes do. Otherwise `NOT_OURS`, as is a tenant whose own key can't be used (`TenantKeyError`). It goes through the identity, not `options.entityId`; the identity lint (§5.8) caught the first draft.
+  3. **Issuer.** The root identity's entity ID, or `${base}/saml2/idp/metadata/<tenantKey>` of an enabled tenant, through `routeIdentity` as the protocol routes do. Otherwise `NOT_OURS`, as is a tenant whose own key can't be used (`TenantKeyError`). It goes through the identity, not `options.entityId`; the identity lint (section 5.8) caught the first draft.
   4. **Signature.** `verifyEnvelopedSignature` on the Assertion with that identity's certificate only (the tenant's own under per-tenant keys). The same XSW rules as signed requests apply: one Reference to `#ID`, the ID unique in the document, allow-listed algorithms, KeyInfo ignored. A missing signature is `BAD_SIGNATURE`. Only the current key: an assertion signed just before a rotation can't be exchanged after it (documented; assertions live 5 minutes).
   5. **Shape.** Exactly what `buildResponseXml` emits: Issuer, Signature, Subject (NameID with only `Format`, one bearer SubjectConfirmation with only SubjectConfirmationData), Conditions (one AudienceRestriction with one Audience, nothing else), one AuthnStatement with AuthnContextClassRef, an optional AttributeStatement. No Advice. Unknown attributes are refused, and no text between elements.
   6. **Time.** `NotBefore − skew ≤ now < NotOnOrAfter + skew`, for Conditions and SubjectConfirmationData: `NOT_YET_VALID` / `EXPIRED`, only after the signature.
@@ -2061,7 +2061,7 @@ An agent that signed a person in through this IdP holds an Assertion, and draft-
   - ban, unverified email, revoked session, deleted user;
   - 10 concurrent exchanges across 5 instances on one database (exactly one wins);
   - an assertion issued before opt-in; a failed record write (SSO still succeeds); no `fetch` during verification;
-  - tenants under shared and per-tenant keys: the tenant's issuer and id, membership removed, tenant disabled, the root's assertion relabelled with the tenant's Issuer and re-signed with the root key (per-tenant: `BAD_SIGNATURE`; shared: the signature holds, as D-052 §5.1 says it must, and the record refuses it, `NOT_OURS`).
+  - tenants under shared and per-tenant keys: the tenant's issuer and id, membership removed, tenant disabled, the root's assertion relabelled with the tenant's Issuer and re-signed with the root key (per-tenant: `BAD_SIGNATURE`; shared: the signature holds, as D-052 section 5.1 says it must, and the record refuses it, `NOT_OURS`).
   - Also: options (`test/unit/options.test.ts`), delegation (`tenant-delegation.test.ts`), and the adapter matrix (exactly one of 10 concurrent exchanges on each database, with the assertion cut out of the Response text and given the namespace declaration).
 - **Mutation proof** (each guard re-broken on Node, the tests run, then restored):
   - 21 mutations, 18 caught: skipping the signature check, the client comparison, the opt-in check, the record comparison, the ban, email, session and membership checks, the expiry and not-before checks, the Conditions shape check; consuming before the signature; find-then-delete in place of consume (the 5-instance concurrency test fails); accepting a disabled tenant; failing SSO when the record write fails; dropping the delegation guard, the `sign: "response"` refusal and the stored-SP `enabled` requirement.
@@ -2247,7 +2247,7 @@ Everything brought current before the release, so it ships on what users will in
 As D-055, for what has built up since. Everything removed is in git history.
 
 - **`docs/design/multi-tenant.md`** is removed. It was the design as written before phase 1, with effort estimates and notes for the maintainer; the [multi-tenant guide](docs/guide/multi-tenant.md) documents what was built, and D-052, D-058 and D-059 record the decisions. Entries above that name the file are unchanged.
-- **References to documents that aren't in the repository** are gone from the source, the docs, the examples and the workflows: the review finding IDs (`review 6 R6-1`, `R4-L8` …), `ADDENDUM-01 R1`–`R4`, `SPEC §6`, the design's section numbers and the project's phases. Several were in the published type declarations, where users read them in their editor. Each comment keeps its reason, and points to a D-0xx entry or a guide page where one explains more. The entries in this file keep their IDs as they were.
+- **References to documents that aren't in the repository** are gone from the source, the docs, the examples and the workflows: the review finding IDs (`review 6 R6-1`, `R4-L8` …), `ADDENDUM-01 R1`–`R4`, SPEC section 6, the design's section numbers and the project's phases. Several were in the published type declarations, where users read them in their editor. Each comment keeps its reason, and points to a D-0xx entry or a guide page where one explains more. The entries in this file keep their IDs as they were.
 - **The `review-3-baseline` tag** is removed from GitHub: a marker for a review, not a release.
 
 ## D-084: better-call and better-fetch exempt from the one-day wait (2026-10-20)
