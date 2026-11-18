@@ -48,6 +48,7 @@ updates:
       - dependency-name: ip-address
       - dependency-name: http-cache-semantics
       - dependency-name: postcss-selector-parser
+      - dependency-name: picomatch
   # e2e container images, pinned by digest.
   - package-ecosystem: docker-compose
     directory: /e2e
