@@ -53,7 +53,9 @@ jobs:
           # undici 6.29.0 and ip-address 10.7.2, bundled in the release job's npm (.github/npm-cli): no npm
           # bundles undici 6.29.1 or ip-address 10.7.4 yet. Dependabot alerts #16, #17 and #18 are
           # dismissed for the same reason. Remove each when npm bundles its fix.
-          allow-ghsas: GHSA-xjj6-f33q-929c, GHSA-4qv8-2p9j-2685, GHSA-rxp7-6hxx-x8q5
+          # picomatch (GHSA-fc5q-39xc-vjpf) has no fixed release yet; it is in the release job's npm and in
+          # dev tooling (DECISIONS.md, D-089). Remove it when picomatch ships a fix.
+          allow-ghsas: GHSA-xjj6-f33q-929c, GHSA-4qv8-2p9j-2685, GHSA-rxp7-6hxx-x8q5, GHSA-fc5q-39xc-vjpf
           comment-summary-in-pr: never
 
   osv:

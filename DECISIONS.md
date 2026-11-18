@@ -93,6 +93,7 @@ A running log of the non-obvious choices, with the options considered and the ev
 - [D-086](#d-086-daily-upstream-watch-and-a-daily-check-of-the-demo-2026-10-22): Daily upstream watch, and a daily check of the demo (2026-10-22)
 - [D-087](#d-087-samlify-held-at-2131-in-the-tests-2026-10-25): samlify held at 2.13.1 in the tests (2026-10-25)
 - [D-088](#d-088-better-auth-floor-1716-2026-11-06): Better Auth floor 1.7.16 (2026-11-06)
+- [D-089](#d-089-picomatch-advisory-allowed-until-a-fix-ships-2026-11-18): picomatch advisory allowed until a fix ships (2026-11-18)
 
 ---
 
@@ -2286,6 +2287,7 @@ samlify is a development dependency only: the tests' strict service provider. Th
 - **Checked again 2026-10-27** with @cloudflare/vitest-plugin 1.4.8, whose fix for CommonJS `require` on Vite 8 looked related: samlify 2.15.1 still fails the same way in the workerd project. The hold stays.
 - **Checked again 2026-11-12** with @cloudflare/vitest-plugin 1.7.0 (1.8.0 was under a day old, below `minimumReleaseAge`): the same 46 tests fail. The hold stays.
 - **Checked again 2026-11-15** with @cloudflare/vitest-plugin 1.8.2 (1.8.0 tried 2026-11-13 too): the same 46 tests fail, mostly `TypeError: (0 , xml_1.default) is not a function` from samlify's CommonJS default import of `xml`. The hold stays.
+- **Checked again 2026-11-18** with @cloudflare/vitest-plugin 1.8.4: the same 46 tests fail. The hold stays.
 
 ## D-088: Better Auth floor 1.7.16 (2026-11-06)
 
@@ -2297,3 +2299,12 @@ Better Auth 1.7.16 (2026-11-03) fixed twelve security advisories. One reaches a 
 - **The R4-5 test** now asserts the `revoked-sessions-before-<userId>` marker, which every supported version writes.
 - **Docs:** the "With Better Auth ≥ 1.7.3" conditions in the Cloudflare notes are dropped; every supported version is past it.
 - **Considered:** keeping the floor and recommending 1.7.16 in the docs. Rejected for the reason in D-081.
+
+## D-089: picomatch advisory allowed until a fix ships (2026-11-18)
+
+[GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) (picomatch ReDoS, high) was widened on 2026-11-17 to every picomatch up to 4.0.7, the latest, with no fixed release. picomatch reaches us only through development tools (vite, tinyglobby, better-auth's Vitest peer in the Next.js example) and the npm the release job runs (`.github/npm-cli`, picomatch 4.0.5 inside tinyglobby). The published package doesn't depend on it, and `runtime-audit` passes.
+
+- **Dependency review** allows the advisory, so a pull request that touches picomatch or npm isn't blocked by it.
+- **`.github/npm-cli/osv-scanner.toml`** ignores it until 2027-01-06, like npm's other bundled dependencies, and **Dependabot** ignores picomatch in that folder.
+- **`examples-audit`** keeps reporting it. It isn't required ([D-085](#d-085-examples-audit-is-no-longer-a-required-check-2026-10-21)), and staying red keeps the advisory in view.
+- **Undo all three** when picomatch ships a fix.

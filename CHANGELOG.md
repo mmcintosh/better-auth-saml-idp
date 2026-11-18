@@ -13,6 +13,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 - Development only: Better Auth 1.7.25 (was 1.7.18) in development and the examples. No plugin code changes.
 - Development only: fast-xml-parser 5.12.0 (was 5.11.2), which @better-auth/sso brings into the tests, for [GHSA-474x-hrwr-fgx4](https://github.com/advisories/GHSA-474x-hrwr-fgx4). The plugin doesn't depend on it.
 - Development only: astro 7.4.7 (was 7.4.5) in the CharDB Astro example, for [GHSA-r3h5-4585-7x3w](https://github.com/advisories/GHSA-r3h5-4585-7x3w). The example doesn't use the affected `@astrojs/node` adapter, and the plugin doesn't depend on Astro.
+- Development only: [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) (picomatch) has no fixed release yet, so CI's dependency checks allow it for now ([D-089](DECISIONS.md#d-089-picomatch-advisory-allowed-until-a-fix-ships-2026-11-18)). picomatch reaches only development tools and the release job's npm; the plugin doesn't depend on it.
 
 ## [1.8.0] - 2026-11-06
 
