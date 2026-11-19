@@ -2288,6 +2288,7 @@ samlify is a development dependency only: the tests' strict service provider. Th
 - **Checked again 2026-11-12** with @cloudflare/vitest-plugin 1.7.0 (1.8.0 was under a day old, below `minimumReleaseAge`): the same 46 tests fail. The hold stays.
 - **Checked again 2026-11-15** with @cloudflare/vitest-plugin 1.8.2 (1.8.0 tried 2026-11-13 too): the same 46 tests fail, mostly `TypeError: (0 , xml_1.default) is not a function` from samlify's CommonJS default import of `xml`. The hold stays.
 - **Checked again 2026-11-18** with @cloudflare/vitest-plugin 1.8.4: the same 46 tests fail. The hold stays.
+- **Checked again 2026-11-19** with @cloudflare/vitest-plugin 1.8.5, installed for the check while under a day old: the same 46 tests fail. The hold stays.
 
 ## D-088: Better Auth floor 1.7.16 (2026-11-06)
 
@@ -2308,3 +2309,4 @@ Better Auth 1.7.16 (2026-11-03) fixed twelve security advisories. One reaches a 
 - **`.github/npm-cli/osv-scanner.toml`** ignores it until 2027-01-06, like npm's other bundled dependencies, and **Dependabot** ignores picomatch in that folder.
 - **`examples-audit`** keeps reporting it. It isn't required ([D-085](#d-085-examples-audit-is-no-longer-a-required-check-2026-10-21)), and staying red keeps the advisory in view.
 - **Undo all three** when picomatch ships a fix.
+- **Withdrawn 2026-11-18.** GitHub withdrew the advisory; picomatch 4.0.7 is still the latest. All three are undone, and `examples-audit` passes again.

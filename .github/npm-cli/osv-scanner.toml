@@ -36,11 +36,6 @@ ignoreUntil = 2027-01-06T00:00:00Z
 reason = "ip-address, bundled inside npm (release job only); updated only by a newer npm"
 
 [[IgnoredVulns]]
-id = "GHSA-fc5q-39xc-vjpf"
-ignoreUntil = 2027-01-06T00:00:00Z
-reason = "picomatch, bundled inside npm (release job only); no fixed picomatch yet, then updated only by a newer npm"
-
-[[IgnoredVulns]]
 id = "GHSA-j6r3-76f7-8jcv"
 ignoreUntil = 2027-01-06T00:00:00Z
 reason = "ip-address, bundled inside npm (release job only); updated only by a newer npm"
